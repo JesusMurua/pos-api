@@ -1,3 +1,4 @@
+using POS.Repository.Dependencies;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,8 +11,9 @@ builder.Host.UseSerilog((context, configuration) =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-// TODO: Register DbContext, Repositories, and Services
-// builder.Services.AddRepositoryDependencies(builder.Configuration);
+// Register dependencies
+builder.Services.AddRepositoryDependencies(builder.Configuration);
+// TODO: Register Services
 // builder.Services.AddServiceDependencies();
 
 var app = builder.Build();
