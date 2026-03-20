@@ -1,0 +1,24 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# JetBrains Rider
+.idea/
+
+# NuGet packages
+packages/
+
+# Test results
+TestResults/
+
+# Environment-specific settings
+appsettings.Development.json
+appsettings.Production.json
+
+# Logs
+Logs/
