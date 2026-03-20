@@ -4,5 +4,6 @@ public enum UserRole
 {
     Owner,
     Cashier,
-    Kitchen
+    Kitchen,
+    Waiter
 }
