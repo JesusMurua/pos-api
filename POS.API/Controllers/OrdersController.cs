@@ -29,7 +29,7 @@ public class OrdersController : ControllerBase
     [HttpPost("sync")]
     [ProducesResponseType(typeof(SyncResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Sync([FromBody] IEnumerable<Order> orders)
+    public async Task<IActionResult> Sync([FromBody] List<SyncOrderRequest> orders)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 

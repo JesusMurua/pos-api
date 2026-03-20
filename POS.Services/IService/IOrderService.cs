@@ -11,7 +11,7 @@ public interface IOrderService
     /// Syncs a batch of offline orders. Idempotent — skips duplicates by UUID.
     /// Returns a summary with synced, skipped, and failed counts.
     /// </summary>
-    Task<SyncResult> SyncOrdersAsync(IEnumerable<Order> orders);
+    Task<SyncResult> SyncOrdersAsync(IEnumerable<SyncOrderRequest> orders);
 
     /// <summary>
     /// Retrieves orders for a branch on a specific date.
