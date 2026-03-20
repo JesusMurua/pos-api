@@ -189,6 +189,28 @@ public class ApplicationDbContext : DbContext
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 
+        modelBuilder.Entity<Category>().HasData(
+            new Category { Id = 1, BranchId = 1, Name = "Comida", Icon = "pi-shopping-bag", SortOrder = 1, IsActive = true },
+            new Category { Id = 2, BranchId = 1, Name = "Antojitos", Icon = "pi-star", SortOrder = 2, IsActive = true },
+            new Category { Id = 3, BranchId = 1, Name = "Bebidas", Icon = "pi-filter", SortOrder = 3, IsActive = true },
+            new Category { Id = 4, BranchId = 1, Name = "Postres", Icon = "pi-heart", SortOrder = 4, IsActive = true }
+        );
+
+        modelBuilder.Entity<Product>().HasData(
+            new Product { Id = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 2, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 3, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 4, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false },
+            new Product { Id = 5, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false },
+            new Product { Id = 6, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 7, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false },
+            new Product { Id = 8, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 9, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false },
+            new Product { Id = 10, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false },
+            new Product { Id = 11, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false },
+            new Product { Id = 12, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false }
+        );
+
         #endregion
     }
 }
