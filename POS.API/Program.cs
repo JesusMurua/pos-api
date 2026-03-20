@@ -20,6 +20,7 @@ builder.Services.AddControllers()
     });
 
 builder.Services.AddOpenApi();
+builder.Services.AddSwaggerGen();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -50,9 +51,14 @@ app.UseSerilogRequestLogging();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowFrontend");
 
