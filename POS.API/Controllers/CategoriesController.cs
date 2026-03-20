@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Models;
 using POS.Services.IService;
@@ -9,6 +10,7 @@ namespace POS.API.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Owner")]
 public class CategoriesController : ControllerBase
 {
     private readonly ICategoryService _categoryService;

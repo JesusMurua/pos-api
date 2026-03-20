@@ -65,7 +65,14 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(20);
 
             entity.HasIndex(u => u.Email)
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("[Email] IS NOT NULL");
+
+            entity.HasOne(u => u.Branch)
+                .WithMany()
+                .HasForeignKey(u => u.BranchId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         #endregion
@@ -209,6 +216,48 @@ public class ApplicationDbContext : DbContext
             new Product { Id = 10, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false },
             new Product { Id = 11, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false },
             new Product { Id = 12, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false }
+        );
+
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                Id = 1,
+                BusinessId = 1,
+                BranchId = null,
+                Name = "Jesús",
+                Email = "jesus@test.com",
+                PasswordHash = "$2a$11$4Qq2WK0QugEzhFlwvMDxieQ46r1Y.NafdFU8LLx3bXAJQ3JJwBSau",
+                PinHash = null,
+                Role = UserRole.Owner,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new User
+            {
+                Id = 2,
+                BusinessId = 1,
+                BranchId = 1,
+                Name = "Juan",
+                Email = null,
+                PasswordHash = null,
+                PinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi",
+                Role = UserRole.Cashier,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new User
+            {
+                Id = 3,
+                BusinessId = 1,
+                BranchId = 1,
+                Name = "Cocina",
+                Email = null,
+                PasswordHash = null,
+                PinHash = "$2a$11$1uDkWZWuha6zTWRnTY7Eke1GgFSozVZnRZZ8/ouAA6OdMOEp4k0sm",
+                Role = UserRole.Kitchen,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
         );
 
         #endregion

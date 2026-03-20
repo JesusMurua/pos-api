@@ -9,13 +9,20 @@ public partial class User
 
     public int BusinessId { get; set; }
 
-    [Required]
-    [MaxLength(150)]
-    public string Email { get; set; } = null!;
+    public int? BranchId { get; set; }
 
     [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = null!;
+
+    [MaxLength(150)]
+    public string? Email { get; set; }
+
     [MaxLength(255)]
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
+
+    [MaxLength(255)]
+    public string? PinHash { get; set; }
 
     public UserRole Role { get; set; } = UserRole.Cashier;
 
@@ -24,6 +31,8 @@ public partial class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Business? Business { get; set; }
+
+    public virtual Branch? Branch { get; set; }
 
     public virtual ICollection<Order>? Orders { get; set; }
 }

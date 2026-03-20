@@ -13,6 +13,7 @@ public static class ServiceDependencies
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IBranchService, BranchService>();
         services.AddScoped<IBusinessService, BusinessService>();
+        services.AddScoped<IAuthService, AuthService>();
 
         return services;
     }

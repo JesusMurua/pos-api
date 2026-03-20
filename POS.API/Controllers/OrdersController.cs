@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Models;
 using POS.Services.IService;
@@ -9,6 +10,7 @@ namespace POS.API.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class OrdersController : ControllerBase
 {
     private readonly IOrderService _orderService;
@@ -69,5 +71,19 @@ public class OrdersController : ControllerBase
     {
         var orders = await _orderService.GetDailySummaryAsync(branchId, date);
         return Ok(orders);
+    }
+
+    /// <summary>
+    /// Gets the last order number for a branch.
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <returns>The last order number, or 0 if no orders exist.</returns>
+    /// <response code="200">Returns the last order number.</response>
+    [HttpGet("last-number")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLastOrderNumber([FromQuery] int branchId)
+    {
+        var lastNumber = await _orderService.GetLastOrderNumberAsync(branchId);
+        return Ok(new { lastOrderNumber = lastNumber });
     }
 }

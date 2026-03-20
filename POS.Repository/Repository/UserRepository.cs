@@ -13,6 +13,13 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public async Task<User?> GetByEmailAsync(string email)
     {
         return await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == email);
+            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
+    }
+
+    public async Task<IEnumerable<User>> GetActiveByBranchAsync(int branchId)
+    {
+        return await _context.Users
+            .Where(u => u.BranchId == branchId && u.IsActive && u.PinHash != null)
+            .ToListAsync();
     }
 }

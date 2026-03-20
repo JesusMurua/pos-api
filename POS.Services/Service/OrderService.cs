@@ -84,6 +84,19 @@ public class OrderService : IOrderService
         return await _unitOfWork.Orders.GetDailySummaryAsync(branchId, date);
     }
 
+    /// <summary>
+    /// Gets the last order number for a branch. Returns 0 if no orders exist.
+    /// </summary>
+    public async Task<int> GetLastOrderNumberAsync(int branchId)
+    {
+        var orders = await _unitOfWork.Orders.GetAsync(
+            o => o.BranchId == branchId);
+
+        return orders.Any()
+            ? orders.Max(o => o.OrderNumber)
+            : 0;
+    }
+
     #endregion
 
     #region Private Helper Methods

@@ -22,6 +22,11 @@ public interface IOrderService
     /// Retrieves order data for daily KPI summary.
     /// </summary>
     Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateTime date);
+
+    /// <summary>
+    /// Gets the last order number for a branch. Returns 0 if no orders exist.
+    /// </summary>
+    Task<int> GetLastOrderNumberAsync(int branchId);
 }
 
 /// <summary>

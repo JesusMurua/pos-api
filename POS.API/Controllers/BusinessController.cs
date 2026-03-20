@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.API.Models;
 using POS.Domain.Models;
@@ -10,6 +11,7 @@ namespace POS.API.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Owner")]
 public class BusinessController : ControllerBase
 {
     private readonly IBusinessService _businessService;
