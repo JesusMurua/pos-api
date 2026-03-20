@@ -1,4 +1,5 @@
 using POS.Repository.Dependencies;
+using POS.Services.Dependencies;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,8 +14,7 @@ builder.Services.AddOpenApi();
 
 // Register dependencies
 builder.Services.AddRepositoryDependencies(builder.Configuration);
-// TODO: Register Services
-// builder.Services.AddServiceDependencies();
+builder.Services.AddServiceDependencies();
 
 var app = builder.Build();
 
