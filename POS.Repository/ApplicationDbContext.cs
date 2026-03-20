@@ -22,6 +22,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductExtra> ProductExtras { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderItem> OrderItems { get; set; } = null!;
+    public DbSet<AuditLog> AuditLogs { get; set; } = null!;
 
     #endregion
 
@@ -152,6 +153,16 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        #endregion
+
+        #region AuditLog Configuration
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasIndex(a => new { a.BranchId, a.CreatedAt });
+            entity.HasIndex(a => new { a.EntityType, a.EntityId });
         });
 
         #endregion
