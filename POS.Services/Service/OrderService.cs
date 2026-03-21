@@ -1,4 +1,5 @@
 using POS.Domain.Enums;
+using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -95,6 +96,31 @@ public class OrderService : IOrderService
         return orders.Any()
             ? orders.Max(o => o.OrderNumber)
             : 0;
+    }
+
+    /// <summary>
+    /// Cancels an order by setting cancellation reason, timestamp, and who cancelled it.
+    /// </summary>
+    public async Task<Order> CancelAsync(string orderId, string reason, string? notes, string cancelledBy)
+    {
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
+        var order = results.FirstOrDefault();
+
+        if (order == null)
+            throw new NotFoundException($"Order with id {orderId} not found");
+
+        if (order.CancelledAt.HasValue)
+            throw new ValidationException("Order is already cancelled");
+
+        order.CancellationReason = string.IsNullOrEmpty(notes)
+            ? reason
+            : $"{reason} — {notes}";
+        order.CancelledAt = DateTime.UtcNow;
+        order.CancelledBy = cancelledBy;
+
+        _unitOfWork.Orders.Update(order);
+        await _unitOfWork.SaveChangesAsync();
+        return order;
     }
 
     #endregion

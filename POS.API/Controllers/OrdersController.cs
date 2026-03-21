@@ -86,4 +86,26 @@ public class OrdersController : ControllerBase
         var lastNumber = await _orderService.GetLastOrderNumberAsync(branchId);
         return Ok(new { lastOrderNumber = lastNumber });
     }
+
+    /// <summary>
+    /// Cancels an order.
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <param name="request">Cancellation reason and optional notes.</param>
+    /// <returns>The cancelled order.</returns>
+    /// <response code="200">Returns the cancelled order.</response>
+    /// <response code="400">If the order is already cancelled.</response>
+    /// <response code="404">If the order is not found.</response>
+    [HttpPatch("{id}/cancel")]
+    [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Cancel(string id, [FromBody] CancelOrderRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userName = User.Identity?.Name ?? "Unknown";
+        var order = await _orderService.CancelAsync(id, request.Reason, request.Notes, userName);
+        return Ok(order);
+    }
 }

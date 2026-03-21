@@ -27,6 +27,11 @@ public interface IOrderService
     /// Gets the last order number for a branch. Returns 0 if no orders exist.
     /// </summary>
     Task<int> GetLastOrderNumberAsync(int branchId);
+
+    /// <summary>
+    /// Cancels an order by setting cancellation reason, timestamp, and who cancelled it.
+    /// </summary>
+    Task<Order> CancelAsync(string orderId, string reason, string? notes, string cancelledBy);
 }
 
 /// <summary>

@@ -34,6 +34,14 @@ public partial class Order
 
     public DateTime? SyncedAt { get; set; }
 
+    [MaxLength(500)]
+    public string? CancellationReason { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+
+    [MaxLength(100)]
+    public string? CancelledBy { get; set; }
+
     public virtual Branch? Branch { get; set; }
 
     public virtual User? User { get; set; }
