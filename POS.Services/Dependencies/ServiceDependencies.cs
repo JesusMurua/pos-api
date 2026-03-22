@@ -17,6 +17,7 @@ public static class ServiceDependencies
         services.AddScoped<IDiscountPresetService, DiscountPresetService>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IProductImportService, ProductImportService>();
 
         return services;
     }
