@@ -27,6 +27,7 @@ public class ProductsController : ControllerBase
     /// <returns>A list of active products.</returns>
     /// <response code="200">Returns the list of active products.</response>
     [HttpGet]
+    [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll([FromQuery] int branchId)
     {

@@ -27,6 +27,7 @@ public class CategoriesController : ControllerBase
     /// <returns>A list of active categories.</returns>
     /// <response code="200">Returns the list of active categories.</response>
     [HttpGet]
+    [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Category>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll([FromQuery] int branchId)
     {

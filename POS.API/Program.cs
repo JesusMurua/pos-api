@@ -8,6 +8,8 @@ using POS.Repository.Dependencies;
 using POS.Services.Dependencies;
 using Serilog;
 
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog

@@ -13,6 +13,9 @@ public class UnitOfWork : IUnitOfWork
     private IBranchRepository? _branches;
     private IBusinessRepository? _business;
     private IUserRepository? _users;
+    private IDiscountPresetRepository? _discountPresets;
+    private ICashRegisterSessionRepository? _cashRegisterSessions;
+    private ICashMovementRepository? _cashMovements;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -36,6 +39,15 @@ public class UnitOfWork : IUnitOfWork
 
     public IUserRepository Users =>
         _users ??= new UserRepository(_context);
+
+    public IDiscountPresetRepository DiscountPresets =>
+        _discountPresets ??= new DiscountPresetRepository(_context);
+
+    public ICashRegisterSessionRepository CashRegisterSessions =>
+        _cashRegisterSessions ??= new CashRegisterSessionRepository(_context);
+
+    public ICashMovementRepository CashMovements =>
+        _cashMovements ??= new CashMovementRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using POS.Repository;
 
@@ -11,9 +12,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260321205422_AddDiscountPresetsAndOrderDiscountFields")]
+    partial class AddDiscountPresetsAndOrderDiscountFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -155,95 +158,6 @@ namespace POS.Repository.Migrations
                             Name = "POS Táctil Demo",
                             PlanType = "basic"
                         });
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.CashMovement", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AmountCents")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("SessionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SessionId");
-
-                    b.ToTable("CashMovements");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.CashRegisterSession", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BranchId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ClosedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("CountedAmountCents")
-                        .HasColumnType("int");
-
-                    b.Property<int>("InitialAmountCents")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("OpenedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("OpenedBy")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId", "OpenedAt");
-
-                    b.HasIndex("BranchId", "Status");
-
-                    b.ToTable("CashRegisterSessions");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Category", b =>
@@ -784,28 +698,6 @@ namespace POS.Repository.Migrations
                     b.Navigation("Business");
                 });
 
-            modelBuilder.Entity("POS.Domain.Models.CashMovement", b =>
-                {
-                    b.HasOne("POS.Domain.Models.CashRegisterSession", "Session")
-                        .WithMany("Movements")
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Session");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.CashRegisterSession", b =>
-                {
-                    b.HasOne("POS.Domain.Models.Branch", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-                });
-
             modelBuilder.Entity("POS.Domain.Models.Category", b =>
                 {
                     b.HasOne("POS.Domain.Models.Branch", "Branch")
@@ -927,11 +819,6 @@ namespace POS.Repository.Migrations
                     b.Navigation("Branches");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.CashRegisterSession", b =>
-                {
-                    b.Navigation("Movements");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Category", b =>

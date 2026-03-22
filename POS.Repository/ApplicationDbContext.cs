@@ -23,6 +23,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderItem> OrderItems { get; set; } = null!;
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
+    public DbSet<DiscountPreset> DiscountPresets { get; set; } = null!;
+    public DbSet<CashRegisterSession> CashRegisterSessions { get; set; } = null!;
+    public DbSet<CashMovement> CashMovements { get; set; } = null!;
 
     #endregion
 
@@ -160,6 +163,38 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        #endregion
+
+        #region DiscountPreset Configuration
+
+        modelBuilder.Entity<DiscountPreset>(entity =>
+        {
+            entity.HasOne(d => d.Branch)
+                .WithMany()
+                .HasForeignKey(d => d.BranchId);
+
+            entity.HasIndex(d => new { d.BranchId, d.IsActive });
+        });
+
+        #endregion
+
+        #region CashRegister Configuration
+
+        modelBuilder.Entity<CashRegisterSession>(entity =>
+        {
+            entity.HasOne(s => s.Branch)
+                .WithMany()
+                .HasForeignKey(s => s.BranchId);
+
+            entity.HasMany(s => s.Movements)
+                .WithOne(m => m.Session)
+                .HasForeignKey(m => m.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(s => new { s.BranchId, s.Status });
+            entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
         });
 
         #endregion
