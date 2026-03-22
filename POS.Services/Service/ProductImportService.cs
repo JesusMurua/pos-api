@@ -211,6 +211,17 @@ public class ProductImportService : IProductImportService
                 result.Warnings.Add($"Categoría '{row.CategoryName}' creada automáticamente");
             }
 
+            // Check for duplicate product in same category
+            var existing = await _unitOfWork.Products.GetAsync(
+                p => p.Name.ToLower() == row.Name.ToLower() && p.CategoryId == categoryId);
+
+            if (existing.Any())
+            {
+                result.SkippedCount++;
+                result.Warnings.Add($"Producto '{row.Name}' ya existe, se omitió");
+                continue;
+            }
+
             var product = new Product
             {
                 CategoryId = categoryId,
