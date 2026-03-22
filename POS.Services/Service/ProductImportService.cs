@@ -96,7 +96,13 @@ public class ProductImportService : IProductImportService
 
             // Skip completely empty rows
             if (string.IsNullOrEmpty(name) && string.IsNullOrEmpty(priceStr) &&
-                string.IsNullOrEmpty(categoryName))
+                string.IsNullOrEmpty(categoryName) && string.IsNullOrEmpty(availableStr) &&
+                string.IsNullOrEmpty(popularStr))
+                continue;
+
+            // Skip note/instruction rows
+            if (name.StartsWith("Nota", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Note", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             preview.TotalRows++;
