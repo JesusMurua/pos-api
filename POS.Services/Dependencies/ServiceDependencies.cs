@@ -19,6 +19,7 @@ public static class ServiceDependencies
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IProductImportService, ProductImportService>();
         services.AddScoped<ITableService, TableService>();
+        services.AddScoped<IUserService, UserService>();
 
         return services;
     }
