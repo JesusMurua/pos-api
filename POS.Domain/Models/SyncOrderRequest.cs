@@ -23,6 +23,11 @@ public class SyncOrderRequest
 
     public DateTime CreatedAt { get; set; }
 
+    public int? TableId { get; set; }
+
+    [MaxLength(50)]
+    public string? TableName { get; set; }
+
     public List<SyncOrderItemRequest> Items { get; set; } = new();
 }
 

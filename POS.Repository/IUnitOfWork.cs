@@ -13,6 +13,7 @@ public interface IUnitOfWork : IDisposable
     IDiscountPresetRepository DiscountPresets { get; }
     ICashRegisterSessionRepository CashRegisterSessions { get; }
     ICashMovementRepository CashMovements { get; }
+    IRestaurantTableRepository RestaurantTables { get; }
 
     Task<int> SaveChangesAsync();
 }

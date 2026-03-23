@@ -52,9 +52,16 @@ public partial class Order
     [MaxLength(100)]
     public string? CancelledBy { get; set; }
 
+    public int? TableId { get; set; }
+
+    [MaxLength(50)]
+    public string? TableName { get; set; }
+
     public virtual Branch? Branch { get; set; }
 
     public virtual User? User { get; set; }
+
+    public virtual RestaurantTable? Table { get; set; }
 
     public virtual ICollection<OrderItem>? Items { get; set; }
 }

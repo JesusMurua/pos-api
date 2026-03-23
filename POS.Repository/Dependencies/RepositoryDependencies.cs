@@ -29,6 +29,7 @@ public static class RepositoryDependencies
         services.AddScoped<IDiscountPresetRepository, DiscountPresetRepository>();
         services.AddScoped<ICashRegisterSessionRepository, CashRegisterSessionRepository>();
         services.AddScoped<ICashMovementRepository, CashMovementRepository>();
+        services.AddScoped<IRestaurantTableRepository, RestaurantTableRepository>();
 
         return services;
     }

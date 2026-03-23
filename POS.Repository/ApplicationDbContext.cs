@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DiscountPreset> DiscountPresets { get; set; } = null!;
     public DbSet<CashRegisterSession> CashRegisterSessions { get; set; } = null!;
     public DbSet<CashMovement> CashMovements { get; set; } = null!;
+    public DbSet<RestaurantTable> RestaurantTables { get; set; } = null!;
 
     #endregion
 
@@ -195,6 +196,25 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(s => new { s.BranchId, s.Status });
             entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
+        });
+
+        #endregion
+
+        #region RestaurantTable Configuration
+
+        modelBuilder.Entity<RestaurantTable>(entity =>
+        {
+            entity.HasOne(t => t.Branch)
+                .WithMany()
+                .HasForeignKey(t => t.BranchId);
+
+            entity.HasMany(t => t.Orders)
+                .WithOne(o => o.Table)
+                .HasForeignKey(o => o.TableId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(t => new { t.BranchId, t.IsActive });
         });
 
         #endregion

@@ -16,6 +16,7 @@ public class UnitOfWork : IUnitOfWork
     private IDiscountPresetRepository? _discountPresets;
     private ICashRegisterSessionRepository? _cashRegisterSessions;
     private ICashMovementRepository? _cashMovements;
+    private IRestaurantTableRepository? _restaurantTables;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -48,6 +49,9 @@ public class UnitOfWork : IUnitOfWork
 
     public ICashMovementRepository CashMovements =>
         _cashMovements ??= new CashMovementRepository(_context);
+
+    public IRestaurantTableRepository RestaurantTables =>
+        _restaurantTables ??= new RestaurantTableRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

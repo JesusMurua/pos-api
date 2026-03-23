@@ -44,6 +44,19 @@ public class OrderService : IOrderService
 
                 await _unitOfWork.Orders.AddAsync(order);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Update table status based on order
+                if (order.TableId.HasValue)
+                {
+                    var table = await _unitOfWork.RestaurantTables.GetByIdAsync(order.TableId.Value);
+                    if (table != null)
+                    {
+                        table.Status = order.CancellationReason == null ? "occupied" : "available";
+                        _unitOfWork.RestaurantTables.Update(table);
+                        await _unitOfWork.SaveChangesAsync();
+                    }
+                }
+
                 result.Synced++;
             }
             catch
@@ -142,6 +155,8 @@ public class OrderService : IOrderService
             TenderedCents = request.TenderedCents,
             ChangeCents = request.ChangeCents,
             CreatedAt = request.CreatedAt,
+            TableId = request.TableId,
+            TableName = request.TableName,
             Items = request.Items.Select(i => new OrderItem
             {
                 OrderId = request.Id,
