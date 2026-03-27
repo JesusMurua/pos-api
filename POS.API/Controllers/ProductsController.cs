@@ -41,6 +41,21 @@ public class ProductsController : BaseApiController
     }
 
     /// <summary>
+    /// Retrieves all active and available products for a branch (public/kiosk access).
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <returns>A list of active and available products.</returns>
+    /// <response code="200">Returns the list of products.</response>
+    [HttpGet("public")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllPublic([FromQuery] int branchId)
+    {
+        var products = await _productService.GetAllActiveAsync(branchId);
+        return Ok(products);
+    }
+
+    /// <summary>
     /// Retrieves a product by its identifier.
     /// </summary>
     /// <param name="id">The product identifier.</param>

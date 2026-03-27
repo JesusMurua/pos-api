@@ -34,6 +34,21 @@ public class CategoriesController : BaseApiController
     }
 
     /// <summary>
+    /// Retrieves all active categories for a branch (public/kiosk access).
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <returns>A list of active categories.</returns>
+    /// <response code="200">Returns the list of categories.</response>
+    [HttpGet("public")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<Category>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllPublic([FromQuery] int branchId)
+    {
+        var categories = await _categoryService.GetAllActiveAsync(branchId);
+        return Ok(categories);
+    }
+
+    /// <summary>
     /// Creates a new category.
     /// </summary>
     /// <param name="category">The category data to create.</param>

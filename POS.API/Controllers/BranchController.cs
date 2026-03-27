@@ -130,6 +130,29 @@ public class BranchController : BaseApiController
     }
 
     /// <summary>
+    /// Retrieves public branch info for kiosk mode (no sensitive data).
+    /// </summary>
+    /// <param name="id">The branch identifier.</param>
+    /// <returns>Basic branch info.</returns>
+    /// <response code="200">Returns the branch public info.</response>
+    /// <response code="404">If the branch is not found.</response>
+    [HttpGet("public/{id}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublicConfig(int id)
+    {
+        var branch = await _branchService.GetConfigAsync(id);
+        return Ok(new
+        {
+            branch.Id,
+            branch.Name,
+            branch.LocationName,
+            businessName = branch.Business?.Name
+        });
+    }
+
+    /// <summary>
     /// Updates the branch name and location.
     /// </summary>
     /// <param name="id">The branch identifier.</param>
