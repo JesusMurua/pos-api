@@ -9,7 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for sales reports and export.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner")]
+[Authorize]
 public class ReportController : BaseApiController
 {
     private readonly IReportService _reportService;
@@ -28,6 +28,7 @@ public class ReportController : BaseApiController
     /// <response code="200">Returns the report summary.</response>
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("summary")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(ReportSummary), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetSummary(
@@ -47,6 +48,7 @@ public class ReportController : BaseApiController
     /// <response code="200">Returns the Excel file.</response>
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/excel")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportExcel(
@@ -70,6 +72,7 @@ public class ReportController : BaseApiController
     /// <response code="200">Returns the PDF file.</response>
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/pdf")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportPdf(

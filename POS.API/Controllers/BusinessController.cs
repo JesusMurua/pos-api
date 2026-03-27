@@ -10,7 +10,7 @@ namespace POS.API.Controllers;
 /// Controller for managing businesses.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner")]
+[Authorize]
 public class BusinessController : BaseApiController
 {
     private readonly IBusinessService _businessService;
@@ -28,6 +28,7 @@ public class BusinessController : BaseApiController
     /// <response code="200">Returns the requested business.</response>
     /// <response code="404">If the business is not found.</response>
     [HttpGet("{id}")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Business), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
@@ -44,6 +45,7 @@ public class BusinessController : BaseApiController
     /// <response code="201">Returns the created business.</response>
     /// <response code="400">If the request data is invalid.</response>
     [HttpPost]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Business), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRequest request)

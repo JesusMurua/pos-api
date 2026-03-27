@@ -10,7 +10,7 @@ namespace POS.API.Controllers;
 /// Controller for managing branch configuration and PIN.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner")]
+[Authorize]
 public class BranchController : BaseApiController
 {
     private readonly IBranchService _branchService;
@@ -139,6 +139,7 @@ public class BranchController : BaseApiController
     /// <response code="404">If the branch is not found.</response>
     /// <response code="400">If the request data is invalid.</response>
     [HttpPut("{id}/config")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Branch), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -159,6 +160,7 @@ public class BranchController : BaseApiController
     /// <response code="200">Returns the verification result.</response>
     /// <response code="404">If the branch is not found.</response>
     [HttpPost("{id}/verify-pin")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> VerifyPin(int id, [FromBody] VerifyPinRequest request)
@@ -179,6 +181,7 @@ public class BranchController : BaseApiController
     /// <response code="400">If the current PIN is incorrect.</response>
     /// <response code="404">If the branch is not found.</response>
     [HttpPut("{id}/pin")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

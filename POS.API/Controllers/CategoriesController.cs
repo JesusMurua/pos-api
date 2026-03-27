@@ -9,7 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing categories.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner")]
+[Authorize]
 public class CategoriesController : BaseApiController
 {
     private readonly ICategoryService _categoryService;
@@ -41,6 +41,7 @@ public class CategoriesController : BaseApiController
     /// <response code="201">Returns the created category.</response>
     /// <response code="400">If the category data is invalid.</response>
     [HttpPost]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Category), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] Category category)
@@ -61,6 +62,7 @@ public class CategoriesController : BaseApiController
     /// <response code="404">If the category is not found.</response>
     /// <response code="400">If the category data is invalid.</response>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Category), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -80,6 +82,7 @@ public class CategoriesController : BaseApiController
     /// <response code="200">Returns the updated category.</response>
     /// <response code="404">If the category is not found.</response>
     [HttpPatch("{id}/toggle")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Category), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Toggle(int id)
@@ -97,6 +100,7 @@ public class CategoriesController : BaseApiController
     /// <response code="400">If the category has active products.</response>
     /// <response code="404">If the category is not found.</response>
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -9,7 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing users.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner,Manager")]
+[Authorize]
 public class UserController : BaseApiController
 {
     private readonly IUserService _userService;
@@ -25,6 +25,7 @@ public class UserController : BaseApiController
     /// <returns>A list of users.</returns>
     /// <response code="200">Returns the list of users.</response>
     [HttpGet]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranch()
     {
@@ -40,6 +41,7 @@ public class UserController : BaseApiController
     /// <response code="200">Returns the created user identifier.</response>
     /// <response code="400">If validation fails.</response>
     [HttpPost]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
@@ -59,6 +61,7 @@ public class UserController : BaseApiController
     /// <response code="200">Returns the updated user.</response>
     /// <response code="404">If the user is not found.</response>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
@@ -77,6 +80,7 @@ public class UserController : BaseApiController
     /// <response code="200">Returns the list of branch assignments.</response>
     /// <response code="404">If the user is not found.</response>
     [HttpGet("{id}/branches")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<UserBranchDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBranches(int id)
@@ -116,6 +120,7 @@ public class UserController : BaseApiController
     /// <response code="400">If trying to deactivate the last owner.</response>
     /// <response code="404">If the user is not found.</response>
     [HttpPatch("{id}/toggle")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

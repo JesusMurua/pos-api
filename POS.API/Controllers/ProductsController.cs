@@ -9,7 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing products.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner")]
+[Authorize]
 public class ProductsController : BaseApiController
 {
     private readonly IProductService _productService;
@@ -48,6 +48,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the requested product.</response>
     /// <response code="404">If the product is not found.</response>
     [HttpGet("{id}")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
@@ -64,6 +65,7 @@ public class ProductsController : BaseApiController
     /// <response code="201">Returns the created product.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPost]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] Product product)
@@ -84,6 +86,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If the product is not found.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -103,6 +106,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the updated product.</response>
     /// <response code="404">If the product is not found.</response>
     [HttpPatch("{id}/toggle")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Toggle(int id)
@@ -121,6 +125,7 @@ public class ProductsController : BaseApiController
     /// <response code="400">If TrackStock is false or type is invalid.</response>
     /// <response code="404">If the product is not found.</response>
     [HttpPost("{id}/stock")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -167,6 +172,7 @@ public class ProductsController : BaseApiController
     /// <returns>A list of inventory movements, or empty array if none.</returns>
     /// <response code="200">Returns the list of movements.</response>
     [HttpGet("{id}/movements")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(IEnumerable<InventoryMovement>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMovements(int id)
     {
@@ -180,6 +186,7 @@ public class ProductsController : BaseApiController
     /// <returns>An Excel file with headers and example data.</returns>
     /// <response code="200">Returns the Excel template file.</response>
     [HttpGet("import/template")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetImportTemplate()
     {
@@ -197,6 +204,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the import preview.</response>
     /// <response code="400">If the file is missing or invalid.</response>
     [HttpPost("import/preview")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(ProductImportPreview), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> PreviewImport(IFormFile file)
@@ -219,6 +227,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the import result.</response>
     /// <response code="400">If rows are missing or empty.</response>
     [HttpPost("import/execute")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(ProductImportResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExecuteImport([FromBody] List<ProductImportRow> rows)

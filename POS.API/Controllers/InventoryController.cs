@@ -9,7 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing inventory items and movements.
 /// </summary>
 [Route("api/[controller]")]
-[Authorize(Roles = "Owner,Manager")]
+[Authorize]
 public class InventoryController : BaseApiController
 {
     private readonly IInventoryService _inventoryService;
@@ -25,6 +25,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of inventory items.</returns>
     /// <response code="200">Returns the list of inventory items.</response>
     [HttpGet]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<InventoryItem>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
@@ -54,6 +55,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns the requested inventory item.</response>
     /// <response code="404">If the item is not found.</response>
     [HttpGet("{id}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(InventoryItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
@@ -68,6 +70,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of low-stock inventory items.</returns>
     /// <response code="200">Returns the list of low-stock items.</response>
     [HttpGet("low-stock")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<InventoryItem>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLowStock()
     {
@@ -83,6 +86,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns the list of movements.</response>
     /// <response code="404">If the item is not found.</response>
     [HttpGet("{id}/movements")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<InventoryMovement>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMovements(int id)
@@ -99,6 +103,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns the created item identifier.</response>
     /// <response code="400">If the item data is invalid.</response>
     [HttpPost("create")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] InventoryItem item)
@@ -118,6 +123,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns the updated item.</response>
     /// <response code="404">If the item is not found.</response>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(InventoryItem), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(int id, [FromBody] InventoryItem item)
@@ -136,6 +142,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns success status.</response>
     /// <response code="404">If the item is not found.</response>
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)
@@ -154,6 +161,7 @@ public class InventoryController : BaseApiController
     /// <response code="400">If the movement type is invalid.</response>
     /// <response code="404">If the item is not found.</response>
     [HttpPost("{id}/movement")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(InventoryMovement), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -171,6 +179,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of consumption rules with inventory item details.</returns>
     /// <response code="200">Returns the list of consumption rules.</response>
     [HttpGet("consumption/{productId}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(IEnumerable<ProductConsumption>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetConsumption(int productId)
     {
@@ -186,6 +195,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns the consumption rule.</response>
     /// <response code="400">If the request data is invalid.</response>
     [HttpPost("consumption")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(ProductConsumption), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateConsumption([FromBody] CreateConsumptionRequest request)
@@ -205,6 +215,7 @@ public class InventoryController : BaseApiController
     /// <response code="200">Returns success status.</response>
     /// <response code="404">If the consumption rule is not found.</response>
     [HttpDelete("consumption/{id}")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteConsumption(int id)
