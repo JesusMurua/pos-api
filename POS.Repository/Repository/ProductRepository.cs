@@ -18,4 +18,12 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Include(p => p.Extras)
             .ToListAsync();
     }
+
+    public async Task<Product?> GetByIdWithRelationsAsync(int id)
+    {
+        return await _context.Products
+            .Include(p => p.Sizes)
+            .Include(p => p.Extras)
+            .FirstOrDefaultAsync(p => p.Id == id);
+    }
 }

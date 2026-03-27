@@ -65,7 +65,7 @@ public class ProductService : IProductService
     /// </summary>
     public async Task<Product> UpdateAsync(int id, Product product)
     {
-        var existing = await _unitOfWork.Products.GetByIdAsync(id);
+        var existing = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);
 
         if (existing == null)
             throw new NotFoundException($"Product with id {id} not found");
@@ -79,6 +79,26 @@ public class ProductService : IProductService
         existing.TrackStock = product.TrackStock;
         existing.CurrentStock = product.CurrentStock;
         existing.LowStockThreshold = product.LowStockThreshold;
+
+        existing.Sizes.Clear();
+        foreach (var size in product.Sizes ?? [])
+        {
+            existing.Sizes.Add(new ProductSize
+            {
+                Label = size.Label,
+                ExtraPriceCents = size.ExtraPriceCents
+            });
+        }
+
+        existing.Extras.Clear();
+        foreach (var extra in product.Extras ?? [])
+        {
+            existing.Extras.Add(new ProductExtra
+            {
+                Label = extra.Label,
+                PriceCents = extra.PriceCents
+            });
+        }
 
         _unitOfWork.Products.Update(existing);
         await _unitOfWork.SaveChangesAsync();
