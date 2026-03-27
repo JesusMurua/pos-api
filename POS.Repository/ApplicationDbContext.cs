@@ -32,6 +32,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductConsumption> ProductConsumptions { get; set; } = null!;
     public DbSet<UserBranch> UserBranches { get; set; } = null!;
     public DbSet<PushSubscription> PushSubscriptions { get; set; } = null!;
+    public DbSet<DeviceActivationCode> DeviceActivationCodes { get; set; } = null!;
 
     #endregion
 
@@ -325,6 +326,36 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(p => p.BranchId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        #endregion
+
+        #region DeviceActivationCode Configuration
+
+        modelBuilder.Entity<DeviceActivationCode>(entity =>
+        {
+            entity.Property(d => d.Code).HasMaxLength(6);
+            entity.Property(d => d.Mode).HasMaxLength(20);
+
+            entity.HasIndex(d => d.Code).IsUnique();
+            entity.HasIndex(d => d.BusinessId);
+
+            entity.Property(d => d.IsUsed).HasDefaultValue(false);
+
+            entity.HasOne(d => d.Business)
+                .WithMany()
+                .HasForeignKey(d => d.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Branch)
+                .WithMany()
+                .HasForeignKey(d => d.BranchId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(d => d.Creator)
+                .WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         #endregion

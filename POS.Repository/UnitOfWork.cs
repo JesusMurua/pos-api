@@ -22,6 +22,7 @@ public class UnitOfWork : IUnitOfWork
     private IProductConsumptionRepository? _productConsumptions;
     private IUserBranchRepository? _userBranches;
     private IPushSubscriptionRepository? _pushSubscriptions;
+    private IDeviceActivationCodeRepository? _deviceActivationCodes;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -72,6 +73,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IPushSubscriptionRepository PushSubscriptions =>
         _pushSubscriptions ??= new PushSubscriptionRepository(_context);
+
+    public IDeviceActivationCodeRepository DeviceActivationCodes =>
+        _deviceActivationCodes ??= new DeviceActivationCodeRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {
