@@ -18,6 +18,7 @@ public interface IUnitOfWork : IDisposable
     IInventoryMovementRepository InventoryMovements { get; }
     IProductConsumptionRepository ProductConsumptions { get; }
     IUserBranchRepository UserBranches { get; }
+    IPushSubscriptionRepository PushSubscriptions { get; }
 
     Task<int> SaveChangesAsync();
 }

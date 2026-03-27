@@ -27,6 +27,14 @@ if (!string.IsNullOrEmpty(jwtSecret))
     builder.Configuration["Jwt:Secret"] = jwtSecret;
 }
 
+var vapidPublic = Environment.GetEnvironmentVariable("VAPID_PUBLIC");
+if (!string.IsNullOrEmpty(vapidPublic))
+    builder.Configuration["Vapid:PublicKey"] = vapidPublic;
+
+var vapidPrivate = Environment.GetEnvironmentVariable("VAPID_PRIVATE");
+if (!string.IsNullOrEmpty(vapidPrivate))
+    builder.Configuration["Vapid:PrivateKey"] = vapidPrivate;
+
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
@@ -50,6 +58,9 @@ builder.Services.AddSwaggerGen();
 // JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+
+// VAPID Configuration
+builder.Services.Configure<VapidSettings>(builder.Configuration.GetSection("Vapid"));
 
 builder.Services.AddAuthentication(options =>
 {

@@ -21,6 +21,7 @@ public class UnitOfWork : IUnitOfWork
     private IInventoryMovementRepository? _inventoryMovements;
     private IProductConsumptionRepository? _productConsumptions;
     private IUserBranchRepository? _userBranches;
+    private IPushSubscriptionRepository? _pushSubscriptions;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -68,6 +69,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IUserBranchRepository UserBranches =>
         _userBranches ??= new UserBranchRepository(_context);
+
+    public IPushSubscriptionRepository PushSubscriptions =>
+        _pushSubscriptions ??= new PushSubscriptionRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

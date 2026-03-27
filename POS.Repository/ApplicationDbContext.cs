@@ -31,6 +31,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<InventoryMovement> InventoryMovements { get; set; } = null!;
     public DbSet<ProductConsumption> ProductConsumptions { get; set; } = null!;
     public DbSet<UserBranch> UserBranches { get; set; } = null!;
+    public DbSet<PushSubscription> PushSubscriptions { get; set; } = null!;
 
     #endregion
 
@@ -295,6 +296,31 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(pc => new { pc.ProductId, pc.InventoryItemId })
                 .IsUnique();
+        });
+
+        #endregion
+
+        #region PushSubscription Configuration
+
+        modelBuilder.Entity<PushSubscription>(entity =>
+        {
+            entity.Property(p => p.Endpoint).HasMaxLength(2048);
+            entity.Property(p => p.P256dh).HasMaxLength(500);
+            entity.Property(p => p.Auth).HasMaxLength(500);
+            entity.Property(p => p.DeviceInfo).HasMaxLength(500);
+
+            entity.HasIndex(p => p.Endpoint).IsUnique();
+            entity.HasIndex(p => p.BranchId);
+
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.Branch)
+                .WithMany()
+                .HasForeignKey(p => p.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         #endregion

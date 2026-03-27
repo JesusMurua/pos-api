@@ -34,6 +34,7 @@ public static class RepositoryDependencies
         services.AddScoped<IInventoryMovementRepository, InventoryMovementRepository>();
         services.AddScoped<IProductConsumptionRepository, ProductConsumptionRepository>();
         services.AddScoped<IUserBranchRepository, UserBranchRepository>();
+        services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
 
         return services;
     }

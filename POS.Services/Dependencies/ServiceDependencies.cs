@@ -21,6 +21,7 @@ public static class ServiceDependencies
         services.AddScoped<ITableService, TableService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<IPushNotificationService, PushNotificationService>();
 
         return services;
     }
