@@ -25,7 +25,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of inventory items.</returns>
     /// <response code="200">Returns the list of inventory items.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Manager")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<InventoryItem>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
