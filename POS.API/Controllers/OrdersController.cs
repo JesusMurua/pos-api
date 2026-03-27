@@ -119,4 +119,38 @@ public class OrdersController : BaseApiController
         var order = await _orderService.CancelAsync(id, request.Reason, request.Notes, userName);
         return Ok(order);
     }
+
+    /// <summary>
+    /// Updates the kitchen status of an order.
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <param name="request">The new kitchen status.</param>
+    /// <returns>The updated order.</returns>
+    /// <response code="200">Returns the updated order.</response>
+    /// <response code="400">If the status value is invalid.</response>
+    /// <response code="404">If the order is not found.</response>
+    [HttpPatch("{id}/kitchen-status")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen")]
+    [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateKitchenStatus(string id, [FromBody] UpdateKitchenStatusRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var validStatuses = new[] { "Preparing", "Ready", "Delivered" };
+        if (!validStatuses.Contains(request.Status))
+            return BadRequest(new { message = "Status must be 'Preparing', 'Ready', or 'Delivered'" });
+
+        var order = await _orderService.UpdateKitchenStatusAsync(id, request.Status);
+        return Ok(order);
+    }
+}
+
+/// <summary>
+/// Request body for updating kitchen status.
+/// </summary>
+public class UpdateKitchenStatusRequest
+{
+    public string Status { get; set; } = null!;
 }

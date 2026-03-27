@@ -37,6 +37,11 @@ public interface IOrderService
     /// Gets active (non-cancelled) orders for a specific table, ordered by CreatedAt ascending.
     /// </summary>
     Task<IEnumerable<object>> GetActiveByTableAsync(int tableId);
+
+    /// <summary>
+    /// Updates the kitchen status of an order. Sends push notification when status is "Ready".
+    /// </summary>
+    Task<Order> UpdateKitchenStatusAsync(string orderId, string status);
 }
 
 /// <summary>

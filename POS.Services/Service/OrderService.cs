@@ -9,10 +9,12 @@ namespace POS.Services.Service;
 public class OrderService : IOrderService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPushNotificationService _pushService;
 
-    public OrderService(IUnitOfWork unitOfWork)
+    public OrderService(IUnitOfWork unitOfWork, IPushNotificationService pushService)
     {
         _unitOfWork = unitOfWork;
+        _pushService = pushService;
     }
 
     #region Public API Methods
@@ -99,6 +101,21 @@ public class OrderService : IOrderService
                     }
                 }
 
+                // Push notification to Kitchen for new order
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var tableInfo = order.TableName != null ? $" - Mesa {order.TableName}" : "";
+                        await _pushService.SendToBranchAsync(
+                            order.BranchId,
+                            "Nueva orden 🛎️",
+                            $"Orden #{order.OrderNumber}{tableInfo}",
+                            new { orderId = order.Id, orderNumber = order.OrderNumber, tableId = order.TableId, tableName = order.TableName });
+                    }
+                    catch { /* best-effort */ }
+                });
+
                 result.Synced++;
             }
             catch
@@ -175,6 +192,43 @@ public class OrderService : IOrderService
 
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
+        return order;
+    }
+
+    /// <summary>
+    /// Updates kitchen status and sends push when status is "Ready".
+    /// </summary>
+    public async Task<Order> UpdateKitchenStatusAsync(string orderId, string status)
+    {
+        var validStatuses = new[] { "Pending", "Preparing", "Ready", "Delivered" };
+        if (!validStatuses.Contains(status))
+            throw new ValidationException($"Invalid kitchen status: {status}. Must be one of: {string.Join(", ", validStatuses)}");
+
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
+        var order = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
+
+        order.KitchenStatus = status;
+        _unitOfWork.Orders.Update(order);
+        await _unitOfWork.SaveChangesAsync();
+
+        if (status == "Ready")
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var tableInfo = order.TableName != null ? $" - Mesa {order.TableName}" : "";
+                    await _pushService.SendToBranchAsync(
+                        order.BranchId,
+                        "Orden lista 🍽️",
+                        $"Orden #{order.OrderNumber}{tableInfo}",
+                        new { orderId = order.Id, orderNumber = order.OrderNumber, tableId = order.TableId, tableName = order.TableName });
+                }
+                catch { /* best-effort */ }
+            });
+        }
+
         return order;
     }
 

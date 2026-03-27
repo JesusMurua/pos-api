@@ -54,6 +54,9 @@ public partial class Order
 
     public bool IsPaid { get; set; } = false;
 
+    [MaxLength(20)]
+    public string KitchenStatus { get; set; } = "Pending";
+
     public int? TableId { get; set; }
 
     [MaxLength(50)]

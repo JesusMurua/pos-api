@@ -168,6 +168,10 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(o => o.IsPaid).HasDefaultValue(false);
 
+            entity.Property(o => o.KitchenStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("Pending");
+
             entity.HasOne(o => o.Branch)
                 .WithMany(b => b.Orders)
                 .HasForeignKey(o => o.BranchId);
