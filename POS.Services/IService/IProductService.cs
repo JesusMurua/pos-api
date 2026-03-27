@@ -31,4 +31,9 @@ public interface IProductService
     /// Toggles the active/inactive status of a product.
     /// </summary>
     Task<Product> ToggleActiveAsync(int id);
+
+    Task AddImageAsync(int productId, ProductImage image);
+    Task<ProductImage?> GetImageAsync(int imageId);
+    Task DeleteImageAsync(int imageId);
+    Task UpdateImageUrlAsync(int productId, string url);
 }

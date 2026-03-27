@@ -17,6 +17,9 @@ public partial class Product
     [MaxLength(500)]
     public string? ImageUrl { get; set; }
 
+    [MaxLength(1000)]
+    public string? Description { get; set; }
+
     public bool IsAvailable { get; set; } = true;
 
     public bool IsPopular { get; set; }
@@ -32,4 +35,6 @@ public partial class Product
     public virtual ICollection<ProductSize>? Sizes { get; set; }
 
     public virtual ICollection<ProductExtra>? Extras { get; set; }
+
+    public virtual ICollection<ProductImage>? Images { get; set; }
 }

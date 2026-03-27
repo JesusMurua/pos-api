@@ -35,6 +35,14 @@ var vapidPrivate = Environment.GetEnvironmentVariable("VAPID_PRIVATE");
 if (!string.IsNullOrEmpty(vapidPrivate))
     builder.Configuration["Vapid:PrivateKey"] = vapidPrivate;
 
+var supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL");
+if (!string.IsNullOrEmpty(supabaseUrl))
+    builder.Configuration["Supabase:Url"] = supabaseUrl;
+
+var supabaseKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY");
+if (!string.IsNullOrEmpty(supabaseKey))
+    builder.Configuration["Supabase:ServiceKey"] = supabaseKey;
+
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
@@ -61,6 +69,9 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"))
 
 // VAPID Configuration
 builder.Services.Configure<VapidSettings>(builder.Configuration.GetSection("Vapid"));
+
+// Supabase Configuration
+builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("Supabase"));
 
 builder.Services.AddAuthentication(options =>
 {

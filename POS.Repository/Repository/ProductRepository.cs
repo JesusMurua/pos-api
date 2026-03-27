@@ -16,6 +16,7 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Where(p => p.CategoryId == categoryId && p.IsAvailable)
             .Include(p => p.Sizes)
             .Include(p => p.Extras)
+            .Include(p => p.Images)
             .ToListAsync();
     }
 
@@ -24,6 +25,23 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
         return await _context.Products
             .Include(p => p.Sizes)
             .Include(p => p.Extras)
+            .Include(p => p.Images)
             .FirstOrDefaultAsync(p => p.Id == id);
+    }
+
+    public async Task<ProductImage?> GetImageByIdAsync(int imageId)
+    {
+        return await _context.ProductImages
+            .FirstOrDefaultAsync(i => i.Id == imageId);
+    }
+
+    public async Task AddImageAsync(ProductImage image)
+    {
+        await _context.ProductImages.AddAsync(image);
+    }
+
+    public void DeleteImage(ProductImage image)
+    {
+        _context.ProductImages.Remove(image);
     }
 }

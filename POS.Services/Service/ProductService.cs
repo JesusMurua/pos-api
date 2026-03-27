@@ -121,5 +121,38 @@ public class ProductService : IProductService
         return product;
     }
 
+    public async Task AddImageAsync(int productId, ProductImage image)
+    {
+        image.ProductId = productId;
+        await _unitOfWork.Products.AddImageAsync(image);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task<ProductImage?> GetImageAsync(int imageId)
+    {
+        return await _unitOfWork.Products.GetImageByIdAsync(imageId);
+    }
+
+    public async Task DeleteImageAsync(int imageId)
+    {
+        var image = await _unitOfWork.Products.GetImageByIdAsync(imageId);
+        if (image != null)
+        {
+            _unitOfWork.Products.DeleteImage(image);
+            await _unitOfWork.SaveChangesAsync();
+        }
+    }
+
+    public async Task UpdateImageUrlAsync(int productId, string url)
+    {
+        var product = await _unitOfWork.Products.GetByIdAsync(productId);
+        if (product != null)
+        {
+            product.ImageUrl = url;
+            _unitOfWork.Products.Update(product);
+            await _unitOfWork.SaveChangesAsync();
+        }
+    }
+
     #endregion
 }

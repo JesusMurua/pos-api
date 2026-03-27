@@ -15,15 +15,18 @@ public class ProductsController : BaseApiController
     private readonly IProductService _productService;
     private readonly IProductImportService _productImportService;
     private readonly IInventoryService _inventoryService;
+    private readonly IStorageService _storageService;
 
     public ProductsController(
         IProductService productService,
         IProductImportService productImportService,
-        IInventoryService inventoryService)
+        IInventoryService inventoryService,
+        IStorageService storageService)
     {
         _productService = productService;
         _productImportService = productImportService;
         _inventoryService = inventoryService;
+        _storageService = storageService;
     }
 
     /// <summary>
@@ -80,7 +83,7 @@ public class ProductsController : BaseApiController
     /// <response code="201">Returns the created product.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPost]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] Product product)
@@ -101,7 +104,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If the product is not found.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPut("{id}")]
-    [Authorize(Roles = "Owner")]
+    [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -252,6 +255,75 @@ public class ProductsController : BaseApiController
 
         var result = await _productImportService.ImportAsync(rows, BranchId);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Uploads an image for a product and saves to Supabase Storage.
+    /// </summary>
+    /// <param name="id">The product identifier.</param>
+    /// <param name="file">The image file.</param>
+    /// <returns>The created product image.</returns>
+    /// <response code="200">Returns the created image record.</response>
+    /// <response code="400">If the file is missing or not an image.</response>
+    /// <response code="404">If the product is not found.</response>
+    [HttpPost("{id}/images")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(ProductImage), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadImage(int id, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "File is required" });
+
+        if (!file.ContentType.StartsWith("image/"))
+            return BadRequest(new { message = "File must be an image" });
+
+        var product = await _productService.GetByIdAsync(id);
+        if (product == null)
+            return NotFound(new { message = $"Product with id {id} not found" });
+
+        var url = await _storageService.UploadAsync(
+            file.OpenReadStream(), file.FileName, file.ContentType);
+
+        var image = new ProductImage
+        {
+            ProductId = id,
+            Url = url,
+            SortOrder = (product.Images?.Count ?? 0) + 1,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _productService.AddImageAsync(id, image);
+
+        if (string.IsNullOrEmpty(product.ImageUrl))
+            await _productService.UpdateImageUrlAsync(id, url);
+
+        return Ok(image);
+    }
+
+    /// <summary>
+    /// Deletes a product image from Supabase Storage and database.
+    /// </summary>
+    /// <param name="id">The product identifier.</param>
+    /// <param name="imageId">The image identifier.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Image deleted successfully.</response>
+    /// <response code="404">If the image is not found.</response>
+    [HttpDelete("{id}/images/{imageId}")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteImage(int id, int imageId)
+    {
+        var image = await _productService.GetImageAsync(imageId);
+        if (image == null || image.ProductId != id)
+            return NotFound(new { message = "Image not found" });
+
+        await _storageService.DeleteAsync(image.Url);
+        await _productService.DeleteImageAsync(imageId);
+
+        return Ok(new { success = true });
     }
 }
 

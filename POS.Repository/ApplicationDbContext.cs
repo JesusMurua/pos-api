@@ -33,6 +33,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserBranch> UserBranches { get; set; } = null!;
     public DbSet<PushSubscription> PushSubscriptions { get; set; } = null!;
     public DbSet<DeviceActivationCode> DeviceActivationCodes { get; set; } = null!;
+    public DbSet<ProductImage> ProductImages { get; set; } = null!;
 
     #endregion
 
@@ -136,6 +137,11 @@ public class ApplicationDbContext : DbContext
             entity.HasMany(p => p.Extras)
                 .WithOne(e => e.Product)
                 .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(p => p.Images)
+                .WithOne(i => i.Product)
+                .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(p => p.CategoryId);
