@@ -24,7 +24,7 @@ public class DiscountPresetController : BaseApiController
     /// <returns>A list of active discount presets.</returns>
     /// <response code="200">Returns the list of discount presets.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<DiscountPreset>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranch()
     {

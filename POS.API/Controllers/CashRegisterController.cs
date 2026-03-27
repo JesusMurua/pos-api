@@ -25,7 +25,7 @@ public class CashRegisterController : BaseApiController
     /// <response code="200">Returns the open session.</response>
     /// <response code="204">No open session exists.</response>
     [HttpGet("session")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> GetOpenSession()
@@ -46,7 +46,7 @@ public class CashRegisterController : BaseApiController
     /// <response code="200">Returns the created session.</response>
     /// <response code="400">If there is already an open session.</response>
     [HttpPost("session/open")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> OpenSession([FromBody] OpenSessionRequest request)
@@ -65,7 +65,7 @@ public class CashRegisterController : BaseApiController
     /// <response code="200">Returns the closed session.</response>
     /// <response code="404">If no open session exists.</response>
     [HttpPost("session/close")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CloseSession([FromBody] CloseSessionRequest request)
@@ -85,7 +85,7 @@ public class CashRegisterController : BaseApiController
     /// <response code="404">If no open session exists.</response>
     /// <response code="400">If the request data is invalid.</response>
     [HttpPost("movement")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(CashMovement), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

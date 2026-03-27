@@ -27,7 +27,7 @@ public class TableController : BaseApiController
     /// <returns>A list of tables.</returns>
     /// <response code="200">Returns the list of tables.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Cashier,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen")]
     [ProducesResponseType(typeof(IEnumerable<RestaurantTable>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranch([FromQuery] bool includeInactive = false)
     {
@@ -101,7 +101,7 @@ public class TableController : BaseApiController
     /// <response code="400">If the status value is invalid.</response>
     /// <response code="404">If the table is not found.</response>
     [HttpPatch("{id}/status")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(RestaurantTable), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

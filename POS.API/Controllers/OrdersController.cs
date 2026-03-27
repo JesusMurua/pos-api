@@ -27,6 +27,7 @@ public class OrdersController : BaseApiController
     /// <response code="200">Returns the sync result summary.</response>
     /// <response code="400">If the request body is invalid.</response>
     [HttpPost("sync")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(SyncResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Sync([FromBody] List<SyncOrderRequest> orders)
@@ -44,6 +45,7 @@ public class OrdersController : BaseApiController
     /// <returns>A list of orders.</returns>
     /// <response code="200">Returns the list of orders.</response>
     [HttpGet]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranchAndDate([FromQuery] DateTime date)
     {
@@ -58,6 +60,7 @@ public class OrdersController : BaseApiController
     /// <returns>Order data for daily summary.</returns>
     /// <response code="200">Returns the daily summary data.</response>
     [HttpGet("summary")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDailySummary([FromQuery] DateTime date)
     {
@@ -71,6 +74,7 @@ public class OrdersController : BaseApiController
     /// <returns>The last order number, or 0 if no orders exist.</returns>
     /// <response code="200">Returns the last order number.</response>
     [HttpGet("last-number")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLastOrderNumber()
     {
@@ -85,6 +89,7 @@ public class OrdersController : BaseApiController
     /// <returns>A list of active orders for the table.</returns>
     /// <response code="200">Returns the list of active orders, or empty array if none.</response>
     [HttpGet("by-table/{tableId}")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByTable(int tableId)
     {
@@ -102,6 +107,7 @@ public class OrdersController : BaseApiController
     /// <response code="400">If the order is already cancelled.</response>
     /// <response code="404">If the order is not found.</response>
     [HttpPatch("{id}/cancel")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
