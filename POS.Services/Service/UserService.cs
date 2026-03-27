@@ -92,6 +92,19 @@ public class UserService : IUserService
         await _unitOfWork.Users.AddAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
+        // Auto-assign the user to a default branch via UserBranch
+        var defaultBranch = await ResolveDefaultBranchAsync(branch.BusinessId);
+        if (defaultBranch != null)
+        {
+            await _unitOfWork.UserBranches.AddAsync(new UserBranch
+            {
+                UserId = user.Id,
+                BranchId = defaultBranch.Id,
+                IsDefault = true
+            });
+            await _unitOfWork.SaveChangesAsync();
+        }
+
         return MapToDto(user);
     }
 
@@ -154,9 +167,77 @@ public class UserService : IUserService
         return user.IsActive;
     }
 
+    /// <summary>
+    /// Gets all branch assignments for a user.
+    /// </summary>
+    public async Task<IEnumerable<UserBranchDto>> GetUserBranchesAsync(int userId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user == null)
+            throw new NotFoundException($"User with id {userId} not found");
+
+        var userBranches = await _unitOfWork.UserBranches.GetByUserIdAsync(userId);
+
+        return userBranches
+            .Where(ub => ub.Branch != null)
+            .Select(ub => new UserBranchDto
+            {
+                BranchId = ub.BranchId,
+                BranchName = ub.Branch!.Name,
+                IsDefault = ub.IsDefault
+            });
+    }
+
+    /// <summary>
+    /// Replaces all branch assignments for a user.
+    /// </summary>
+    public async Task<IEnumerable<UserBranchDto>> SetUserBranchesAsync(int userId, int[] branchIds, int defaultBranchId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user == null)
+            throw new NotFoundException($"User with id {userId} not found");
+
+        if (branchIds.Length == 0)
+            throw new ValidationException("At least one branch must be assigned");
+
+        if (!branchIds.Contains(defaultBranchId))
+            throw new ValidationException("Default branch must be included in the branch list");
+
+        // Remove existing assignments
+        var existing = await _unitOfWork.UserBranches.GetByUserIdAsync(userId);
+        foreach (var ub in existing)
+            _unitOfWork.UserBranches.Delete(ub);
+
+        // Add new assignments
+        foreach (var branchId in branchIds.Distinct())
+        {
+            await _unitOfWork.UserBranches.AddAsync(new UserBranch
+            {
+                UserId = userId,
+                BranchId = branchId,
+                IsDefault = branchId == defaultBranchId
+            });
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+
+        return await GetUserBranchesAsync(userId);
+    }
+
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Resolves the default branch for a business: matrix branch first, then lowest ID.
+    /// </summary>
+    private async Task<Branch?> ResolveDefaultBranchAsync(int businessId)
+    {
+        var branches = await _unitOfWork.Branches.GetAsync(
+            b => b.BusinessId == businessId && b.IsActive);
+
+        return branches.OrderByDescending(b => b.IsMatrix).ThenBy(b => b.Id).FirstOrDefault();
+    }
 
     private static UserDto MapToDto(User user)
     {

@@ -14,6 +14,10 @@ public interface IUnitOfWork : IDisposable
     ICashRegisterSessionRepository CashRegisterSessions { get; }
     ICashMovementRepository CashMovements { get; }
     IRestaurantTableRepository RestaurantTables { get; }
+    IInventoryRepository Inventory { get; }
+    IInventoryMovementRepository InventoryMovements { get; }
+    IProductConsumptionRepository ProductConsumptions { get; }
+    IUserBranchRepository UserBranches { get; }
 
     Task<int> SaveChangesAsync();
 }

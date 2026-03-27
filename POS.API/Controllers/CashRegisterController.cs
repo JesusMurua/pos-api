@@ -9,9 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing cash register sessions and movements.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
-[Authorize]
-public class CashRegisterController : ControllerBase
+public class CashRegisterController : BaseApiController
 {
     private readonly ICashRegisterService _cashRegisterService;
 
@@ -21,9 +19,8 @@ public class CashRegisterController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the current open session for a branch.
+    /// Gets the current open session for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>The open session or 204 if none exists.</returns>
     /// <response code="200">Returns the open session.</response>
     /// <response code="204">No open session exists.</response>
@@ -31,9 +28,9 @@ public class CashRegisterController : ControllerBase
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> GetOpenSession([FromQuery] int branchId)
+    public async Task<IActionResult> GetOpenSession()
     {
-        var session = await _cashRegisterService.GetOpenSessionAsync(branchId);
+        var session = await _cashRegisterService.GetOpenSessionAsync(BranchId);
 
         if (session == null)
             return NoContent();
@@ -44,7 +41,6 @@ public class CashRegisterController : ControllerBase
     /// <summary>
     /// Opens a new cash register session.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="request">The session opening data.</param>
     /// <returns>The created session.</returns>
     /// <response code="200">Returns the created session.</response>
@@ -53,20 +49,17 @@ public class CashRegisterController : ControllerBase
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> OpenSession(
-        [FromQuery] int branchId,
-        [FromBody] OpenSessionRequest request)
+    public async Task<IActionResult> OpenSession([FromBody] OpenSessionRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var session = await _cashRegisterService.OpenSessionAsync(branchId, request);
+        var session = await _cashRegisterService.OpenSessionAsync(BranchId, request);
         return Ok(session);
     }
 
     /// <summary>
     /// Closes the current open session.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="request">The session closing data.</param>
     /// <returns>The closed session.</returns>
     /// <response code="200">Returns the closed session.</response>
@@ -75,20 +68,17 @@ public class CashRegisterController : ControllerBase
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CloseSession(
-        [FromQuery] int branchId,
-        [FromBody] CloseSessionRequest request)
+    public async Task<IActionResult> CloseSession([FromBody] CloseSessionRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var session = await _cashRegisterService.CloseSessionAsync(branchId, request);
+        var session = await _cashRegisterService.CloseSessionAsync(BranchId, request);
         return Ok(session);
     }
 
     /// <summary>
     /// Adds a movement to the current open session.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="request">The movement data.</param>
     /// <returns>The created movement.</returns>
     /// <response code="200">Returns the created movement.</response>
@@ -99,20 +89,17 @@ public class CashRegisterController : ControllerBase
     [ProducesResponseType(typeof(CashMovement), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AddMovement(
-        [FromQuery] int branchId,
-        [FromBody] AddMovementRequest request)
+    public async Task<IActionResult> AddMovement([FromBody] AddMovementRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var movement = await _cashRegisterService.AddMovementAsync(branchId, request);
+        var movement = await _cashRegisterService.AddMovementAsync(BranchId, request);
         return Ok(movement);
     }
 
     /// <summary>
     /// Gets session history for a date range.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="from">Start date.</param>
     /// <param name="to">End date.</param>
     /// <returns>Sessions within the date range.</returns>
@@ -121,11 +108,10 @@ public class CashRegisterController : ControllerBase
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(IEnumerable<CashRegisterSession>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(
-        [FromQuery] int branchId,
         [FromQuery] DateTime from,
         [FromQuery] DateTime to)
     {
-        var sessions = await _cashRegisterService.GetHistoryAsync(branchId, from, to);
+        var sessions = await _cashRegisterService.GetHistoryAsync(BranchId, from, to);
         return Ok(sessions);
     }
 }

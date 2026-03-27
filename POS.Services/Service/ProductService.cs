@@ -76,6 +76,9 @@ public class ProductService : IProductService
         existing.IsAvailable = product.IsAvailable;
         existing.IsPopular = product.IsPopular;
         existing.CategoryId = product.CategoryId;
+        existing.TrackStock = product.TrackStock;
+        existing.CurrentStock = product.CurrentStock;
+        existing.LowStockThreshold = product.LowStockThreshold;
 
         _unitOfWork.Products.Update(existing);
         await _unitOfWork.SaveChangesAsync();

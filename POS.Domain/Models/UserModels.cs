@@ -57,6 +57,34 @@ public class UpdateUserRequest
 }
 
 /// <summary>
+/// Request to set branch assignments for a user.
+/// </summary>
+public class SetUserBranchesRequest
+{
+    /// <summary>
+    /// The branch IDs to assign to the user.
+    /// </summary>
+    [Required]
+    public int[] BranchIds { get; set; } = [];
+
+    /// <summary>
+    /// The branch ID to mark as default.
+    /// </summary>
+    [Required]
+    public int DefaultBranchId { get; set; }
+}
+
+/// <summary>
+/// Branch assignment for a user.
+/// </summary>
+public class UserBranchDto
+{
+    public int BranchId { get; set; }
+    public string BranchName { get; set; } = null!;
+    public bool IsDefault { get; set; }
+}
+
+/// <summary>
 /// User data for display (no sensitive fields).
 /// </summary>
 public class UserDto

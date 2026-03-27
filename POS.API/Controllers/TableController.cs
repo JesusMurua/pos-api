@@ -9,39 +9,35 @@ namespace POS.API.Controllers;
 /// Controller for restaurant table management.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
-[Authorize]
-public class TableController : ControllerBase
+public class TableController : BaseApiController
 {
     private readonly ITableService _tableService;
+    private readonly IOrderService _orderService;
 
-    public TableController(ITableService tableService)
+    public TableController(ITableService tableService, IOrderService orderService)
     {
         _tableService = tableService;
+        _orderService = orderService;
     }
 
     /// <summary>
-    /// Gets all tables for a branch.
+    /// Gets all tables for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="includeInactive">Whether to include inactive tables.</param>
     /// <returns>A list of tables.</returns>
     /// <response code="200">Returns the list of tables.</response>
     [HttpGet]
     [Authorize(Roles = "Owner,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<RestaurantTable>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByBranch(
-        [FromQuery] int branchId,
-        [FromQuery] bool includeInactive = false)
+    public async Task<IActionResult> GetByBranch([FromQuery] bool includeInactive = false)
     {
-        var tables = await _tableService.GetByBranchAsync(branchId, includeInactive);
+        var tables = await _tableService.GetByBranchAsync(BranchId, includeInactive);
         return Ok(tables);
     }
 
     /// <summary>
     /// Creates a new table.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="table">The table data to create.</param>
     /// <returns>The created table identifier.</returns>
     /// <response code="200">Returns the created table identifier.</response>
@@ -50,13 +46,11 @@ public class TableController : ControllerBase
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create(
-        [FromQuery] int branchId,
-        [FromBody] RestaurantTable table)
+    public async Task<IActionResult> Create([FromBody] RestaurantTable table)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var created = await _tableService.CreateAsync(branchId, table);
+        var created = await _tableService.CreateAsync(BranchId, table);
         return Ok(new { id = created.Id });
     }
 
@@ -113,7 +107,15 @@ public class TableController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] TableStatusRequest request)
     {
-        var table = await _tableService.UpdateStatusAsync(id, request.Status);
+        if (request.Status?.ToLowerInvariant() == "available")
+        {
+            var activeOrders = await _orderService.GetActiveByTableAsync(id);
+            var count = activeOrders.Count();
+            if (count > 0)
+                return BadRequest(new { message = $"No se puede liberar la mesa, tiene {count} orden(es) sin completar" });
+        }
+
+        var table = await _tableService.UpdateStatusAsync(id, request.Status!);
         return Ok(table);
     }
 }

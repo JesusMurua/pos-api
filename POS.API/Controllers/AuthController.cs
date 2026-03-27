@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.API.Models;
 using POS.Services.IService;
@@ -51,6 +53,31 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var response = await _authService.PinLoginAsync(request.BranchId, request.Pin);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Switches the authenticated user to a different branch and returns a new JWT.
+    /// </summary>
+    /// <param name="request">The target branch identifier.</param>
+    /// <returns>A new JWT token and user info for the selected branch.</returns>
+    /// <response code="200">Returns the new JWT token and user info.</response>
+    /// <response code="401">If the user is not authorized to access the branch.</response>
+    /// <response code="404">If the user or branch is not found.</response>
+    [HttpPost("switch-branch")]
+    [Authorize]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SwitchBranch([FromBody] SwitchBranchRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            return Unauthorized();
+
+        var response = await _authService.SwitchBranchAsync(userId, request.BranchId);
         return Ok(response);
     }
 }

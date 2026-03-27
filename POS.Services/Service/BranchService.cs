@@ -30,6 +30,57 @@ public class BranchService : IBranchService
     }
 
     /// <summary>
+    /// Retrieves all branches for a business.
+    /// </summary>
+    public async Task<IEnumerable<Branch>> GetByBusinessAsync(int businessId)
+    {
+        return await _unitOfWork.Branches.GetAsync(b => b.BusinessId == businessId);
+    }
+
+    /// <summary>
+    /// Creates a new branch and copies the catalog from the matrix branch.
+    /// </summary>
+    public async Task<Branch> CreateAsync(Branch branch)
+    {
+        branch.IsActive = true;
+        branch.CreatedAt = DateTime.UtcNow;
+
+        await _unitOfWork.Branches.AddAsync(branch);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Copy catalog from matrix branch
+        var matrixBranch = (await _unitOfWork.Branches.GetAsync(
+            b => b.BusinessId == branch.BusinessId && b.IsMatrix))
+            .FirstOrDefault();
+
+        if (matrixBranch != null)
+            await CopyCatalogAsync(branch.Id, matrixBranch.Id);
+
+        return branch;
+    }
+
+    /// <summary>
+    /// Updates an existing branch's name and location.
+    /// </summary>
+    public async Task<Branch> UpdateAsync(int id, Branch branch)
+    {
+        var existing = await _unitOfWork.Branches.GetByIdAsync(id);
+
+        if (existing == null)
+            throw new NotFoundException($"Branch with id {id} not found");
+
+        if (existing.BusinessId != branch.BusinessId)
+            throw new ValidationException("Branch does not belong to the specified business");
+
+        existing.Name = branch.Name;
+        existing.LocationName = branch.LocationName;
+
+        _unitOfWork.Branches.Update(existing);
+        await _unitOfWork.SaveChangesAsync();
+        return existing;
+    }
+
+    /// <summary>
     /// Retrieves a branch with its business configuration.
     /// </summary>
     public async Task<Branch> GetConfigAsync(int branchId)
@@ -94,6 +145,85 @@ public class BranchService : IBranchService
         _unitOfWork.Branches.Update(branch);
         await _unitOfWork.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Copies the full catalog (categories, products, sizes, extras) from one branch to another.
+    /// Skips if the target branch already has categories.
+    /// </summary>
+    public async Task<int> CopyCatalogAsync(int targetBranchId, int sourceBranchId)
+    {
+        var target = await _unitOfWork.Branches.GetByIdAsync(targetBranchId);
+        if (target == null)
+            throw new NotFoundException($"Branch with id {targetBranchId} not found");
+
+        var source = await _unitOfWork.Branches.GetByIdAsync(sourceBranchId);
+        if (source == null)
+            throw new NotFoundException($"Branch with id {sourceBranchId} not found");
+
+        if (target.BusinessId != source.BusinessId)
+            throw new ValidationException("Source and target branches must belong to the same business");
+
+        // Skip if target already has categories
+        var existingCategories = await _unitOfWork.Categories.GetAsync(
+            c => c.BranchId == targetBranchId);
+        if (existingCategories.Any())
+            return 0;
+
+        var sourceCategories = await _unitOfWork.Categories.GetAsync(
+            c => c.BranchId == sourceBranchId);
+
+        var productCount = 0;
+
+        foreach (var sourceCategory in sourceCategories)
+        {
+            var newCategory = new Category
+            {
+                BranchId = targetBranchId,
+                Name = sourceCategory.Name,
+                Icon = sourceCategory.Icon,
+                SortOrder = sourceCategory.SortOrder,
+                IsActive = sourceCategory.IsActive
+            };
+
+            await _unitOfWork.Categories.AddAsync(newCategory);
+            await _unitOfWork.SaveChangesAsync();
+
+            var sourceProducts = await _unitOfWork.Products.GetAsync(
+                p => p.CategoryId == sourceCategory.Id, "Sizes,Extras");
+
+            foreach (var sourceProduct in sourceProducts)
+            {
+                var newProduct = new Product
+                {
+                    CategoryId = newCategory.Id,
+                    Name = sourceProduct.Name,
+                    PriceCents = sourceProduct.PriceCents,
+                    ImageUrl = sourceProduct.ImageUrl,
+                    IsAvailable = sourceProduct.IsAvailable,
+                    IsPopular = sourceProduct.IsPopular,
+                    TrackStock = sourceProduct.TrackStock,
+                    CurrentStock = 0,
+                    LowStockThreshold = sourceProduct.LowStockThreshold,
+                    Sizes = sourceProduct.Sizes?.Select(s => new ProductSize
+                    {
+                        Label = s.Label,
+                        ExtraPriceCents = s.ExtraPriceCents
+                    }).ToList(),
+                    Extras = sourceProduct.Extras?.Select(e => new ProductExtra
+                    {
+                        Label = e.Label,
+                        PriceCents = e.PriceCents
+                    }).ToList()
+                };
+
+                await _unitOfWork.Products.AddAsync(newProduct);
+                productCount++;
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+        return productCount;
     }
 
     #endregion

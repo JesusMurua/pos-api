@@ -10,9 +10,8 @@ namespace POS.API.Controllers;
 /// Controller for managing businesses.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
 [Authorize(Roles = "Owner")]
-public class BusinessController : ControllerBase
+public class BusinessController : BaseApiController
 {
     private readonly IBusinessService _businessService;
 
@@ -57,7 +56,7 @@ public class BusinessController : ControllerBase
             PlanType = request.PlanType
         };
 
-        var created = await _businessService.CreateAsync(business);
+        var created = await _businessService.CreateAsync(business, UserId);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 }

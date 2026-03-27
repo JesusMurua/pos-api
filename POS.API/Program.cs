@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using POS.API.Middleware;
 using POS.Domain.Settings;
+using Microsoft.EntityFrameworkCore;
+using POS.Repository;
 using POS.Repository.Dependencies;
 using POS.Services.Dependencies;
 using Serilog;
@@ -11,6 +13,19 @@ using Serilog;
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Override connection string from DATABASE_URL environment variable (Render/Production)
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = databaseUrl;
+}
+
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
+if (!string.IsNullOrEmpty(jwtSecret))
+{
+    builder.Configuration["Jwt:Secret"] = jwtSecret;
+}
 
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
@@ -25,6 +40,8 @@ builder.Services.AddControllers()
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         options.JsonSerializerOptions.DefaultIgnoreCondition =
             System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
 builder.Services.AddOpenApi();
@@ -72,6 +89,13 @@ builder.Services.AddRepositoryDependencies(builder.Configuration);
 builder.Services.AddServiceDependencies();
 
 var app = builder.Build();
+
+// Apply pending migrations automatically on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
 
 // Middleware order matters — exception handler first
 app.UseExceptionMiddleware();

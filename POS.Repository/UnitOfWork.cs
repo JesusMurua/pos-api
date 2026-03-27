@@ -17,6 +17,10 @@ public class UnitOfWork : IUnitOfWork
     private ICashRegisterSessionRepository? _cashRegisterSessions;
     private ICashMovementRepository? _cashMovements;
     private IRestaurantTableRepository? _restaurantTables;
+    private IInventoryRepository? _inventory;
+    private IInventoryMovementRepository? _inventoryMovements;
+    private IProductConsumptionRepository? _productConsumptions;
+    private IUserBranchRepository? _userBranches;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -52,6 +56,18 @@ public class UnitOfWork : IUnitOfWork
 
     public IRestaurantTableRepository RestaurantTables =>
         _restaurantTables ??= new RestaurantTableRepository(_context);
+
+    public IInventoryRepository Inventory =>
+        _inventory ??= new InventoryRepository(_context);
+
+    public IInventoryMovementRepository InventoryMovements =>
+        _inventoryMovements ??= new InventoryMovementRepository(_context);
+
+    public IProductConsumptionRepository ProductConsumptions =>
+        _productConsumptions ??= new ProductConsumptionRepository(_context);
+
+    public IUserBranchRepository UserBranches =>
+        _userBranches ??= new UserBranchRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

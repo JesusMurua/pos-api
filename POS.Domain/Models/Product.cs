@@ -21,6 +21,12 @@ public partial class Product
 
     public bool IsPopular { get; set; }
 
+    public bool TrackStock { get; set; } = false;
+
+    public decimal CurrentStock { get; set; } = 0;
+
+    public decimal LowStockThreshold { get; set; } = 0;
+
     public virtual Category? Category { get; set; }
 
     public virtual ICollection<ProductSize>? Sizes { get; set; }

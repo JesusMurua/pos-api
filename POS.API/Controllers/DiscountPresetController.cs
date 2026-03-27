@@ -9,9 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing discount presets.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
-[Authorize]
-public class DiscountPresetController : ControllerBase
+public class DiscountPresetController : BaseApiController
 {
     private readonly IDiscountPresetService _discountPresetService;
 
@@ -21,17 +19,16 @@ public class DiscountPresetController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all active discount presets for a branch.
+    /// Gets all active discount presets for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>A list of active discount presets.</returns>
     /// <response code="200">Returns the list of discount presets.</response>
     [HttpGet]
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<DiscountPreset>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByBranch([FromQuery] int branchId)
+    public async Task<IActionResult> GetByBranch()
     {
-        var presets = await _discountPresetService.GetByBranchAsync(branchId);
+        var presets = await _discountPresetService.GetByBranchAsync(BranchId);
         return Ok(presets);
     }
 

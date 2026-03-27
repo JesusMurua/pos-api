@@ -18,6 +18,11 @@ public partial class Branch
     [MaxLength(255)]
     public string? PinHash { get; set; }
 
+    /// <summary>
+    /// Whether this is the main (matrix) branch of the business, created automatically.
+    /// </summary>
+    public bool IsMatrix { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -27,4 +32,9 @@ public partial class Branch
     public virtual ICollection<Category>? Categories { get; set; }
 
     public virtual ICollection<Order>? Orders { get; set; }
+
+    /// <summary>
+    /// Users assigned to this branch (many-to-many via UserBranch).
+    /// </summary>
+    public virtual ICollection<UserBranch>? UserBranches { get; set; }
 }

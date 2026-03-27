@@ -35,4 +35,9 @@ public partial class User
     public virtual Branch? Branch { get; set; }
 
     public virtual ICollection<Order>? Orders { get; set; }
+
+    /// <summary>
+    /// Branches this user belongs to (many-to-many via UserBranch).
+    /// </summary>
+    public virtual ICollection<UserBranch>? UserBranches { get; set; }
 }

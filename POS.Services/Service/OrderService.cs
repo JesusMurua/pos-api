@@ -34,7 +34,49 @@ public class OrderService : IOrderService
 
                 if (existing.Any())
                 {
-                    result.Skipped++;
+                    // Upsert: update totals and replace items
+                    var withItems = await _unitOfWork.Orders.GetAsync(
+                        o => o.Id == request.Id, "Items");
+                    var existingOrder = withItems.First();
+
+                    existingOrder.TotalCents = request.TotalCents;
+                    existingOrder.SubtotalCents = request.SubtotalCents;
+                    existingOrder.DiscountCents = request.DiscountCents;
+                    existingOrder.DiscountLabel = request.DiscountLabel;
+                    existingOrder.DiscountReason = request.DiscountReason;
+                    existingOrder.TenderedCents = request.TenderedCents;
+                    existingOrder.ChangeCents = request.ChangeCents;
+                    existingOrder.IsPaid = request.IsPaid;
+                    existingOrder.TableId = request.TableId;
+                    existingOrder.TableName = request.TableName;
+                    existingOrder.SyncedAt = DateTime.UtcNow;
+
+                    if (request.PaymentMethod != null
+                        && Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var pm))
+                        existingOrder.PaymentMethod = pm;
+
+                    // Replace items: clear existing, add new
+                    existingOrder.Items?.Clear();
+                    foreach (var i in request.Items)
+                    {
+                        existingOrder.Items ??= new List<OrderItem>();
+                        existingOrder.Items.Add(new OrderItem
+                        {
+                            OrderId = request.Id,
+                            ProductId = i.ProductId,
+                            ProductName = i.ProductName,
+                            Quantity = i.Quantity,
+                            UnitPriceCents = i.UnitPriceCents,
+                            SizeName = i.SizeName,
+                            ExtrasJson = i.ExtrasJson,
+                            Notes = i.Notes
+                        });
+                    }
+
+                    _unitOfWork.Orders.Update(existingOrder);
+                    await _unitOfWork.SaveChangesAsync();
+
+                    result.Updated++;
                     continue;
                 }
 
@@ -155,6 +197,11 @@ public class OrderService : IOrderService
             TenderedCents = request.TenderedCents,
             ChangeCents = request.ChangeCents,
             CreatedAt = request.CreatedAt,
+            SubtotalCents = request.SubtotalCents,
+            DiscountCents = request.DiscountCents,
+            DiscountLabel = request.DiscountLabel,
+            DiscountReason = request.DiscountReason,
+            IsPaid = request.IsPaid,
             TableId = request.TableId,
             TableName = request.TableName,
             Items = request.Items.Select(i => new OrderItem
@@ -169,6 +216,33 @@ public class OrderService : IOrderService
                 Notes = i.Notes
             }).ToList()
         };
+    }
+
+    /// <summary>
+    /// Gets active (non-cancelled) orders for a specific table.
+    /// </summary>
+    public async Task<IEnumerable<object>> GetActiveByTableAsync(int tableId)
+    {
+        var orders = await _unitOfWork.Orders.GetAsync(
+            o => o.TableId == tableId
+                && o.CancellationReason == null
+                && o.IsPaid == false,
+            "Items");
+
+        return orders
+            .OrderBy(o => o.CreatedAt)
+            .Select(o => new
+            {
+                o.Id,
+                o.OrderNumber,
+                o.TotalCents,
+                o.CreatedAt,
+                Items = o.Items?.Select(i => new
+                {
+                    i.ProductName,
+                    i.Quantity
+                }) ?? Enumerable.Empty<object>()
+            });
     }
 
     #endregion

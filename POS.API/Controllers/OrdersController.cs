@@ -9,9 +9,7 @@ namespace POS.API.Controllers;
 /// Controller for managing orders and offline sync.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
-[Authorize]
-public class OrdersController : ControllerBase
+public class OrdersController : BaseApiController
 {
     private readonly IOrderService _orderService;
 
@@ -40,51 +38,58 @@ public class OrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves orders for a branch on a specific date.
+    /// Retrieves orders for the current branch on a specific date.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="date">The date to filter by.</param>
     /// <returns>A list of orders.</returns>
     /// <response code="200">Returns the list of orders.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByBranchAndDate(
-        [FromQuery] int branchId,
-        [FromQuery] DateTime date)
+    public async Task<IActionResult> GetByBranchAndDate([FromQuery] DateTime date)
     {
-        var orders = await _orderService.GetByBranchAndDateAsync(branchId, date);
+        var orders = await _orderService.GetByBranchAndDateAsync(BranchId, date);
         return Ok(orders);
     }
 
     /// <summary>
-    /// Retrieves daily KPI summary for a branch.
+    /// Retrieves daily KPI summary for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="date">The date to summarize.</param>
     /// <returns>Order data for daily summary.</returns>
     /// <response code="200">Returns the daily summary data.</response>
     [HttpGet("summary")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDailySummary(
-        [FromQuery] int branchId,
-        [FromQuery] DateTime date)
+    public async Task<IActionResult> GetDailySummary([FromQuery] DateTime date)
     {
-        var orders = await _orderService.GetDailySummaryAsync(branchId, date);
+        var orders = await _orderService.GetDailySummaryAsync(BranchId, date);
         return Ok(orders);
     }
 
     /// <summary>
-    /// Gets the last order number for a branch.
+    /// Gets the last order number for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>The last order number, or 0 if no orders exist.</returns>
     /// <response code="200">Returns the last order number.</response>
     [HttpGet("last-number")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetLastOrderNumber([FromQuery] int branchId)
+    public async Task<IActionResult> GetLastOrderNumber()
     {
-        var lastNumber = await _orderService.GetLastOrderNumberAsync(branchId);
+        var lastNumber = await _orderService.GetLastOrderNumberAsync(BranchId);
         return Ok(new { lastOrderNumber = lastNumber });
+    }
+
+    /// <summary>
+    /// Gets active (non-cancelled) orders for a specific table.
+    /// </summary>
+    /// <param name="tableId">The table identifier.</param>
+    /// <returns>A list of active orders for the table.</returns>
+    /// <response code="200">Returns the list of active orders, or empty array if none.</response>
+    [HttpGet("by-table/{tableId}")]
+    [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetByTable(int tableId)
+    {
+        var orders = await _orderService.GetActiveByTableAsync(tableId);
+        return Ok(orders);
     }
 
     /// <summary>

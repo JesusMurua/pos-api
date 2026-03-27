@@ -9,9 +9,8 @@ namespace POS.API.Controllers;
 /// Controller for managing categories.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
 [Authorize(Roles = "Owner")]
-public class CategoriesController : ControllerBase
+public class CategoriesController : BaseApiController
 {
     private readonly ICategoryService _categoryService;
 
@@ -21,17 +20,16 @@ public class CategoriesController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all active categories for a branch.
+    /// Retrieves all active categories for the current branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>A list of active categories.</returns>
     /// <response code="200">Returns the list of active categories.</response>
     [HttpGet]
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Category>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery] int branchId)
+    public async Task<IActionResult> GetAll()
     {
-        var categories = await _categoryService.GetAllActiveAsync(branchId);
+        var categories = await _categoryService.GetAllActiveAsync(BranchId);
         return Ok(categories);
     }
 

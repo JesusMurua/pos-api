@@ -19,7 +19,9 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     public async Task<IEnumerable<User>> GetActiveByBranchAsync(int branchId)
     {
         return await _context.Users
-            .Where(u => u.BranchId == branchId && u.IsActive && u.PinHash != null)
+            .Where(u => u.IsActive
+                && u.PinHash != null
+                && u.UserBranches!.Any(ub => ub.BranchId == branchId))
             .ToListAsync();
     }
 }

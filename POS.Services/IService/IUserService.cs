@@ -34,4 +34,16 @@ public interface IUserService
     /// <exception cref="POS.Domain.Exceptions.ValidationException">
     /// Thrown when trying to deactivate the last active owner.</exception>
     Task<bool> ToggleActiveAsync(int id);
+
+    /// <summary>
+    /// Gets all branch assignments for a user.
+    /// </summary>
+    Task<IEnumerable<UserBranchDto>> GetUserBranchesAsync(int userId);
+
+    /// <summary>
+    /// Replaces all branch assignments for a user.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.ValidationException">
+    /// Thrown when defaultBranchId is not in branchIds.</exception>
+    Task<IEnumerable<UserBranchDto>> SetUserBranchesAsync(int userId, int[] branchIds, int defaultBranchId);
 }

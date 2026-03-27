@@ -13,6 +13,27 @@ public interface IBranchService
     Task<Branch> GetByIdAsync(int id);
 
     /// <summary>
+    /// Retrieves all branches for a business.
+    /// </summary>
+    Task<IEnumerable<Branch>> GetByBusinessAsync(int businessId);
+
+    /// <summary>
+    /// Creates a new branch.
+    /// </summary>
+    Task<Branch> CreateAsync(Branch branch);
+
+    /// <summary>
+    /// Updates an existing branch's name and location.
+    /// </summary>
+    Task<Branch> UpdateAsync(int id, Branch branch);
+
+    /// <summary>
+    /// Copies the full catalog (categories, products, sizes, extras) from one branch to another.
+    /// Skips if the target branch already has categories.
+    /// </summary>
+    Task<int> CopyCatalogAsync(int targetBranchId, int sourceBranchId);
+
+    /// <summary>
     /// Retrieves a branch with its business configuration.
     /// </summary>
     Task<Branch> GetConfigAsync(int branchId);

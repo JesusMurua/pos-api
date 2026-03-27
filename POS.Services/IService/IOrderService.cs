@@ -32,6 +32,11 @@ public interface IOrderService
     /// Cancels an order by setting cancellation reason, timestamp, and who cancelled it.
     /// </summary>
     Task<Order> CancelAsync(string orderId, string reason, string? notes, string cancelledBy);
+
+    /// <summary>
+    /// Gets active (non-cancelled) orders for a specific table, ordered by CreatedAt ascending.
+    /// </summary>
+    Task<IEnumerable<object>> GetActiveByTableAsync(int tableId);
 }
 
 /// <summary>
@@ -40,6 +45,7 @@ public interface IOrderService
 public class SyncResult
 {
     public int Synced { get; set; }
+    public int Updated { get; set; }
     public int Skipped { get; set; }
     public int Failed { get; set; }
 }

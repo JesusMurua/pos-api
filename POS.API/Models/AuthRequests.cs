@@ -20,3 +20,15 @@ public class PinLoginRequest
     [Required]
     public string Pin { get; set; } = null!;
 }
+
+/// <summary>
+/// Request body for switching the active branch.
+/// </summary>
+public class SwitchBranchRequest
+{
+    /// <summary>
+    /// The target branch identifier to switch to.
+    /// </summary>
+    [Required]
+    public int BranchId { get; set; }
+}

@@ -9,9 +9,8 @@ namespace POS.API.Controllers;
 /// Controller for managing users.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
 [Authorize(Roles = "Owner,Manager")]
-public class UserController : ControllerBase
+public class UserController : BaseApiController
 {
     private readonly IUserService _userService;
 
@@ -21,23 +20,21 @@ public class UserController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all users for a branch, including the business owner.
+    /// Gets all users for the current branch, including the business owner.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>A list of users.</returns>
     /// <response code="200">Returns the list of users.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByBranch([FromQuery] int branchId)
+    public async Task<IActionResult> GetByBranch()
     {
-        var users = await _userService.GetByBranchAsync(branchId);
+        var users = await _userService.GetByBranchAsync(BranchId);
         return Ok(users);
     }
 
     /// <summary>
     /// Creates a new user with PIN or email authentication.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="request">The user creation data.</param>
     /// <returns>The created user identifier.</returns>
     /// <response code="200">Returns the created user identifier.</response>
@@ -45,13 +42,11 @@ public class UserController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create(
-        [FromQuery] int branchId,
-        [FromBody] CreateUserRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var user = await _userService.CreateAsync(branchId, request);
+        var user = await _userService.CreateAsync(BranchId, request);
         return Ok(new { id = user.Id });
     }
 
@@ -72,6 +67,44 @@ public class UserController : ControllerBase
 
         var user = await _userService.UpdateAsync(id, request);
         return Ok(user);
+    }
+
+    /// <summary>
+    /// Gets all branch assignments for a user.
+    /// </summary>
+    /// <param name="id">The user identifier.</param>
+    /// <returns>A list of branch assignments.</returns>
+    /// <response code="200">Returns the list of branch assignments.</response>
+    /// <response code="404">If the user is not found.</response>
+    [HttpGet("{id}/branches")]
+    [ProducesResponseType(typeof(IEnumerable<UserBranchDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetBranches(int id)
+    {
+        var branches = await _userService.GetUserBranchesAsync(id);
+        return Ok(branches);
+    }
+
+    /// <summary>
+    /// Replaces all branch assignments for a user.
+    /// </summary>
+    /// <param name="id">The user identifier.</param>
+    /// <param name="request">The branch assignment data.</param>
+    /// <returns>The updated list of branch assignments.</returns>
+    /// <response code="200">Returns the updated branch assignments.</response>
+    /// <response code="400">If validation fails.</response>
+    /// <response code="404">If the user is not found.</response>
+    [HttpPost("{id}/branches")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(IEnumerable<UserBranchDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetBranches(int id, [FromBody] SetUserBranchesRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var branches = await _userService.SetUserBranchesAsync(id, request.BranchIds, request.DefaultBranchId);
+        return Ok(branches);
     }
 
     /// <summary>

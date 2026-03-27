@@ -14,14 +14,25 @@ public class SyncOrderRequest
 
     public int TotalCents { get; set; }
 
-    [Required]
-    public string PaymentMethod { get; set; } = null!;
+    public string? PaymentMethod { get; set; }
 
     public int? TenderedCents { get; set; }
 
     public int? ChangeCents { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    public int? SubtotalCents { get; set; }
+
+    public int? DiscountCents { get; set; }
+
+    [MaxLength(100)]
+    public string? DiscountLabel { get; set; }
+
+    [MaxLength(500)]
+    public string? DiscountReason { get; set; }
+
+    public bool IsPaid { get; set; } = false;
 
     public int? TableId { get; set; }
 

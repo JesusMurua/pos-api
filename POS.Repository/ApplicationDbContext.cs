@@ -27,6 +27,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<CashRegisterSession> CashRegisterSessions { get; set; } = null!;
     public DbSet<CashMovement> CashMovements { get; set; } = null!;
     public DbSet<RestaurantTable> RestaurantTables { get; set; } = null!;
+    public DbSet<InventoryItem> InventoryItems { get; set; } = null!;
+    public DbSet<InventoryMovement> InventoryMovements { get; set; } = null!;
+    public DbSet<ProductConsumption> ProductConsumptions { get; set; } = null!;
+    public DbSet<UserBranch> UserBranches { get; set; } = null!;
 
     #endregion
 
@@ -53,9 +57,10 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Branch>(entity =>
         {
-            // Exclude PinHash from normal queries
             entity.Property(b => b.PinHash)
                 .HasMaxLength(255);
+
+            entity.Property(b => b.IsMatrix).HasDefaultValue(false);
         });
 
         #endregion
@@ -70,13 +75,36 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(u => u.Email)
                 .IsUnique()
-                .HasFilter("[Email] IS NOT NULL");
+                .HasFilter("\"Email\" IS NOT NULL");
 
             entity.HasOne(u => u.Branch)
                 .WithMany()
                 .HasForeignKey(u => u.BranchId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        #endregion
+
+        #region UserBranch Configuration
+
+        modelBuilder.Entity<UserBranch>(entity =>
+        {
+            entity.HasKey(ub => new { ub.UserId, ub.BranchId });
+
+            entity.Property(ub => ub.IsDefault).HasDefaultValue(false);
+
+            entity.HasOne(ub => ub.User)
+                .WithMany(u => u.UserBranches)
+                .HasForeignKey(ub => ub.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(ub => ub.Branch)
+                .WithMany(b => b.UserBranches)
+                .HasForeignKey(ub => ub.BranchId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(ub => ub.BranchId);
         });
 
         #endregion
@@ -109,6 +137,10 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(p => p.CategoryId);
+
+            entity.Property(p => p.TrackStock).HasDefaultValue(false);
+            entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
+            entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
         });
 
         #endregion
@@ -132,6 +164,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(o => o.SyncStatus)
                 .HasConversion<string>()
                 .HasMaxLength(20);
+
+            entity.Property(o => o.IsPaid).HasDefaultValue(false);
 
             entity.HasOne(o => o.Branch)
                 .WithMany(b => b.Orders)
@@ -219,6 +253,52 @@ public class ApplicationDbContext : DbContext
 
         #endregion
 
+        #region Inventory Configuration
+
+        modelBuilder.Entity<InventoryItem>(entity =>
+        {
+            entity.Property(i => i.CurrentStock).HasPrecision(18, 4);
+            entity.Property(i => i.LowStockThreshold).HasPrecision(18, 4);
+
+            entity.HasOne(i => i.Branch)
+                .WithMany()
+                .HasForeignKey(i => i.BranchId);
+
+            entity.HasMany(i => i.Movements)
+                .WithOne(m => m.InventoryItem)
+                .HasForeignKey(m => m.InventoryItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(i => i.ProductConsumptions)
+                .WithOne(pc => pc.InventoryItem)
+                .HasForeignKey(pc => pc.InventoryItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(i => new { i.BranchId, i.IsActive });
+        });
+
+        modelBuilder.Entity<InventoryMovement>(entity =>
+        {
+            entity.Property(m => m.Quantity).HasPrecision(18, 4);
+
+            entity.HasIndex(m => new { m.InventoryItemId, m.CreatedAt });
+        });
+
+        modelBuilder.Entity<ProductConsumption>(entity =>
+        {
+            entity.Property(pc => pc.QuantityPerSale).HasPrecision(18, 4);
+
+            entity.HasOne(pc => pc.Product)
+                .WithMany()
+                .HasForeignKey(pc => pc.ProductId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(pc => new { pc.ProductId, pc.InventoryItemId })
+                .IsUnique();
+        });
+
+        #endregion
+
         #region AuditLog Configuration
 
         modelBuilder.Entity<AuditLog>(entity =>
@@ -247,6 +327,7 @@ public class ApplicationDbContext : DbContext
             Name = "Sucursal Principal",
             LocationName = "Centro",
             PinHash = "$2a$11$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+            IsMatrix = true,
             IsActive = true,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
@@ -259,18 +340,18 @@ public class ApplicationDbContext : DbContext
         );
 
         modelBuilder.Entity<Product>().HasData(
-            new Product { Id = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 2, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 3, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 4, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false },
-            new Product { Id = 5, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false },
-            new Product { Id = 6, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 7, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false },
-            new Product { Id = 8, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 9, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false },
-            new Product { Id = 10, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false },
-            new Product { Id = 11, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false },
-            new Product { Id = 12, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false }
+            new Product { Id = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 2, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 3, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 4, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 5, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 6, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 7, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 8, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 9, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 10, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 11, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 12, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 }
         );
 
         modelBuilder.Entity<User>().HasData(
@@ -313,6 +394,12 @@ public class ApplicationDbContext : DbContext
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
+        );
+
+        modelBuilder.Entity<UserBranch>().HasData(
+            new UserBranch { UserId = 1, BranchId = 1, IsDefault = true },
+            new UserBranch { UserId = 2, BranchId = 1, IsDefault = true },
+            new UserBranch { UserId = 3, BranchId = 1, IsDefault = true }
         );
 
         #endregion

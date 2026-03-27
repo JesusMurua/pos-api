@@ -9,9 +9,8 @@ namespace POS.API.Controllers;
 /// Controller for sales reports and export.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
 [Authorize(Roles = "Owner")]
-public class ReportController : ControllerBase
+public class ReportController : BaseApiController
 {
     private readonly IReportService _reportService;
 
@@ -23,7 +22,6 @@ public class ReportController : ControllerBase
     /// <summary>
     /// Gets report summary for a date range.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="from">Start date.</param>
     /// <param name="to">End date.</param>
     /// <returns>Complete report summary with metrics.</returns>
@@ -33,18 +31,16 @@ public class ReportController : ControllerBase
     [ProducesResponseType(typeof(ReportSummary), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetSummary(
-        [FromQuery] int branchId,
         [FromQuery] DateTime from,
         [FromQuery] DateTime to)
     {
-        var summary = await _reportService.GetSummaryAsync(branchId, from, to);
+        var summary = await _reportService.GetSummaryAsync(BranchId, from, to);
         return Ok(summary);
     }
 
     /// <summary>
     /// Downloads Excel report for a date range.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="from">Start date.</param>
     /// <param name="to">End date.</param>
     /// <returns>Excel file download.</returns>
@@ -54,11 +50,10 @@ public class ReportController : ControllerBase
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportExcel(
-        [FromQuery] int branchId,
         [FromQuery] DateTime from,
         [FromQuery] DateTime to)
     {
-        var bytes = await _reportService.GenerateExcelAsync(branchId, from, to);
+        var bytes = await _reportService.GenerateExcelAsync(BranchId, from, to);
 
         return File(
             bytes,
@@ -69,7 +64,6 @@ public class ReportController : ControllerBase
     /// <summary>
     /// Downloads PDF report for a date range.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <param name="from">Start date.</param>
     /// <param name="to">End date.</param>
     /// <returns>PDF file download.</returns>
@@ -79,11 +73,10 @@ public class ReportController : ControllerBase
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportPdf(
-        [FromQuery] int branchId,
         [FromQuery] DateTime from,
         [FromQuery] DateTime to)
     {
-        var bytes = await _reportService.GeneratePdfAsync(branchId, from, to);
+        var bytes = await _reportService.GeneratePdfAsync(BranchId, from, to);
 
         return File(
             bytes,

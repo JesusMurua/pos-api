@@ -9,31 +9,34 @@ namespace POS.API.Controllers;
 /// Controller for managing products.
 /// </summary>
 [Route("api/[controller]")]
-[ApiController]
 [Authorize(Roles = "Owner")]
-public class ProductsController : ControllerBase
+public class ProductsController : BaseApiController
 {
     private readonly IProductService _productService;
     private readonly IProductImportService _productImportService;
+    private readonly IInventoryService _inventoryService;
 
-    public ProductsController(IProductService productService, IProductImportService productImportService)
+    public ProductsController(
+        IProductService productService,
+        IProductImportService productImportService,
+        IInventoryService inventoryService)
     {
         _productService = productService;
         _productImportService = productImportService;
+        _inventoryService = inventoryService;
     }
 
     /// <summary>
-    /// Retrieves all active products for a branch, including sizes and extras.
+    /// Retrieves all active products for the current branch, including sizes and extras.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
     /// <returns>A list of active products.</returns>
     /// <response code="200">Returns the list of active products.</response>
     [HttpGet]
     [Authorize(Roles = "Owner,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery] int branchId)
+    public async Task<IActionResult> GetAll()
     {
-        var products = await _productService.GetAllActiveAsync(branchId);
+        var products = await _productService.GetAllActiveAsync(BranchId);
         return Ok(products);
     }
 
@@ -109,6 +112,69 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
+    /// Updates stock for a product with TrackStock enabled.
+    /// </summary>
+    /// <param name="id">The product identifier.</param>
+    /// <param name="request">Stock adjustment data.</param>
+    /// <returns>The updated product.</returns>
+    /// <response code="200">Returns the updated product.</response>
+    /// <response code="400">If TrackStock is false or type is invalid.</response>
+    /// <response code="404">If the product is not found.</response>
+    [HttpPost("{id}/stock")]
+    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateStock(int id, [FromBody] UpdateStockRequest request)
+    {
+        var product = await _productService.GetByIdAsync(id);
+        if (product == null)
+            return NotFound(new { message = $"Product with id {id} not found" });
+
+        if (!product.TrackStock)
+            return BadRequest(new { message = "Product does not have stock tracking enabled" });
+
+        var validTypes = new[] { "in", "out", "adjustment" };
+        if (!validTypes.Contains(request.Type?.ToLowerInvariant()))
+            return BadRequest(new { message = "Type must be 'in', 'out', or 'adjustment'" });
+
+        switch (request.Type!.ToLowerInvariant())
+        {
+            case "in":
+                product.CurrentStock += request.Quantity;
+                break;
+            case "out":
+                product.CurrentStock -= request.Quantity;
+                if (product.CurrentStock < 0) product.CurrentStock = 0;
+                break;
+            case "adjustment":
+                product.CurrentStock = request.Quantity;
+                break;
+        }
+
+        if (product.CurrentStock > product.LowStockThreshold)
+            product.IsAvailable = true;
+        if (product.CurrentStock <= 0)
+            product.IsAvailable = false;
+
+        await _productService.UpdateAsync(id, product);
+        return Ok(product);
+    }
+
+    /// <summary>
+    /// Gets inventory movements for a product with TrackStock enabled.
+    /// </summary>
+    /// <param name="id">The product identifier.</param>
+    /// <returns>A list of inventory movements, or empty array if none.</returns>
+    /// <response code="200">Returns the list of movements.</response>
+    [HttpGet("{id}/movements")]
+    [ProducesResponseType(typeof(IEnumerable<InventoryMovement>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMovements(int id)
+    {
+        var movements = await _inventoryService.GetProductMovementsAsync(id);
+        return Ok(movements);
+    }
+
+    /// <summary>
     /// Downloads an Excel template for product import.
     /// </summary>
     /// <returns>An Excel file with headers and example data.</returns>
@@ -126,7 +192,6 @@ public class ProductsController : ControllerBase
     /// <summary>
     /// Previews products from an Excel file without saving to database.
     /// </summary>
-    /// <param name="branchId">The branch to import products to.</param>
     /// <param name="file">The Excel file to preview.</param>
     /// <returns>A preview with valid rows and validation errors.</returns>
     /// <response code="200">Returns the import preview.</response>
@@ -134,7 +199,7 @@ public class ProductsController : ControllerBase
     [HttpPost("import/preview")]
     [ProducesResponseType(typeof(ProductImportPreview), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> PreviewImport([FromQuery] int branchId, IFormFile file)
+    public async Task<IActionResult> PreviewImport(IFormFile file)
     {
         if (file == null || file.Length == 0)
             return BadRequest(new { message = "File is required" });
@@ -142,14 +207,13 @@ public class ProductsController : ControllerBase
         if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "File must be .xlsx format" });
 
-        var preview = await _productImportService.PreviewAsync(file.OpenReadStream(), branchId);
+        var preview = await _productImportService.PreviewAsync(file.OpenReadStream(), BranchId);
         return Ok(preview);
     }
 
     /// <summary>
     /// Executes product import from previously validated rows.
     /// </summary>
-    /// <param name="branchId">The branch to import products to.</param>
     /// <param name="rows">The validated rows to import.</param>
     /// <returns>Import result with counts and warnings.</returns>
     /// <response code="200">Returns the import result.</response>
@@ -157,14 +221,22 @@ public class ProductsController : ControllerBase
     [HttpPost("import/execute")]
     [ProducesResponseType(typeof(ProductImportResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ExecuteImport(
-        [FromQuery] int branchId,
-        [FromBody] List<ProductImportRow> rows)
+    public async Task<IActionResult> ExecuteImport([FromBody] List<ProductImportRow> rows)
     {
         if (rows == null || rows.Count == 0)
             return BadRequest(new { message = "No rows to import" });
 
-        var result = await _productImportService.ImportAsync(rows, branchId);
+        var result = await _productImportService.ImportAsync(rows, BranchId);
         return Ok(result);
     }
+}
+
+/// <summary>
+/// Request body for updating product stock.
+/// </summary>
+public class UpdateStockRequest
+{
+    public string Type { get; set; } = null!;
+    public decimal Quantity { get; set; }
+    public string? Reason { get; set; }
 }

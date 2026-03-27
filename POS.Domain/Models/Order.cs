@@ -52,6 +52,8 @@ public partial class Order
     [MaxLength(100)]
     public string? CancelledBy { get; set; }
 
+    public bool IsPaid { get; set; } = false;
+
     public int? TableId { get; set; }
 
     [MaxLength(50)]

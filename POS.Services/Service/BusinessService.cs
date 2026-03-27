@@ -34,12 +34,35 @@ public class BusinessService : IBusinessService
     }
 
     /// <summary>
-    /// Creates a new business.
+    /// Creates a new business with its matrix branch and assigns the owner to it.
     /// </summary>
-    public async Task<Business> CreateAsync(Business business)
+    public async Task<Business> CreateAsync(Business business, int ownerUserId)
     {
         await _unitOfWork.Business.AddAsync(business);
         await _unitOfWork.SaveChangesAsync();
+
+        // Create matrix branch automatically
+        var matrixBranch = new Branch
+        {
+            BusinessId = business.Id,
+            Name = business.Name,
+            IsMatrix = true,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _unitOfWork.Branches.AddAsync(matrixBranch);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Assign owner to matrix branch
+        await _unitOfWork.UserBranches.AddAsync(new UserBranch
+        {
+            UserId = ownerUserId,
+            BranchId = matrixBranch.Id,
+            IsDefault = true
+        });
+        await _unitOfWork.SaveChangesAsync();
+
         return business;
     }
 
