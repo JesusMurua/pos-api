@@ -32,7 +32,7 @@ public class ProductsController : BaseApiController
     /// <returns>A list of active products.</returns>
     /// <response code="200">Returns the list of active products.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {

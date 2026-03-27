@@ -25,7 +25,7 @@ public class CategoriesController : BaseApiController
     /// <returns>A list of active categories.</returns>
     /// <response code="200">Returns the list of active categories.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<Category>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
