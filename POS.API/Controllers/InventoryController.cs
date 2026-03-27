@@ -38,6 +38,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of product IDs with depleted inventory.</returns>
     /// <response code="200">Returns the list of out-of-stock product IDs.</response>
     [HttpGet("out-of-stock-products")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetOutOfStockProducts()
     {
@@ -219,6 +220,7 @@ public class InventoryController : BaseApiController
     /// <returns>Success acknowledgement.</returns>
     /// <response code="200">Always returns success — failures are logged internally.</response>
     [HttpPost("deduct-sale")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeductSale([FromBody] DeductSaleRequest request)
     {

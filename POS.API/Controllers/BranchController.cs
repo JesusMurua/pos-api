@@ -120,7 +120,7 @@ public class BranchController : BaseApiController
     /// <response code="200">Returns the branch configuration.</response>
     /// <response code="404">If the branch is not found.</response>
     [HttpGet("{id}/config")]
-    [Authorize(Roles = "Owner,Cashier")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(Branch), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetConfig(int id)
