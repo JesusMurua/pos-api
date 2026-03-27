@@ -57,25 +57,17 @@ public class PushController : BaseApiController
     }
 
     /// <summary>
-    /// Removes a push subscription by its endpoint.
+    /// Removes a push subscription by its endpoint URL.
     /// </summary>
-    /// <param name="dto">The endpoint to unsubscribe.</param>
+    /// <param name="endpoint">The push subscription endpoint URL.</param>
     /// <returns>Success acknowledgement.</returns>
     /// <response code="200">Subscription removed successfully.</response>
     [HttpDelete("unsubscribe")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Unsubscribe([FromBody] UnsubscribeRequest dto)
+    public async Task<IActionResult> Unsubscribe([FromQuery] string endpoint)
     {
-        await _pushService.RemoveSubscriptionAsync(dto.Endpoint);
+        await _pushService.RemoveSubscriptionAsync(endpoint);
         return Ok(new { message = "Subscription removed" });
     }
-}
-
-/// <summary>
-/// Request body for unsubscribing from push notifications.
-/// </summary>
-public class UnsubscribeRequest
-{
-    public string Endpoint { get; set; } = null!;
 }
