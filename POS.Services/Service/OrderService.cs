@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -481,6 +482,117 @@ public class OrderService : IOrderService
             },
             SourceTableFreed = sourceTableFreed,
             SourceTableName = sourceTableName
+        };
+    }
+
+    /// <summary>
+    /// Splits an order into multiple new orders by item groups.
+    /// </summary>
+    public async Task<SplitResult> SplitOrderAsync(string orderId, List<SplitGroup> splits, int branchId)
+    {
+        if (splits.Count < 2)
+            throw new ValidationException("At least 2 split groups are required");
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Items");
+        var source = sourceResults.FirstOrDefault()
+            ?? throw new NotFoundException($"Order {orderId} not found");
+
+        if (source.BranchId != branchId)
+            throw new UnauthorizedException("Order does not belong to this branch");
+        if (source.CancelledAt.HasValue)
+            throw new ValidationException("Order is cancelled");
+
+        // Validate all items assigned exactly once
+        var allRequestedIds = splits.SelectMany(s => s.ItemIds).ToList();
+        var sourceItemIds = source.Items?.Select(i => i.Id).ToHashSet() ?? new HashSet<int>();
+
+        if (allRequestedIds.Count != allRequestedIds.Distinct().Count())
+            throw new ValidationException("An item cannot appear in more than one split group");
+
+        if (!allRequestedIds.ToHashSet().SetEquals(sourceItemIds))
+            throw new ValidationException("All items in the source order must be assigned to exactly one split group");
+
+        var splitSummaries = new List<SplitOrderSummary>();
+
+        foreach (var group in splits)
+        {
+            var newOrderId = Guid.NewGuid().ToString();
+
+            string? folioNumber = null;
+            try
+            {
+                var counters = await _context.Database
+                    .SqlQuery<int>($@"
+                        UPDATE ""Branches""
+                        SET ""FolioCounter"" = ""FolioCounter"" + 1
+                        WHERE ""Id"" = {branchId}
+                        RETURNING ""FolioCounter""")
+                    .ToListAsync();
+                var counter = counters.FirstOrDefault();
+                if (counter > 0) folioNumber = counter.ToString("D4");
+            }
+            catch { /* folio generation is best-effort */ }
+
+            var newOrder = new Order
+            {
+                Id = newOrderId,
+                BranchId = source.BranchId,
+                UserId = source.UserId,
+                OrderNumber = source.OrderNumber,
+                TableId = source.TableId,
+                TableName = source.TableName,
+                KitchenStatus = source.KitchenStatus,
+                FolioNumber = folioNumber,
+                CreatedAt = DateTime.UtcNow,
+                SyncStatus = OrderSyncStatus.Synced,
+                SyncedAt = DateTime.UtcNow,
+                Items = new List<OrderItem>(),
+                Payments = new List<OrderPayment>()
+            };
+
+            var itemsForGroup = source.Items!
+                .Where(i => group.ItemIds.Contains(i.Id))
+                .ToList();
+
+            foreach (var item in itemsForGroup)
+            {
+                source.Items!.Remove(item);
+                item.OrderId = newOrderId;
+                newOrder.Items.Add(item);
+            }
+
+            RecalculateOrderTotals(newOrder);
+            RecalculatePaymentTotals(newOrder);
+
+            await _unitOfWork.Orders.AddAsync(newOrder);
+
+            splitSummaries.Add(new SplitOrderSummary
+            {
+                Id = newOrderId,
+                FolioNumber = folioNumber,
+                Label = group.Label,
+                TotalCents = newOrder.TotalCents,
+                ItemCount = newOrder.Items.Count
+            });
+        }
+
+        // Cancel source order
+        source.CancellationReason = $"Split into {splits.Count} orders";
+        source.CancelledAt = DateTime.UtcNow;
+        source.CancelledBy = "System";
+        source.SubtotalCents = 0;
+        source.TotalCents = 0;
+
+        _unitOfWork.Orders.Update(source);
+        await _unitOfWork.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return new SplitResult
+        {
+            SplitOrders = splitSummaries,
+            SourceOrderCancelled = true
         };
     }
 

@@ -69,6 +69,12 @@ public interface IOrderService
     /// Closes source order and frees its table.
     /// </summary>
     Task<MergeResult> MergeOrdersAsync(string targetOrderId, string sourceOrderId, int branchId);
+
+    /// <summary>
+    /// Splits an order into multiple new orders by item groups.
+    /// Cancels the source order after splitting.
+    /// </summary>
+    Task<SplitResult> SplitOrderAsync(string orderId, List<SplitGroup> splits, int branchId);
 }
 
 public class MoveItemsResult
@@ -81,6 +87,27 @@ public class MoveItemsResult
 public class OrderSummary
 {
     public string Id { get; set; } = null!;
+    public int TotalCents { get; set; }
+    public int ItemCount { get; set; }
+}
+
+public class SplitGroup
+{
+    public List<int> ItemIds { get; set; } = new();
+    public string? Label { get; set; }
+}
+
+public class SplitResult
+{
+    public List<SplitOrderSummary> SplitOrders { get; set; } = new();
+    public bool SourceOrderCancelled { get; set; }
+}
+
+public class SplitOrderSummary
+{
+    public string Id { get; set; } = null!;
+    public string? FolioNumber { get; set; }
+    public string? Label { get; set; }
     public int TotalCents { get; set; }
     public int ItemCount { get; set; }
 }

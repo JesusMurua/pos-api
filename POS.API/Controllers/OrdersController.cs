@@ -266,6 +266,28 @@ public class OrdersController : BaseApiController
         var result = await _orderService.MergeOrdersAsync(id, request.SourceOrderId, BranchId);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Splits an order into multiple new orders by item groups.
+    /// </summary>
+    /// <param name="id">The source order UUID to split.</param>
+    /// <param name="request">The split groups with item IDs and labels.</param>
+    /// <returns>Summary of created split orders.</returns>
+    /// <response code="200">Returns split result.</response>
+    /// <response code="400">If validation fails.</response>
+    /// <response code="404">If the order is not found.</response>
+    [HttpPost("{id}/split")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(SplitResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Split(string id, [FromBody] SplitOrderRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _orderService.SplitOrderAsync(id, request.Splits, BranchId);
+        return Ok(result);
+    }
 }
 
 /// <summary>
@@ -274,6 +296,14 @@ public class OrdersController : BaseApiController
 public class MergeOrderRequest
 {
     public string SourceOrderId { get; set; } = null!;
+}
+
+/// <summary>
+/// Request body for splitting an order.
+/// </summary>
+public class SplitOrderRequest
+{
+    public List<SplitGroup> Splits { get; set; } = new();
 }
 
 /// <summary>
