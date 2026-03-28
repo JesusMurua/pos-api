@@ -36,6 +36,21 @@ public class TableController : BaseApiController
     }
 
     /// <summary>
+    /// Returns enriched table status for the floor map.
+    /// Combines table availability with active order kitchen status.
+    /// </summary>
+    /// <returns>A list of table statuses with display info.</returns>
+    /// <response code="200">Returns the list of table statuses.</response>
+    [HttpGet("status")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen")]
+    [ProducesResponseType(typeof(IEnumerable<TableStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTableStatuses()
+    {
+        var statuses = await _tableService.GetTableStatusesAsync(BranchId);
+        return Ok(statuses);
+    }
+
+    /// <summary>
     /// Creates a new table.
     /// </summary>
     /// <param name="table">The table data to create.</param>

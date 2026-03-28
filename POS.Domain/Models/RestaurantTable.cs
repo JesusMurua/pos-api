@@ -20,11 +20,15 @@ public partial class RestaurantTable
     [MaxLength(20)]
     public string Status { get; set; } = "available";
 
+    public int? ZoneId { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Branch? Branch { get; set; }
+
+    public virtual Zone? Zone { get; set; }
 
     public virtual ICollection<Order>? Orders { get; set; }
 }

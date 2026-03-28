@@ -287,6 +287,12 @@ public class ApplicationDbContext : DbContext
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            entity.HasOne(t => t.Zone)
+                .WithMany()
+                .HasForeignKey(t => t.ZoneId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasIndex(t => new { t.BranchId, t.IsActive });
         });
 

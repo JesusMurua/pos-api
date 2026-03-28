@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -11,10 +12,12 @@ namespace POS.Services.Service;
 public class TableService : ITableService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ApplicationDbContext _context;
 
-    public TableService(IUnitOfWork unitOfWork)
+    public TableService(IUnitOfWork unitOfWork, ApplicationDbContext context)
     {
         _unitOfWork = unitOfWork;
+        _context = context;
     }
 
     #region Public API Methods
@@ -59,6 +62,7 @@ public class TableService : ITableService
 
         existing.Name = table.Name;
         existing.Capacity = table.Capacity;
+        existing.ZoneId = table.ZoneId;
         existing.IsActive = table.IsActive;
 
         _unitOfWork.RestaurantTables.Update(existing);
@@ -106,6 +110,80 @@ public class TableService : ITableService
         await _unitOfWork.SaveChangesAsync();
 
         return table;
+    }
+
+    /// <summary>
+    /// Returns enriched status for all active tables in a branch.
+    /// </summary>
+    public async Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId)
+    {
+        var tables = await _context.RestaurantTables
+            .AsNoTracking()
+            .Where(t => t.BranchId == branchId && t.IsActive)
+            .Select(t => new
+            {
+                t.Id,
+                t.Name,
+                t.ZoneId,
+                ZoneName = t.Zone != null ? t.Zone.Name : ""
+            })
+            .ToListAsync();
+
+        var activeOrders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                && o.TableId != null
+                && o.CancellationReason == null
+                && o.IsPaid == false)
+            .Select(o => new
+            {
+                o.TableId,
+                o.Id,
+                o.TotalCents,
+                o.KitchenStatus,
+                o.CreatedAt
+            })
+            .ToListAsync();
+
+        var orderByTable = activeOrders
+            .GroupBy(o => o.TableId)
+            .ToDictionary(
+                g => g.Key!.Value,
+                g => g.OrderByDescending(o => o.CreatedAt).First());
+
+        return tables.Select(t =>
+        {
+            var hasOrder = orderByTable.TryGetValue(t.Id, out var order);
+            return new TableStatusDto
+            {
+                TableId = t.Id,
+                TableName = t.Name,
+                ZoneId = t.ZoneId,
+                ZoneName = t.ZoneName,
+                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus) : "free",
+                OrderTotalCents = hasOrder ? order!.TotalCents : null,
+                OrderId = hasOrder ? order!.Id : null,
+                GuestName = null,
+                ReservationTime = null
+            };
+        });
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    private static string MapKitchenToDisplay(string? kitchenStatus)
+    {
+        return (kitchenStatus?.ToLowerInvariant()) switch
+        {
+            "new" or "pending" => "with_order",
+            "sent" or "preparing" => "in_kitchen",
+            "ready" or "done" => "ready",
+            "waiting_bill" => "waiting_bill",
+            "completed" or "paid" => "paid",
+            _ => "with_order"
+        };
     }
 
     #endregion

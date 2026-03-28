@@ -38,4 +38,10 @@ public interface ITableService
     /// <exception cref="POS.Domain.Exceptions.NotFoundException">Thrown when table not found.</exception>
     /// <exception cref="POS.Domain.Exceptions.ValidationException">Thrown when status is invalid.</exception>
     Task<RestaurantTable> UpdateStatusAsync(int id, string status);
+
+    /// <summary>
+    /// Returns enriched status for all active tables in a branch,
+    /// combining table status with active order kitchen status.
+    /// </summary>
+    Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId);
 }
