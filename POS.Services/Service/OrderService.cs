@@ -242,7 +242,7 @@ public class OrderService : IOrderService
                 o.OrderNumber,
                 o.TotalCents,
                 o.CreatedAt,
-                Items = o.Items?.Select(i => new { i.ProductName, i.Quantity })
+                Items = o.Items?.Select(i => new { i.Id, i.ProductName, i.Quantity, i.UnitPriceCents })
                     ?? Enumerable.Empty<object>()
             });
     }
