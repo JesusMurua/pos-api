@@ -24,6 +24,7 @@ public static class ServiceDependencies
         services.AddScoped<IPushNotificationService, PushNotificationService>();
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddHttpClient<IStorageService, SupabaseStorageService>();
+        services.AddScoped<IPromotionService, PromotionService>();
 
         return services;
     }

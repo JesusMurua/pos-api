@@ -23,6 +23,8 @@ public class UnitOfWork : IUnitOfWork
     private IUserBranchRepository? _userBranches;
     private IPushSubscriptionRepository? _pushSubscriptions;
     private IDeviceActivationCodeRepository? _deviceActivationCodes;
+    private IPromotionRepository? _promotions;
+    private IPromotionUsageRepository? _promotionUsages;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -76,6 +78,12 @@ public class UnitOfWork : IUnitOfWork
 
     public IDeviceActivationCodeRepository DeviceActivationCodes =>
         _deviceActivationCodes ??= new DeviceActivationCodeRepository(_context);
+
+    public IPromotionRepository Promotions =>
+        _promotions ??= new PromotionRepository(_context);
+
+    public IPromotionUsageRepository PromotionUsages =>
+        _promotionUsages ??= new PromotionUsageRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

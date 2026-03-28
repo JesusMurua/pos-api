@@ -20,6 +20,8 @@ public interface IUnitOfWork : IDisposable
     IUserBranchRepository UserBranches { get; }
     IPushSubscriptionRepository PushSubscriptions { get; }
     IDeviceActivationCodeRepository DeviceActivationCodes { get; }
+    IPromotionRepository Promotions { get; }
+    IPromotionUsageRepository PromotionUsages { get; }
 
     Task<int> SaveChangesAsync();
 }

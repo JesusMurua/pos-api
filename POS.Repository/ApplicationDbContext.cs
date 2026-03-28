@@ -34,6 +34,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<PushSubscription> PushSubscriptions { get; set; } = null!;
     public DbSet<DeviceActivationCode> DeviceActivationCodes { get; set; } = null!;
     public DbSet<ProductImage> ProductImages { get; set; } = null!;
+    public DbSet<Promotion> Promotions { get; set; } = null!;
+    public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
 
     #endregion
 
@@ -382,6 +384,46 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasIndex(a => new { a.BranchId, a.CreatedAt });
             entity.HasIndex(a => new { a.EntityType, a.EntityId });
+        });
+
+        #endregion
+
+        #region Promotion Configuration
+
+        modelBuilder.Entity<Promotion>(entity =>
+        {
+            entity.Property(p => p.Type)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(p => p.AppliesTo)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(p => p.CouponCode).HasMaxLength(50);
+
+            entity.HasOne(p => p.Branch)
+                .WithMany()
+                .HasForeignKey(p => p.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(p => p.Usages)
+                .WithOne(u => u.Promotion)
+                .HasForeignKey(u => u.PromotionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(p => new { p.BranchId, p.CouponCode })
+                .IsUnique()
+                .HasFilter("\"CouponCode\" IS NOT NULL");
+
+            entity.HasIndex(p => new { p.BranchId, p.IsActive });
+        });
+
+        modelBuilder.Entity<PromotionUsage>(entity =>
+        {
+            entity.Property(u => u.OrderId).HasMaxLength(36);
+
+            entity.HasIndex(u => new { u.PromotionId, u.UsedAt });
         });
 
         #endregion
