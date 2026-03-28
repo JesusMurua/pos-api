@@ -191,6 +191,8 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValue("Pending");
 
+            entity.Property(o => o.OrderPromotionName).HasMaxLength(100);
+
             entity.HasOne(o => o.Branch)
                 .WithMany(b => b.Orders)
                 .HasForeignKey(o => o.BranchId);
@@ -217,6 +219,8 @@ public class ApplicationDbContext : DbContext
         {
             entity.Property(i => i.OrderId)
                 .HasMaxLength(36);
+
+            entity.Property(i => i.PromotionName).HasMaxLength(100);
 
             entity.HasOne(i => i.Product)
                 .WithMany()

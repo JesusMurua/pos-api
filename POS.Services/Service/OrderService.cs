@@ -10,11 +10,16 @@ public class OrderService : IOrderService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPushNotificationService _pushService;
+    private readonly IPromotionService _promotionService;
 
-    public OrderService(IUnitOfWork unitOfWork, IPushNotificationService pushService)
+    public OrderService(
+        IUnitOfWork unitOfWork,
+        IPushNotificationService pushService,
+        IPromotionService promotionService)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
+        _promotionService = promotionService;
     }
 
     #region Public API Methods
@@ -43,9 +48,10 @@ public class OrderService : IOrderService
 
                     existingOrder.TotalCents = request.TotalCents;
                     existingOrder.SubtotalCents = request.SubtotalCents;
-                    existingOrder.DiscountCents = request.DiscountCents;
-                    existingOrder.DiscountLabel = request.DiscountLabel;
-                    existingOrder.DiscountReason = request.DiscountReason;
+                    existingOrder.OrderDiscountCents = request.OrderDiscountCents;
+                    existingOrder.TotalDiscountCents = request.TotalDiscountCents;
+                    existingOrder.OrderPromotionId = request.OrderPromotionId;
+                    existingOrder.OrderPromotionName = request.OrderPromotionName;
                     existingOrder.TenderedCents = request.TenderedCents;
                     existingOrder.ChangeCents = request.ChangeCents;
                     existingOrder.IsPaid = request.IsPaid;
@@ -62,17 +68,7 @@ public class OrderService : IOrderService
                     foreach (var i in request.Items)
                     {
                         existingOrder.Items ??= new List<OrderItem>();
-                        existingOrder.Items.Add(new OrderItem
-                        {
-                            OrderId = request.Id,
-                            ProductId = i.ProductId,
-                            ProductName = i.ProductName,
-                            Quantity = i.Quantity,
-                            UnitPriceCents = i.UnitPriceCents,
-                            SizeName = i.SizeName,
-                            ExtrasJson = i.ExtrasJson,
-                            Notes = i.Notes
-                        });
+                        existingOrder.Items.Add(MapToOrderItem(request.Id, i));
                     }
 
                     _unitOfWork.Orders.Update(existingOrder);
@@ -86,8 +82,14 @@ public class OrderService : IOrderService
                 order.SyncStatus = OrderSyncStatus.Synced;
                 order.SyncedAt = DateTime.UtcNow;
 
+                // Recalculate totals server-side
+                RecalculateTotals(order);
+
                 await _unitOfWork.Orders.AddAsync(order);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Record promotion usage (best-effort, idempotent)
+                await RecordPromotionUsagesAsync(order);
 
                 // Update table status based on order
                 if (order.TableId.HasValue)
@@ -232,46 +234,6 @@ public class OrderService : IOrderService
         return order;
     }
 
-    #endregion
-
-    #region Private Helper Methods
-
-    private static Order MapToOrder(SyncOrderRequest request)
-    {
-        if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
-            paymentMethod = PaymentMethod.Cash;
-
-        return new Order
-        {
-            Id = request.Id,
-            BranchId = request.BranchId,
-            OrderNumber = request.OrderNumber,
-            TotalCents = request.TotalCents,
-            PaymentMethod = paymentMethod,
-            TenderedCents = request.TenderedCents,
-            ChangeCents = request.ChangeCents,
-            CreatedAt = request.CreatedAt,
-            SubtotalCents = request.SubtotalCents,
-            DiscountCents = request.DiscountCents,
-            DiscountLabel = request.DiscountLabel,
-            DiscountReason = request.DiscountReason,
-            IsPaid = request.IsPaid,
-            TableId = request.TableId,
-            TableName = request.TableName,
-            Items = request.Items.Select(i => new OrderItem
-            {
-                OrderId = request.Id,
-                ProductId = i.ProductId,
-                ProductName = i.ProductName,
-                Quantity = i.Quantity,
-                UnitPriceCents = i.UnitPriceCents,
-                SizeName = i.SizeName,
-                ExtrasJson = i.ExtrasJson,
-                Notes = i.Notes
-            }).ToList()
-        };
-    }
-
     /// <summary>
     /// Gets active (non-cancelled) orders for a specific table.
     /// </summary>
@@ -297,6 +259,119 @@ public class OrderService : IOrderService
                     i.Quantity
                 }) ?? Enumerable.Empty<object>()
             });
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    private static Order MapToOrder(SyncOrderRequest request)
+    {
+        if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
+            paymentMethod = PaymentMethod.Cash;
+
+        return new Order
+        {
+            Id = request.Id,
+            BranchId = request.BranchId,
+            OrderNumber = request.OrderNumber,
+            TotalCents = request.TotalCents,
+            PaymentMethod = paymentMethod,
+            TenderedCents = request.TenderedCents,
+            ChangeCents = request.ChangeCents,
+            CreatedAt = request.CreatedAt,
+            SubtotalCents = request.SubtotalCents,
+            OrderDiscountCents = request.OrderDiscountCents,
+            TotalDiscountCents = request.TotalDiscountCents,
+            OrderPromotionId = request.OrderPromotionId,
+            OrderPromotionName = request.OrderPromotionName,
+            IsPaid = request.IsPaid,
+            TableId = request.TableId,
+            TableName = request.TableName,
+            Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList()
+        };
+    }
+
+    private static OrderItem MapToOrderItem(string orderId, SyncOrderItemRequest i)
+    {
+        return new OrderItem
+        {
+            OrderId = orderId,
+            ProductId = i.ProductId,
+            ProductName = i.ProductName,
+            Quantity = i.Quantity,
+            UnitPriceCents = i.UnitPriceCents,
+            SizeName = i.SizeName,
+            ExtrasJson = i.ExtrasJson,
+            Notes = i.Notes,
+            DiscountCents = i.DiscountCents,
+            PromotionId = i.PromotionId,
+            PromotionName = i.PromotionName
+        };
+    }
+
+    private static void RecalculateTotals(Order order)
+    {
+        if (order.Items == null) return;
+
+        order.SubtotalCents = order.Items.Sum(i => i.UnitPriceCents * i.Quantity);
+        var itemDiscounts = order.Items.Sum(i => i.DiscountCents);
+        order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
+        order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
+
+        if (order.TotalCents < 0) order.TotalCents = 0;
+    }
+
+    private async Task RecordPromotionUsagesAsync(Order order)
+    {
+        try
+        {
+            var recordedIds = new HashSet<int>();
+
+            // Item-level promotions
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(i => i.PromotionId.HasValue))
+                {
+                    var promoId = item.PromotionId!.Value;
+
+                    var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
+                    if (promo == null || promo.BranchId != order.BranchId)
+                    {
+                        item.PromotionId = null;
+                        continue;
+                    }
+
+                    if (!recordedIds.Contains(promoId))
+                    {
+                        await _promotionService.RecordUsageAsync(promoId, order.BranchId, order.Id);
+                        recordedIds.Add(promoId);
+                    }
+                }
+            }
+
+            // Order-level promotion
+            if (order.OrderPromotionId.HasValue)
+            {
+                var promoId = order.OrderPromotionId.Value;
+
+                var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
+                if (promo == null || promo.BranchId != order.BranchId)
+                {
+                    order.OrderPromotionId = null;
+                }
+                else if (!recordedIds.Contains(promoId))
+                {
+                    await _promotionService.RecordUsageAsync(promoId, order.BranchId, order.Id);
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch
+        {
+            // Best-effort — never fail the sync for promotion tracking
+        }
     }
 
     #endregion

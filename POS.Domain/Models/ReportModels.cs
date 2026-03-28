@@ -13,7 +13,7 @@ public class ReportSummary
     public int TotalCents { get; set; }
     public int CashCents { get; set; }
     public int CardCents { get; set; }
-    public int DiscountCents { get; set; }
+    public int TotalDiscountCents { get; set; }
     public decimal AverageTicketCents { get; set; }
     public List<DailySummary> DailySummaries { get; set; } = new();
     public List<TopProduct> TopProducts { get; set; } = new();
@@ -49,7 +49,7 @@ public class OrderReportRow
     public int OrderNumber { get; set; }
     public DateTime CreatedAt { get; set; }
     public int TotalCents { get; set; }
-    public int? DiscountCents { get; set; }
+    public int TotalDiscountCents { get; set; }
     public string PaymentMethod { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? CancellationReason { get; set; }

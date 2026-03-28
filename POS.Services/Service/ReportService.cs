@@ -44,7 +44,7 @@ public class ReportService : IReportService
         var cardCents = completedOrders
             .Where(o => o.PaymentMethod == PaymentMethod.Card)
             .Sum(o => o.TotalCents);
-        var discountCents = completedOrders.Sum(o => o.DiscountCents ?? 0);
+        var discountCents = completedOrders.Sum(o => o.TotalDiscountCents);
         var averageTicket = completedOrders.Count > 0
             ? (decimal)totalCents / completedOrders.Count
             : 0;
@@ -81,7 +81,7 @@ public class ReportService : IReportService
                 OrderNumber = o.OrderNumber,
                 CreatedAt = o.CreatedAt,
                 TotalCents = o.TotalCents,
-                DiscountCents = o.DiscountCents,
+                TotalDiscountCents = o.TotalDiscountCents,
                 PaymentMethod = o.PaymentMethod.ToString(),
                 Status = o.CancellationReason != null ? "Cancelada" : "Completada",
                 CancellationReason = o.CancellationReason,
@@ -98,7 +98,7 @@ public class ReportService : IReportService
             TotalCents = totalCents,
             CashCents = cashCents,
             CardCents = cardCents,
-            DiscountCents = discountCents,
+            TotalDiscountCents = discountCents,
             AverageTicketCents = averageTicket,
             DailySummaries = dailySummaries,
             TopProducts = topProducts,
@@ -175,7 +175,7 @@ public class ReportService : IReportService
             ("Ticket promedio", FormatMoney((int)summary.AverageTicketCents)),
             ("Ventas efectivo", FormatMoney(summary.CashCents)),
             ("Ventas tarjeta", FormatMoney(summary.CardCents)),
-            ("Total descuentos", FormatMoney(summary.DiscountCents))
+            ("Total descuentos", FormatMoney(summary.TotalDiscountCents))
         };
 
         for (var i = 0; i < metrics.Length; i++)
@@ -243,7 +243,7 @@ public class ReportService : IReportService
             ws.Cell(row, 3).Value = order.CreatedAt.ToString("HH:mm");
             ws.Cell(row, 4).Value = order.ItemCount;
             ws.Cell(row, 5).Value = order.PaymentMethod;
-            ws.Cell(row, 6).Value = order.DiscountCents.HasValue ? FormatMoney(order.DiscountCents.Value) : "";
+            ws.Cell(row, 6).Value = order.TotalDiscountCents > 0 ? FormatMoney(order.TotalDiscountCents) : "";
             ws.Cell(row, 7).Value = FormatMoney(order.TotalCents);
             ws.Cell(row, 8).Value = order.Status;
             ws.Cell(row, 9).Value = order.CancellationReason ?? "";
@@ -304,7 +304,7 @@ public class ReportService : IReportService
                     ("Total ventas", FormatMoney(summary.TotalCents)),
                     ("Órdenes", summary.CompletedOrders.ToString()),
                     ("Ticket promedio", FormatMoney((int)summary.AverageTicketCents)),
-                    ("Descuentos", FormatMoney(summary.DiscountCents)),
+                    ("Descuentos", FormatMoney(summary.TotalDiscountCents)),
                     ("Efectivo", FormatMoney(summary.CashCents)),
                     ("Tarjeta", FormatMoney(summary.CardCents)),
                     ("Completadas", summary.CompletedOrders.ToString()),

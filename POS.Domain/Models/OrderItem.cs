@@ -28,6 +28,13 @@ public partial class OrderItem
     [MaxLength(500)]
     public string? Notes { get; set; }
 
+    public int DiscountCents { get; set; }
+
+    public int? PromotionId { get; set; }
+
+    [MaxLength(100)]
+    public string? PromotionName { get; set; }
+
     public virtual Order? Order { get; set; }
 
     public virtual Product? Product { get; set; }

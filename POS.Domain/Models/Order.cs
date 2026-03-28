@@ -34,15 +34,16 @@ public partial class Order
 
     public DateTime? SyncedAt { get; set; }
 
-    public int? SubtotalCents { get; set; }
+    public int SubtotalCents { get; set; }
 
-    public int? DiscountCents { get; set; }
+    public int OrderDiscountCents { get; set; }
+
+    public int TotalDiscountCents { get; set; }
+
+    public int? OrderPromotionId { get; set; }
 
     [MaxLength(100)]
-    public string? DiscountLabel { get; set; }
-
-    [MaxLength(500)]
-    public string? DiscountReason { get; set; }
+    public string? OrderPromotionName { get; set; }
 
     [MaxLength(500)]
     public string? CancellationReason { get; set; }
