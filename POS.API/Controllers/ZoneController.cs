@@ -46,6 +46,8 @@ public class ZoneController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] Zone zone)
     {
+        zone.BranchId = BranchId;
+        ModelState.Remove("Branch");
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var created = await _zoneService.CreateAsync(BranchId, zone);
