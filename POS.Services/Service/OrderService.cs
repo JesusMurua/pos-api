@@ -308,9 +308,120 @@ public class OrderService : IOrderService
         return order.Payments;
     }
 
+    /// <summary>
+    /// Moves items from one order to another in a single transaction.
+    /// </summary>
+    public async Task<MoveItemsResult> MoveItemsAsync(string sourceOrderId, string targetOrderId, List<int> itemIds, int branchId)
+    {
+        if (sourceOrderId == targetOrderId)
+            throw new ValidationException("Source and target orders must be different");
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == sourceOrderId, "Items");
+        var source = sourceResults.FirstOrDefault()
+            ?? throw new NotFoundException($"Source order {sourceOrderId} not found");
+
+        if (source.BranchId != branchId)
+            throw new UnauthorizedException("Source order does not belong to this branch");
+
+        if (source.CancelledAt.HasValue)
+            throw new ValidationException("Source order is cancelled");
+
+        var targetResults = await _unitOfWork.Orders.GetAsync(o => o.Id == targetOrderId, "Items");
+        var target = targetResults.FirstOrDefault()
+            ?? throw new NotFoundException($"Target order {targetOrderId} not found");
+
+        if (target.BranchId != branchId)
+            throw new UnauthorizedException("Target order does not belong to this branch");
+
+        if (target.CancelledAt.HasValue)
+            throw new ValidationException("Target order is cancelled");
+
+        var itemsToMove = source.Items?
+            .Where(i => itemIds.Contains(i.Id))
+            .ToList() ?? [];
+
+        if (itemsToMove.Count != itemIds.Count)
+            throw new ValidationException("Some items were not found in the source order");
+
+        // Move items
+        foreach (var item in itemsToMove)
+        {
+            source.Items!.Remove(item);
+            item.OrderId = targetOrderId;
+            target.Items ??= new List<OrderItem>();
+            target.Items.Add(item);
+        }
+
+        // Recalculate source
+        RecalculateOrderTotals(source);
+
+        // Recalculate target
+        RecalculateOrderTotals(target);
+
+        var sourceTableFreed = false;
+
+        // If source has no items left, complete it and free table
+        if (source.Items == null || source.Items.Count == 0)
+        {
+            source.KitchenStatus = "Delivered";
+            source.IsPaid = true;
+
+            if (source.TableId.HasValue)
+            {
+                var table = await _unitOfWork.RestaurantTables.GetByIdAsync(source.TableId.Value);
+                if (table != null)
+                {
+                    table.Status = "available";
+                    _unitOfWork.RestaurantTables.Update(table);
+                    sourceTableFreed = true;
+                }
+            }
+        }
+
+        _unitOfWork.Orders.Update(source);
+        _unitOfWork.Orders.Update(target);
+        await _unitOfWork.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return new MoveItemsResult
+        {
+            SourceOrder = new OrderSummary
+            {
+                Id = source.Id,
+                TotalCents = source.TotalCents,
+                ItemCount = source.Items?.Count ?? 0
+            },
+            TargetOrder = new OrderSummary
+            {
+                Id = target.Id,
+                TotalCents = target.TotalCents,
+                ItemCount = target.Items?.Count ?? 0
+            },
+            SourceTableFreed = sourceTableFreed
+        };
+    }
+
     #endregion
 
     #region Private Helper Methods
+
+    private static void RecalculateOrderTotals(Order order)
+    {
+        if (order.Items == null || order.Items.Count == 0)
+        {
+            order.SubtotalCents = 0;
+            order.TotalDiscountCents = order.OrderDiscountCents;
+            order.TotalCents = 0;
+            return;
+        }
+
+        order.SubtotalCents = order.Items.Sum(i => i.UnitPriceCents * i.Quantity);
+        var itemDiscounts = order.Items.Sum(i => i.DiscountCents);
+        order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
+        order.TotalCents = Math.Max(0, order.SubtotalCents - order.OrderDiscountCents);
+    }
 
     private static Order MapToOrder(SyncOrderRequest request)
     {

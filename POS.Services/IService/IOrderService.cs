@@ -57,6 +57,26 @@ public interface IOrderService
     /// Gets all payments for an order.
     /// </summary>
     Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId);
+
+    /// <summary>
+    /// Moves items from one order to another. Recalculates totals on both.
+    /// If source order becomes empty, marks it completed and frees the table.
+    /// </summary>
+    Task<MoveItemsResult> MoveItemsAsync(string sourceOrderId, string targetOrderId, List<int> itemIds, int branchId);
+}
+
+public class MoveItemsResult
+{
+    public OrderSummary SourceOrder { get; set; } = null!;
+    public OrderSummary TargetOrder { get; set; } = null!;
+    public bool SourceTableFreed { get; set; }
+}
+
+public class OrderSummary
+{
+    public string Id { get; set; } = null!;
+    public int TotalCents { get; set; }
+    public int ItemCount { get; set; }
 }
 
 /// <summary>

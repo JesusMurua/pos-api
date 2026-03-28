@@ -221,6 +221,37 @@ public class OrdersController : BaseApiController
         await _orderService.RemovePaymentAsync(id, paymentId, BranchId);
         return Ok(new { success = true });
     }
+
+    /// <summary>
+    /// Moves items from this order to another order.
+    /// </summary>
+    /// <param name="id">The source order UUID.</param>
+    /// <param name="request">Target order and item IDs to move.</param>
+    /// <returns>Summary of both orders after the move.</returns>
+    /// <response code="200">Returns updated order summaries.</response>
+    /// <response code="400">If validation fails.</response>
+    /// <response code="404">If an order is not found.</response>
+    [HttpPost("{id}/move-items")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(MoveItemsResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MoveItems(string id, [FromBody] MoveItemsRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _orderService.MoveItemsAsync(id, request.TargetOrderId, request.ItemIds, BranchId);
+        return Ok(result);
+    }
+}
+
+/// <summary>
+/// Request body for moving items between orders.
+/// </summary>
+public class MoveItemsRequest
+{
+    public string TargetOrderId { get; set; } = null!;
+    public List<int> ItemIds { get; set; } = new();
 }
 
 /// <summary>
