@@ -59,6 +59,45 @@ public class ProductsController : BaseApiController
     }
 
     /// <summary>
+    /// Gets a product by barcode. BranchId from JWT.
+    /// </summary>
+    /// <param name="code">The barcode string to search.</param>
+    /// <returns>The matching product or 404.</returns>
+    /// <response code="200">Returns the matching product.</response>
+    /// <response code="404">If no product matches the barcode.</response>
+    [HttpGet("by-barcode/{code}")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByBarcode(string code)
+    {
+        var product = await _productService.GetByBarcodeAsync(BranchId, code);
+        if (product == null)
+            return NotFound(new { message = "Producto no encontrado" });
+        return Ok(product);
+    }
+
+    /// <summary>
+    /// Gets a product by barcode. Public endpoint for kiosk mode.
+    /// </summary>
+    /// <param name="code">The barcode string to search.</param>
+    /// <param name="branchId">The branch ID as query parameter.</param>
+    /// <returns>The matching product or 404.</returns>
+    /// <response code="200">Returns the matching product.</response>
+    /// <response code="404">If no product matches the barcode.</response>
+    [HttpGet("public/by-barcode/{code}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByBarcodePublic(string code, [FromQuery] int branchId)
+    {
+        var product = await _productService.GetByBarcodeAsync(branchId, code);
+        if (product == null)
+            return NotFound(new { message = "Producto no encontrado" });
+        return Ok(product);
+    }
+
+    /// <summary>
     /// Retrieves a product by its identifier.
     /// </summary>
     /// <param name="id">The product identifier.</param>

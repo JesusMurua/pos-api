@@ -6,6 +6,7 @@ public interface IProductRepository : IGenericRepository<Product>
 {
     Task<IEnumerable<Product>> GetActiveWithExtrasAsync(int categoryId);
     Task<Product?> GetByIdWithRelationsAsync(int id);
+    Task<Product?> GetByBarcodeAsync(int branchId, string barcode);
     Task<ProductImage?> GetImageByIdAsync(int imageId);
     Task AddImageAsync(ProductImage image);
     void DeleteImage(ProductImage image);

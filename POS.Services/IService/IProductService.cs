@@ -32,6 +32,8 @@ public interface IProductService
     /// </summary>
     Task<Product> ToggleActiveAsync(int id);
 
+    Task<Product?> GetByBarcodeAsync(int branchId, string barcode);
+
     Task AddImageAsync(int productId, ProductImage image);
     Task<ProductImage?> GetImageAsync(int imageId);
     Task DeleteImageAsync(int imageId);

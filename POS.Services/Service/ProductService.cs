@@ -55,6 +55,7 @@ public class ProductService : IProductService
     /// </summary>
     public async Task<Product> CreateAsync(Product product)
     {
+        await ValidateBarcodeUniqueAsync(product.BranchId, product.Barcode, null);
         await _unitOfWork.Products.AddAsync(product);
         await _unitOfWork.SaveChangesAsync();
         return product;
@@ -70,9 +71,13 @@ public class ProductService : IProductService
         if (existing == null)
             throw new NotFoundException($"Product with id {id} not found");
 
+        await ValidateBarcodeUniqueAsync(existing.BranchId, product.Barcode, id);
+
         existing.Name = product.Name;
         existing.PriceCents = product.PriceCents;
         existing.ImageUrl = product.ImageUrl;
+        existing.Description = product.Description;
+        existing.Barcode = product.Barcode;
         existing.IsAvailable = product.IsAvailable;
         existing.IsPopular = product.IsPopular;
         existing.CategoryId = product.CategoryId;
@@ -152,6 +157,27 @@ public class ProductService : IProductService
             _unitOfWork.Products.Update(product);
             await _unitOfWork.SaveChangesAsync();
         }
+    }
+
+    /// <summary>
+    /// Gets an available product by barcode within a branch.
+    /// </summary>
+    public async Task<Product?> GetByBarcodeAsync(int branchId, string barcode)
+    {
+        return await _unitOfWork.Products.GetByBarcodeAsync(branchId, barcode);
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    private async Task ValidateBarcodeUniqueAsync(int branchId, string? barcode, int? excludeProductId)
+    {
+        if (string.IsNullOrWhiteSpace(barcode)) return;
+
+        var existing = await _unitOfWork.Products.GetByBarcodeAsync(branchId, barcode);
+        if (existing != null && existing.Id != excludeProductId)
+            throw new ValidationException("Este código de barras ya está registrado en otro producto");
     }
 
     #endregion

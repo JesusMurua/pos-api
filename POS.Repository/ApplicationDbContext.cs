@@ -144,8 +144,18 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.HasOne(p => p.Branch)
+                .WithMany()
+                .HasForeignKey(p => p.BranchId)
+                .OnDelete(DeleteBehavior.NoAction);
+
             entity.HasIndex(p => p.CategoryId);
 
+            entity.HasIndex(p => new { p.BranchId, p.Barcode })
+                .IsUnique()
+                .HasFilter("\"Barcode\" IS NOT NULL");
+
+            entity.Property(p => p.Barcode).HasMaxLength(100);
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
@@ -407,18 +417,18 @@ public class ApplicationDbContext : DbContext
         );
 
         modelBuilder.Entity<Product>().HasData(
-            new Product { Id = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 2, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 3, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 4, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 5, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 6, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 7, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 8, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 9, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 10, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 11, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 12, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 }
+            new Product { Id = 1, BranchId = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 2, BranchId = 1, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 3, BranchId = 1, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 4, BranchId = 1, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 5, BranchId = 1, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 6, BranchId = 1, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 7, BranchId = 1, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 8, BranchId = 1, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 9, BranchId = 1, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 10, BranchId = 1, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 11, BranchId = 1, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
+            new Product { Id = 12, BranchId = 1, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 }
         );
 
         modelBuilder.Entity<User>().HasData(

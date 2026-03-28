@@ -8,6 +8,8 @@ public partial class Product
 
     public int CategoryId { get; set; }
 
+    public int BranchId { get; set; }
+
     [Required]
     [MaxLength(150)]
     public string Name { get; set; } = null!;
@@ -20,6 +22,12 @@ public partial class Product
     [MaxLength(1000)]
     public string? Description { get; set; }
 
+    /// <summary>
+    /// Optional barcode (EAN-13, QR, etc.). Unique per branch.
+    /// </summary>
+    [MaxLength(100)]
+    public string? Barcode { get; set; }
+
     public bool IsAvailable { get; set; } = true;
 
     public bool IsPopular { get; set; }
@@ -31,6 +39,8 @@ public partial class Product
     public decimal LowStockThreshold { get; set; } = 0;
 
     public virtual Category? Category { get; set; }
+
+    public virtual Branch? Branch { get; set; }
 
     public virtual ICollection<ProductSize>? Sizes { get; set; }
 

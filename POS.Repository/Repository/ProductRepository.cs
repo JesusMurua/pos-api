@@ -29,6 +29,17 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
+    public async Task<Product?> GetByBarcodeAsync(int branchId, string barcode)
+    {
+        return await _context.Products
+            .Where(p => p.BranchId == branchId && p.Barcode == barcode && p.IsAvailable)
+            .Include(p => p.Category)
+            .Include(p => p.Sizes)
+            .Include(p => p.Extras)
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<ProductImage?> GetImageByIdAsync(int imageId)
     {
         return await _context.ProductImages
