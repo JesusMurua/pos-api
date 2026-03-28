@@ -51,7 +51,11 @@ public class AuthService : IAuthService
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
-            Branches = branches
+            Branches = branches,
+            PlanType = business!.PlanType.ToString(),
+            BusinessType = business.BusinessType.ToString(),
+            TrialEndsAt = business.TrialEndsAt?.ToString("o"),
+            OnboardingCompleted = business.OnboardingCompleted
         };
     }
 
@@ -87,7 +91,11 @@ public class AuthService : IAuthService
             Name = matchedUser.Name,
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
-            Branches = branches
+            Branches = branches,
+            PlanType = business!.PlanType.ToString(),
+            BusinessType = business.BusinessType.ToString(),
+            TrialEndsAt = business.TrialEndsAt?.ToString("o"),
+            OnboardingCompleted = business.OnboardingCompleted
         };
     }
 
@@ -132,7 +140,11 @@ public class AuthService : IAuthService
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
-            Branches = branches
+            Branches = branches,
+            PlanType = business!.PlanType.ToString(),
+            BusinessType = business.BusinessType.ToString(),
+            TrialEndsAt = business.TrialEndsAt?.ToString("o"),
+            OnboardingCompleted = business.OnboardingCompleted
         };
     }
 
@@ -213,7 +225,11 @@ public class AuthService : IAuthService
             Name = user.Name,
             BusinessId = business.Id,
             CurrentBranchId = branch.Id,
-            Branches = branches
+            Branches = branches,
+            PlanType = business.PlanType.ToString(),
+            BusinessType = business.BusinessType.ToString(),
+            TrialEndsAt = business.TrialEndsAt?.ToString("o"),
+            OnboardingCompleted = business.OnboardingCompleted
         };
     }
 

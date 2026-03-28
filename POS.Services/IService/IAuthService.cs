@@ -60,6 +60,11 @@ public class AuthResponse
     /// All branches the user has access to.
     /// </summary>
     public List<BranchSummary> Branches { get; set; } = new();
+
+    public string PlanType { get; set; } = null!;
+    public string BusinessType { get; set; } = null!;
+    public string? TrialEndsAt { get; set; }
+    public bool OnboardingCompleted { get; set; }
 }
 
 /// <summary>
