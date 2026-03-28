@@ -23,6 +23,14 @@ public partial class Branch
     /// </summary>
     public bool IsMatrix { get; set; }
 
+    [MaxLength(10)]
+    public string? FolioPrefix { get; set; }
+
+    public int FolioCounter { get; set; }
+
+    [MaxLength(30)]
+    public string? FolioFormat { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

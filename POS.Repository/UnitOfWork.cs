@@ -25,6 +25,7 @@ public class UnitOfWork : IUnitOfWork
     private IDeviceActivationCodeRepository? _deviceActivationCodes;
     private IPromotionRepository? _promotions;
     private IPromotionUsageRepository? _promotionUsages;
+    private IZoneRepository? _zones;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -84,6 +85,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IPromotionUsageRepository PromotionUsages =>
         _promotionUsages ??= new PromotionUsageRepository(_context);
+
+    public IZoneRepository Zones =>
+        _zones ??= new ZoneRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

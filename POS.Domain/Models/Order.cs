@@ -58,6 +58,9 @@ public partial class Order
     [MaxLength(20)]
     public string KitchenStatus { get; set; } = "Pending";
 
+    [MaxLength(20)]
+    public string? FolioNumber { get; set; }
+
     public int? TableId { get; set; }
 
     [MaxLength(50)]

@@ -22,6 +22,7 @@ public interface IUnitOfWork : IDisposable
     IDeviceActivationCodeRepository DeviceActivationCodes { get; }
     IPromotionRepository Promotions { get; }
     IPromotionUsageRepository PromotionUsages { get; }
+    IZoneRepository Zones { get; }
 
     Task<int> SaveChangesAsync();
 }

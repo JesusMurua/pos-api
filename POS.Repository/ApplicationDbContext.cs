@@ -36,6 +36,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductImage> ProductImages { get; set; } = null!;
     public DbSet<Promotion> Promotions { get; set; } = null!;
     public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
+    public DbSet<Zone> Zones { get; set; } = null!;
 
     #endregion
 
@@ -47,6 +48,16 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Business>(entity =>
         {
+            entity.Property(b => b.BusinessType)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(b => b.PlanType)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(b => b.TrialUsed).HasDefaultValue(false);
+
             entity.HasMany(b => b.Branches)
                 .WithOne(br => br.Business)
                 .HasForeignKey(br => br.BusinessId);
@@ -382,6 +393,26 @@ public class ApplicationDbContext : DbContext
 
         #endregion
 
+        #region Zone Configuration
+
+        modelBuilder.Entity<Zone>(entity =>
+        {
+            entity.Property(z => z.Type)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(z => z.IsActive).HasDefaultValue(true);
+
+            entity.HasOne(z => z.Branch)
+                .WithMany()
+                .HasForeignKey(z => z.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(z => new { z.BranchId, z.SortOrder });
+        });
+
+        #endregion
+
         #region AuditLog Configuration
 
         modelBuilder.Entity<AuditLog>(entity =>
@@ -438,7 +469,8 @@ public class ApplicationDbContext : DbContext
         {
             Id = 1,
             Name = "POS Táctil Demo",
-            PlanType = "basic",
+            BusinessType = BusinessType.Restaurant,
+            PlanType = PlanType.Basic,
             IsActive = true,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });

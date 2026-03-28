@@ -80,4 +80,38 @@ public class AuthController : ControllerBase
         var response = await _authService.SwitchBranchAsync(userId, request.BranchId);
         return Ok(response);
     }
+
+    /// <summary>
+    /// Registers a new business with owner account.
+    /// </summary>
+    /// <param name="request">Registration data.</param>
+    /// <returns>JWT token and user info.</returns>
+    /// <response code="200">Returns the JWT token and user info.</response>
+    /// <response code="400">If validation fails.</response>
+    /// <response code="409">If email already exists.</response>
+    [HttpPost("register")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register([FromBody] RegisterApiRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            var response = await _authService.RegisterAsync(new RegisterRequest
+            {
+                BusinessName = request.BusinessName,
+                OwnerName = request.OwnerName,
+                Email = request.Email,
+                Password = request.Password,
+                BusinessType = request.BusinessType
+            });
+            return Ok(response);
+        }
+        catch (POS.Domain.Exceptions.ValidationException ex) when (ex.Message == "EMAIL_EXISTS")
+        {
+            return Conflict(new { message = "Email already registered" });
+        }
+    }
 }

@@ -21,6 +21,24 @@ public interface IAuthService
     /// Other roles can only switch to branches assigned via UserBranch.
     /// </summary>
     Task<AuthResponse> SwitchBranchAsync(int userId, int branchId);
+
+    /// <summary>
+    /// Registers a new business with owner account and matrix branch.
+    /// Returns JWT token so user can immediately enter the app.
+    /// </summary>
+    Task<AuthResponse> RegisterAsync(RegisterRequest request);
+}
+
+/// <summary>
+/// Request for public registration.
+/// </summary>
+public class RegisterRequest
+{
+    public string BusinessName { get; set; } = null!;
+    public string OwnerName { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Password { get; set; } = null!;
+    public string? BusinessType { get; set; }
 }
 
 /// <summary>

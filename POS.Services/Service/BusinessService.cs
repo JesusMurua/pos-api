@@ -66,5 +66,15 @@ public class BusinessService : IBusinessService
         return business;
     }
 
+    /// <summary>
+    /// Updates an existing business.
+    /// </summary>
+    public async Task<Business> UpdateAsync(Business business)
+    {
+        _unitOfWork.Business.Update(business);
+        await _unitOfWork.SaveChangesAsync();
+        return business;
+    }
+
     #endregion
 }

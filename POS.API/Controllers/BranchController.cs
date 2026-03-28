@@ -215,4 +215,37 @@ public class BranchController : BaseApiController
         await _branchService.UpdatePinAsync(id, request.CurrentPin, request.NewPin);
         return Ok(new { message = "PIN updated successfully" });
     }
+
+    /// <summary>
+    /// Updates the folio configuration for a branch.
+    /// </summary>
+    /// <param name="request">Folio prefix and format.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Folio config updated.</response>
+    /// <response code="400">If validation fails.</response>
+    [HttpPut("folio-config")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateFolioConfig([FromBody] FolioConfigRequest request)
+    {
+        if (request.FolioPrefix?.Length > 10)
+            return BadRequest(new { message = "Prefix must be 10 characters or less" });
+
+        var branch = await _branchService.GetConfigAsync(BranchId);
+        branch.FolioPrefix = request.FolioPrefix;
+        branch.FolioFormat = request.FolioFormat;
+        await _branchService.UpdateAsync(BranchId, branch);
+
+        return Ok(new { message = "Folio config updated" });
+    }
+}
+
+/// <summary>
+/// Request body for folio configuration.
+/// </summary>
+public class FolioConfigRequest
+{
+    public string? FolioPrefix { get; set; }
+    public string? FolioFormat { get; set; }
 }

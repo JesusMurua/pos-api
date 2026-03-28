@@ -39,9 +39,10 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             throw new ValidationException("Invalid email or password");
 
+        var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
-        var token = GenerateToken(user, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays));
+        var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays));
 
         return new AuthResponse
         {
@@ -74,9 +75,10 @@ public class AuthService : IAuthService
         if (matchedUser == null)
             throw new ValidationException("Invalid PIN");
 
+        var business = await _unitOfWork.Business.GetByIdAsync(matchedUser.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
-        var token = GenerateToken(matchedUser, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours));
+        var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours));
 
         return new AuthResponse
         {
@@ -105,7 +107,6 @@ public class AuthService : IAuthService
         if (branch.BusinessId != user.BusinessId)
             throw new UnauthorizedException("Branch does not belong to the user's business");
 
-        // Owner/Manager can switch to any branch in their business
         var isAdminRole = user.Role == UserRole.Owner || user.Role == UserRole.Manager;
 
         if (!isAdminRole)
@@ -115,13 +116,14 @@ public class AuthService : IAuthService
                 throw new UnauthorizedException("User is not assigned to the requested branch");
         }
 
+        var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (_, branches) = await ResolveBranchesAsync(user);
 
         var expiration = isAdminRole
             ? TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays)
             : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
 
-        var token = GenerateToken(user, branchId, branches, expiration);
+        var token = GenerateToken(user, business!, branchId, branches, expiration);
 
         return new AuthResponse
         {
@@ -134,14 +136,91 @@ public class AuthService : IAuthService
         };
     }
 
+    /// <summary>
+    /// Registers a new business with owner account and matrix branch.
+    /// </summary>
+    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    {
+        var existingUser = await _unitOfWork.Users.GetByEmailAsync(request.Email);
+        if (existingUser != null)
+            throw new ValidationException("EMAIL_EXISTS");
+
+        if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var businessType))
+            businessType = BusinessType.General;
+
+        // Create Business
+        var business = new Business
+        {
+            Name = request.BusinessName,
+            BusinessType = businessType,
+            PlanType = PlanType.Free,
+            TrialEndsAt = DateTime.UtcNow.AddMonths(3),
+            TrialUsed = false,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _unitOfWork.Business.AddAsync(business);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Create matrix Branch
+        var branch = new Branch
+        {
+            BusinessId = business.Id,
+            Name = $"{request.BusinessName} Principal",
+            IsMatrix = true,
+            IsActive = true,
+            FolioCounter = 0,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _unitOfWork.Branches.AddAsync(branch);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Create Owner user
+        var user = new User
+        {
+            BusinessId = business.Id,
+            Name = request.OwnerName,
+            Email = request.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            Role = UserRole.Owner,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _unitOfWork.Users.AddAsync(user);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Create UserBranch
+        var userBranch = new UserBranch
+        {
+            UserId = user.Id,
+            BranchId = branch.Id,
+            IsDefault = true
+        };
+        await _unitOfWork.UserBranches.AddAsync(userBranch);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Seed default zones based on business type
+        await SeedDefaultZonesAsync(branch.Id, businessType);
+
+        // Generate JWT
+        var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays));
+
+        return new AuthResponse
+        {
+            Token = token,
+            Role = user.Role.ToString(),
+            Name = user.Name,
+            BusinessId = business.Id,
+            CurrentBranchId = branch.Id,
+            Branches = branches
+        };
+    }
+
     #endregion
 
     #region Private Helper Methods
 
-    /// <summary>
-    /// Resolves the current branch and all available branches for a user.
-    /// Uses UserBranch table; falls back to first business branch for Owners.
-    /// </summary>
     private async Task<(int currentBranchId, List<BranchSummary> branches)> ResolveBranchesAsync(User user)
     {
         var userBranches = (await _unitOfWork.UserBranches.GetByUserIdAsync(user.Id)).ToList();
@@ -157,7 +236,6 @@ public class AuthService : IAuthService
             return (defaultBranch.BranchId, branchList);
         }
 
-        // Fallback for Owner without UserBranch records: use first branch of the business
         if (user.Role == UserRole.Owner)
         {
             var businessBranches = await _unitOfWork.Branches.GetAsync(
@@ -178,10 +256,7 @@ public class AuthService : IAuthService
         throw new ValidationException("User has no assigned branch");
     }
 
-    /// <summary>
-    /// Generates a JWT token with user claims, including branchId and branches array.
-    /// </summary>
-    private string GenerateToken(User user, int branchId, List<BranchSummary> branches, TimeSpan expiration)
+    private string GenerateToken(User user, Business business, int branchId, List<BranchSummary> branches, TimeSpan expiration)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -196,7 +271,10 @@ public class AuthService : IAuthService
             new(ClaimTypes.Name, user.Name),
             new("businessId", user.BusinessId.ToString()),
             new("branchId", branchId.ToString()),
-            new("branches", branchesJson)
+            new("branches", branchesJson),
+            new("planType", business.PlanType.ToString()),
+            new("businessType", business.BusinessType.ToString()),
+            new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? "")
         };
 
         var token = new JwtSecurityToken(
@@ -208,6 +286,27 @@ public class AuthService : IAuthService
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private async Task SeedDefaultZonesAsync(int branchId, BusinessType businessType)
+    {
+        if (businessType is BusinessType.Retail or BusinessType.FoodTruck or BusinessType.General)
+            return;
+
+        var zones = new List<Zone>
+        {
+            new() { BranchId = branchId, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true }
+        };
+
+        if (businessType == BusinessType.Bar)
+            zones.Add(new Zone { BranchId = branchId, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true });
+
+        zones.Add(new Zone { BranchId = branchId, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false });
+
+        foreach (var zone in zones)
+            await _unitOfWork.Zones.AddAsync(zone);
+
+        await _unitOfWork.SaveChangesAsync();
     }
 
     #endregion

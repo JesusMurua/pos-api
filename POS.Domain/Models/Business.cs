@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Enums;
 
 namespace POS.Domain.Models;
 
@@ -10,9 +11,13 @@ public partial class Business
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    [Required]
-    [MaxLength(50)]
-    public string PlanType { get; set; } = null!;
+    public BusinessType BusinessType { get; set; } = BusinessType.General;
+
+    public PlanType PlanType { get; set; } = PlanType.Free;
+
+    public DateTime? TrialEndsAt { get; set; }
+
+    public bool TrialUsed { get; set; }
 
     public bool IsActive { get; set; } = true;
 

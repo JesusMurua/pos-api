@@ -18,4 +18,9 @@ public interface IBusinessService
     /// <param name="business">The business data.</param>
     /// <param name="ownerUserId">The owner user ID to assign to the matrix branch.</param>
     Task<Business> CreateAsync(Business business, int ownerUserId);
+
+    /// <summary>
+    /// Updates an existing business.
+    /// </summary>
+    Task<Business> UpdateAsync(Business business);
 }

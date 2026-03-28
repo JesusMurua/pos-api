@@ -32,3 +32,27 @@ public class SwitchBranchRequest
     [Required]
     public int BranchId { get; set; }
 }
+
+/// <summary>
+/// Request body for public registration.
+/// </summary>
+public class RegisterApiRequest
+{
+    [Required]
+    [MaxLength(100)]
+    public string BusinessName { get; set; } = null!;
+
+    [Required]
+    [MaxLength(100)]
+    public string OwnerName { get; set; } = null!;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = null!;
+
+    [Required]
+    [MinLength(8)]
+    public string Password { get; set; } = null!;
+
+    public string? BusinessType { get; set; }
+}
