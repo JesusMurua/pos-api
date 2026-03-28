@@ -42,6 +42,21 @@ public interface IOrderService
     /// Updates the kitchen status of an order. Sends push notification when status is "Ready".
     /// </summary>
     Task<Order> UpdateKitchenStatusAsync(string orderId, string status);
+
+    /// <summary>
+    /// Adds a payment to an existing order and recalculates totals.
+    /// </summary>
+    Task<OrderPayment> AddPaymentAsync(string orderId, int branchId, OrderPayment payment);
+
+    /// <summary>
+    /// Removes a payment from an order and recalculates totals.
+    /// </summary>
+    Task RemovePaymentAsync(string orderId, int paymentId, int branchId);
+
+    /// <summary>
+    /// Gets all payments for an order.
+    /// </summary>
+    Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId);
 }
 
 /// <summary>

@@ -39,11 +39,13 @@ public class ReportService : IReportService
 
         var totalCents = completedOrders.Sum(o => o.TotalCents);
         var cashCents = completedOrders
-            .Where(o => o.PaymentMethod == PaymentMethod.Cash)
-            .Sum(o => o.TotalCents);
+            .SelectMany(o => o.Payments)
+            .Where(p => p.Method == PaymentMethod.Cash)
+            .Sum(p => p.AmountCents);
         var cardCents = completedOrders
-            .Where(o => o.PaymentMethod == PaymentMethod.Card)
-            .Sum(o => o.TotalCents);
+            .SelectMany(o => o.Payments)
+            .Where(p => p.Method == PaymentMethod.Card)
+            .Sum(p => p.AmountCents);
         var discountCents = completedOrders.Sum(o => o.TotalDiscountCents);
         var averageTicket = completedOrders.Count > 0
             ? (decimal)totalCents / completedOrders.Count
@@ -82,7 +84,7 @@ public class ReportService : IReportService
                 CreatedAt = o.CreatedAt,
                 TotalCents = o.TotalCents,
                 TotalDiscountCents = o.TotalDiscountCents,
-                PaymentMethod = o.PaymentMethod.ToString(),
+                PaymentMethod = string.Join(", ", o.Payments.Select(p => p.Method.ToString()).Distinct()),
                 Status = o.CancellationReason != null ? "Cancelada" : "Completada",
                 CancellationReason = o.CancellationReason,
                 ItemCount = o.Items?.Count ?? 0

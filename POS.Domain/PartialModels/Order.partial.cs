@@ -8,5 +8,8 @@ public partial class Order
     public int TotalItems => Items?.Sum(i => i.Quantity) ?? 0;
 
     [NotMapped]
-    public bool IsFullyPaid => TenderedCents.HasValue && TenderedCents.Value >= TotalCents;
+    public bool IsFullyPaid => PaidCents >= TotalCents;
+
+    [NotMapped]
+    public int RemainingCents => Math.Max(0, TotalCents - PaidCents);
 }

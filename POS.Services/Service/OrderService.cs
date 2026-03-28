@@ -11,15 +11,18 @@ public class OrderService : IOrderService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPushNotificationService _pushService;
     private readonly IPromotionService _promotionService;
+    private readonly ApplicationDbContext _context;
 
     public OrderService(
         IUnitOfWork unitOfWork,
         IPushNotificationService pushService,
-        IPromotionService promotionService)
+        IPromotionService promotionService,
+        ApplicationDbContext context)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
         _promotionService = promotionService;
+        _context = context;
     }
 
     #region Public API Methods
@@ -41,10 +44,9 @@ public class OrderService : IOrderService
 
                 if (existing.Any())
                 {
-                    // Upsert: update totals and replace items
-                    var withItems = await _unitOfWork.Orders.GetAsync(
-                        o => o.Id == request.Id, "Items");
-                    var existingOrder = withItems.First();
+                    var withRelations = await _unitOfWork.Orders.GetAsync(
+                        o => o.Id == request.Id, "Items,Payments");
+                    var existingOrder = withRelations.First();
 
                     existingOrder.TotalCents = request.TotalCents;
                     existingOrder.SubtotalCents = request.SubtotalCents;
@@ -52,24 +54,25 @@ public class OrderService : IOrderService
                     existingOrder.TotalDiscountCents = request.TotalDiscountCents;
                     existingOrder.OrderPromotionId = request.OrderPromotionId;
                     existingOrder.OrderPromotionName = request.OrderPromotionName;
-                    existingOrder.TenderedCents = request.TenderedCents;
-                    existingOrder.ChangeCents = request.ChangeCents;
                     existingOrder.IsPaid = request.IsPaid;
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
-                    if (request.PaymentMethod != null
-                        && Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var pm))
-                        existingOrder.PaymentMethod = pm;
-
-                    // Replace items: clear existing, add new
+                    // Replace items
                     existingOrder.Items?.Clear();
                     foreach (var i in request.Items)
                     {
                         existingOrder.Items ??= new List<OrderItem>();
                         existingOrder.Items.Add(MapToOrderItem(request.Id, i));
                     }
+
+                    // Replace payments
+                    existingOrder.Payments.Clear();
+                    foreach (var p in request.Payments)
+                        existingOrder.Payments.Add(MapToPayment(request.Id, p));
+
+                    RecalculatePaymentTotals(existingOrder);
 
                     _unitOfWork.Orders.Update(existingOrder);
                     await _unitOfWork.SaveChangesAsync();
@@ -82,16 +85,14 @@ public class OrderService : IOrderService
                 order.SyncStatus = OrderSyncStatus.Synced;
                 order.SyncedAt = DateTime.UtcNow;
 
-                // Recalculate totals server-side
                 RecalculateTotals(order);
+                RecalculatePaymentTotals(order);
 
                 await _unitOfWork.Orders.AddAsync(order);
                 await _unitOfWork.SaveChangesAsync();
 
-                // Record promotion usage (best-effort, idempotent)
                 await RecordPromotionUsagesAsync(order);
 
-                // Update table status based on order
                 if (order.TableId.HasValue)
                 {
                     var table = await _unitOfWork.RestaurantTables.GetByIdAsync(order.TableId.Value);
@@ -103,7 +104,6 @@ public class OrderService : IOrderService
                     }
                 }
 
-                // Push notification to Kitchen for new order
                 _ = Task.Run(async () =>
                 {
                     try
@@ -131,10 +131,7 @@ public class OrderService : IOrderService
                     await _unitOfWork.Orders.AddAsync(failedOrder);
                     await _unitOfWork.SaveChangesAsync();
                 }
-                catch
-                {
-                    // Order could not be persisted at all
-                }
+                catch { }
 
                 result.Failed++;
             }
@@ -164,12 +161,8 @@ public class OrderService : IOrderService
     /// </summary>
     public async Task<int> GetLastOrderNumberAsync(int branchId)
     {
-        var orders = await _unitOfWork.Orders.GetAsync(
-            o => o.BranchId == branchId);
-
-        return orders.Any()
-            ? orders.Max(o => o.OrderNumber)
-            : 0;
+        var orders = await _unitOfWork.Orders.GetAsync(o => o.BranchId == branchId);
+        return orders.Any() ? orders.Max(o => o.OrderNumber) : 0;
     }
 
     /// <summary>
@@ -178,17 +171,13 @@ public class OrderService : IOrderService
     public async Task<Order> CancelAsync(string orderId, string reason, string? notes, string cancelledBy)
     {
         var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
-        var order = results.FirstOrDefault();
-
-        if (order == null)
-            throw new NotFoundException($"Order with id {orderId} not found");
+        var order = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
 
         if (order.CancelledAt.HasValue)
             throw new ValidationException("Order is already cancelled");
 
-        order.CancellationReason = string.IsNullOrEmpty(notes)
-            ? reason
-            : $"{reason} — {notes}";
+        order.CancellationReason = string.IsNullOrEmpty(notes) ? reason : $"{reason} — {notes}";
         order.CancelledAt = DateTime.UtcNow;
         order.CancelledBy = cancelledBy;
 
@@ -204,7 +193,7 @@ public class OrderService : IOrderService
     {
         var validStatuses = new[] { "Pending", "Preparing", "Ready", "Delivered" };
         if (!validStatuses.Contains(status))
-            throw new ValidationException($"Invalid kitchen status: {status}. Must be one of: {string.Join(", ", validStatuses)}");
+            throw new ValidationException($"Invalid kitchen status: {status}");
 
         var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
         var order = results.FirstOrDefault()
@@ -253,12 +242,70 @@ public class OrderService : IOrderService
                 o.OrderNumber,
                 o.TotalCents,
                 o.CreatedAt,
-                Items = o.Items?.Select(i => new
-                {
-                    i.ProductName,
-                    i.Quantity
-                }) ?? Enumerable.Empty<object>()
+                Items = o.Items?.Select(i => new { i.ProductName, i.Quantity })
+                    ?? Enumerable.Empty<object>()
             });
+    }
+
+    /// <summary>
+    /// Adds a payment to an existing order and recalculates totals.
+    /// </summary>
+    public async Task<OrderPayment> AddPaymentAsync(string orderId, int branchId, OrderPayment payment)
+    {
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Payments");
+        var order = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
+
+        if (order.BranchId != branchId)
+            throw new UnauthorizedException("Order does not belong to this branch");
+
+        payment.OrderId = orderId;
+        payment.CreatedAt = DateTime.UtcNow;
+        order.Payments.Add(payment);
+
+        RecalculatePaymentTotals(order);
+
+        _unitOfWork.Orders.Update(order);
+        await _unitOfWork.SaveChangesAsync();
+
+        return payment;
+    }
+
+    /// <summary>
+    /// Removes a payment from an order and recalculates totals.
+    /// </summary>
+    public async Task RemovePaymentAsync(string orderId, int paymentId, int branchId)
+    {
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Payments");
+        var order = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
+
+        if (order.BranchId != branchId)
+            throw new UnauthorizedException("Order does not belong to this branch");
+
+        var payment = order.Payments.FirstOrDefault(p => p.Id == paymentId)
+            ?? throw new NotFoundException($"Payment with id {paymentId} not found");
+
+        order.Payments.Remove(payment);
+        RecalculatePaymentTotals(order);
+
+        _unitOfWork.Orders.Update(order);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Gets all payments for an order.
+    /// </summary>
+    public async Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId)
+    {
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Payments");
+        var order = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
+
+        if (order.BranchId != branchId)
+            throw new UnauthorizedException("Order does not belong to this branch");
+
+        return order.Payments;
     }
 
     #endregion
@@ -267,18 +314,12 @@ public class OrderService : IOrderService
 
     private static Order MapToOrder(SyncOrderRequest request)
     {
-        if (!Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var paymentMethod))
-            paymentMethod = PaymentMethod.Cash;
-
         return new Order
         {
             Id = request.Id,
             BranchId = request.BranchId,
             OrderNumber = request.OrderNumber,
             TotalCents = request.TotalCents,
-            PaymentMethod = paymentMethod,
-            TenderedCents = request.TenderedCents,
-            ChangeCents = request.ChangeCents,
             CreatedAt = request.CreatedAt,
             SubtotalCents = request.SubtotalCents,
             OrderDiscountCents = request.OrderDiscountCents,
@@ -288,7 +329,8 @@ public class OrderService : IOrderService
             IsPaid = request.IsPaid,
             TableId = request.TableId,
             TableName = request.TableName,
-            Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList()
+            Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
+            Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
         };
     }
 
@@ -310,6 +352,21 @@ public class OrderService : IOrderService
         };
     }
 
+    private static OrderPayment MapToPayment(string orderId, SyncPaymentRequest p)
+    {
+        if (!Enum.TryParse<PaymentMethod>(p.Method, true, out var method))
+            method = PaymentMethod.Cash;
+
+        return new OrderPayment
+        {
+            OrderId = orderId,
+            Method = method,
+            AmountCents = p.AmountCents,
+            Reference = p.Reference,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
+
     private static void RecalculateTotals(Order order)
     {
         if (order.Items == null) return;
@@ -318,8 +375,13 @@ public class OrderService : IOrderService
         var itemDiscounts = order.Items.Sum(i => i.DiscountCents);
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
-
         if (order.TotalCents < 0) order.TotalCents = 0;
+    }
+
+    private static void RecalculatePaymentTotals(Order order)
+    {
+        order.PaidCents = order.Payments.Sum(p => p.AmountCents);
+        order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
     }
 
     private async Task RecordPromotionUsagesAsync(Order order)
@@ -328,13 +390,11 @@ public class OrderService : IOrderService
         {
             var recordedIds = new HashSet<int>();
 
-            // Item-level promotions
             if (order.Items != null)
             {
                 foreach (var item in order.Items.Where(i => i.PromotionId.HasValue))
                 {
                     var promoId = item.PromotionId!.Value;
-
                     var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
                     if (promo == null || promo.BranchId != order.BranchId)
                     {
@@ -350,28 +410,19 @@ public class OrderService : IOrderService
                 }
             }
 
-            // Order-level promotion
             if (order.OrderPromotionId.HasValue)
             {
                 var promoId = order.OrderPromotionId.Value;
-
                 var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
                 if (promo == null || promo.BranchId != order.BranchId)
-                {
                     order.OrderPromotionId = null;
-                }
                 else if (!recordedIds.Contains(promoId))
-                {
                     await _promotionService.RecordUsageAsync(promoId, order.BranchId, order.Id);
-                }
             }
 
             await _unitOfWork.SaveChangesAsync();
         }
-        catch
-        {
-            // Best-effort — never fail the sync for promotion tracking
-        }
+        catch { /* best-effort */ }
     }
 
     #endregion

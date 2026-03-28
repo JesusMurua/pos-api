@@ -37,6 +37,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Promotion> Promotions { get; set; } = null!;
     public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
     public DbSet<Zone> Zones { get; set; } = null!;
+    public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
 
     #endregion
 
@@ -184,14 +185,6 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(36)
                 .ValueGeneratedNever();
 
-            entity.Property(o => o.PaymentMethod)
-                .HasConversion<string>()
-                .HasMaxLength(20);
-
-            entity.Property(o => o.PaymentProvider)
-                .HasConversion<string>()
-                .HasMaxLength(30);
-
             entity.Property(o => o.SyncStatus)
                 .HasConversion<string>()
                 .HasMaxLength(20);
@@ -218,8 +211,30 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(i => i.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.HasMany(o => o.Payments)
+                .WithOne(p => p.Order)
+                .HasForeignKey(p => p.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
             entity.HasIndex(o => o.SyncStatus);
+        });
+
+        #endregion
+
+        #region OrderPayment Configuration
+
+        modelBuilder.Entity<OrderPayment>(entity =>
+        {
+            entity.Property(p => p.OrderId).HasMaxLength(36);
+
+            entity.Property(p => p.Method)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(p => p.Reference).HasMaxLength(50);
+
+            entity.HasIndex(p => p.OrderId);
         });
 
         #endregion

@@ -14,12 +14,6 @@ public class SyncOrderRequest
 
     public int TotalCents { get; set; }
 
-    public string? PaymentMethod { get; set; }
-
-    public int? TenderedCents { get; set; }
-
-    public int? ChangeCents { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public int SubtotalCents { get; set; }
@@ -41,6 +35,8 @@ public class SyncOrderRequest
     public string? TableName { get; set; }
 
     public List<SyncOrderItemRequest> Items { get; set; } = new();
+
+    public List<SyncPaymentRequest> Payments { get; set; } = new();
 }
 
 public class SyncOrderItemRequest
@@ -69,4 +65,13 @@ public class SyncOrderItemRequest
 
     [MaxLength(100)]
     public string? PromotionName { get; set; }
+}
+
+public class SyncPaymentRequest
+{
+    public string Method { get; set; } = null!;
+    public int AmountCents { get; set; }
+
+    [MaxLength(50)]
+    public string? Reference { get; set; }
 }

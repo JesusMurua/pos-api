@@ -17,16 +17,9 @@ public partial class Order
 
     public int TotalCents { get; set; }
 
-    public PaymentMethod PaymentMethod { get; set; }
+    public int PaidCents { get; set; }
 
-    public int? TenderedCents { get; set; }
-
-    public int? ChangeCents { get; set; }
-
-    public PaymentProvider? PaymentProvider { get; set; }
-
-    [MaxLength(200)]
-    public string? ExternalReference { get; set; }
+    public int ChangeCents { get; set; }
 
     public OrderSyncStatus SyncStatus { get; set; } = OrderSyncStatus.Pending;
 
@@ -73,4 +66,6 @@ public partial class Order
     public virtual RestaurantTable? Table { get; set; }
 
     public virtual ICollection<OrderItem>? Items { get; set; }
+
+    public virtual ICollection<OrderPayment> Payments { get; set; } = new List<OrderPayment>();
 }
