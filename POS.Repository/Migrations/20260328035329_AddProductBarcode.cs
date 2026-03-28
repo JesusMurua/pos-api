@@ -24,6 +24,16 @@ namespace POS.Repository.Migrations
                 nullable: false,
                 defaultValue: 0);
 
+            // Patch existing products: set BranchId from their Category's BranchId
+            migrationBuilder.Sql(@"
+                UPDATE ""Products""
+                SET ""BranchId"" = c.""BranchId""
+                FROM ""Categories"" c
+                WHERE ""Products"".""CategoryId"" = c.""Id""
+                  AND (""Products"".""BranchId"" = 0
+                    OR ""Products"".""BranchId"" NOT IN (SELECT ""Id"" FROM ""Branches""));
+            ");
+
             migrationBuilder.UpdateData(
                 table: "Products",
                 keyColumn: "Id",
