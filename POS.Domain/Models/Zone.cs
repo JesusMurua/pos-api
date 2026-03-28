@@ -19,5 +19,5 @@ public class Zone
 
     public bool IsActive { get; set; } = true;
 
-    public virtual Branch Branch { get; set; } = null!;
+    public virtual Branch? Branch { get; set; }
 }
