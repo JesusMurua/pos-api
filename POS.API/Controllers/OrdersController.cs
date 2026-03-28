@@ -243,6 +243,37 @@ public class OrdersController : BaseApiController
         var result = await _orderService.MoveItemsAsync(id, request.TargetOrderId, request.ItemIds, BranchId);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Merges all items from source order into this (target) order.
+    /// Closes source order and frees its table.
+    /// </summary>
+    /// <param name="id">The target order UUID (survives).</param>
+    /// <param name="request">The source order to absorb.</param>
+    /// <returns>Summary of the merged target order.</returns>
+    /// <response code="200">Returns merge result.</response>
+    /// <response code="400">If validation fails.</response>
+    /// <response code="404">If an order is not found.</response>
+    [HttpPost("{id}/merge")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(MergeResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Merge(string id, [FromBody] MergeOrderRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _orderService.MergeOrdersAsync(id, request.SourceOrderId, BranchId);
+        return Ok(result);
+    }
+}
+
+/// <summary>
+/// Request body for merging orders.
+/// </summary>
+public class MergeOrderRequest
+{
+    public string SourceOrderId { get; set; } = null!;
 }
 
 /// <summary>

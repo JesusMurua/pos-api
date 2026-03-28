@@ -63,6 +63,12 @@ public interface IOrderService
     /// If source order becomes empty, marks it completed and frees the table.
     /// </summary>
     Task<MoveItemsResult> MoveItemsAsync(string sourceOrderId, string targetOrderId, List<int> itemIds, int branchId);
+
+    /// <summary>
+    /// Merges all items from source order into target order.
+    /// Closes source order and frees its table.
+    /// </summary>
+    Task<MergeResult> MergeOrdersAsync(string targetOrderId, string sourceOrderId, int branchId);
 }
 
 public class MoveItemsResult
@@ -77,6 +83,13 @@ public class OrderSummary
     public string Id { get; set; } = null!;
     public int TotalCents { get; set; }
     public int ItemCount { get; set; }
+}
+
+public class MergeResult
+{
+    public OrderSummary TargetOrder { get; set; } = null!;
+    public bool SourceTableFreed { get; set; }
+    public string? SourceTableName { get; set; }
 }
 
 /// <summary>

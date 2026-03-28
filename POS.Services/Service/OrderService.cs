@@ -403,6 +403,87 @@ public class OrderService : IOrderService
         };
     }
 
+    /// <summary>
+    /// Merges all items from source order into target order in a single transaction.
+    /// </summary>
+    public async Task<MergeResult> MergeOrdersAsync(string targetOrderId, string sourceOrderId, int branchId)
+    {
+        if (sourceOrderId == targetOrderId)
+            throw new ValidationException("Source and target orders must be different");
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == sourceOrderId, "Items");
+        var source = sourceResults.FirstOrDefault()
+            ?? throw new NotFoundException($"Source order {sourceOrderId} not found");
+
+        if (source.BranchId != branchId)
+            throw new UnauthorizedException("Source order does not belong to this branch");
+        if (source.CancelledAt.HasValue)
+            throw new ValidationException("Source order is cancelled");
+
+        var targetResults = await _unitOfWork.Orders.GetAsync(o => o.Id == targetOrderId, "Items");
+        var target = targetResults.FirstOrDefault()
+            ?? throw new NotFoundException($"Target order {targetOrderId} not found");
+
+        if (target.BranchId != branchId)
+            throw new UnauthorizedException("Target order does not belong to this branch");
+        if (target.CancelledAt.HasValue)
+            throw new ValidationException("Target order is cancelled");
+
+        // Move all items from source to target
+        var itemsToMove = source.Items?.ToList() ?? [];
+        foreach (var item in itemsToMove)
+        {
+            source.Items!.Remove(item);
+            item.OrderId = targetOrderId;
+            target.Items ??= new List<OrderItem>();
+            target.Items.Add(item);
+        }
+
+        // Recalculate target
+        RecalculateOrderTotals(target);
+
+        // Close source
+        source.SubtotalCents = 0;
+        source.TotalCents = 0;
+        source.TotalDiscountCents = source.OrderDiscountCents;
+        source.KitchenStatus = "Delivered";
+        source.IsPaid = true;
+
+        // Free source table
+        string? sourceTableName = null;
+        var sourceTableFreed = false;
+        if (source.TableId.HasValue)
+        {
+            var table = await _unitOfWork.RestaurantTables.GetByIdAsync(source.TableId.Value);
+            if (table != null)
+            {
+                sourceTableName = table.Name;
+                table.Status = "available";
+                _unitOfWork.RestaurantTables.Update(table);
+                sourceTableFreed = true;
+            }
+        }
+
+        _unitOfWork.Orders.Update(source);
+        _unitOfWork.Orders.Update(target);
+        await _unitOfWork.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return new MergeResult
+        {
+            TargetOrder = new OrderSummary
+            {
+                Id = target.Id,
+                TotalCents = target.TotalCents,
+                ItemCount = target.Items?.Count ?? 0
+            },
+            SourceTableFreed = sourceTableFreed,
+            SourceTableName = sourceTableName
+        };
+    }
+
     #endregion
 
     #region Private Helper Methods
