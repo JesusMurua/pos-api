@@ -14,10 +14,12 @@ namespace POS.API.Controllers;
 public class BusinessController : BaseApiController
 {
     private readonly IBusinessService _businessService;
+    private readonly IAuthService _authService;
 
-    public BusinessController(IBusinessService businessService)
+    public BusinessController(IBusinessService businessService, IAuthService authService)
     {
         _businessService = businessService;
+        _authService = authService;
     }
 
     /// <summary>
@@ -85,6 +87,24 @@ public class BusinessController : BaseApiController
         business.BusinessType = businessType;
         await _businessService.UpdateAsync(business);
         return Ok(new { message = "Business type updated", businessType = businessType.ToString() });
+    }
+
+    /// <summary>
+    /// Marks the business onboarding as completed and returns a fresh JWT.
+    /// </summary>
+    /// <returns>A new JWT token with updated onboardingCompleted claim.</returns>
+    /// <response code="200">Returns a fresh JWT token.</response>
+    [HttpPost("complete-onboarding")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CompleteOnboarding()
+    {
+        var business = await _businessService.GetByIdAsync(BusinessId);
+        business.OnboardingCompleted = true;
+        await _businessService.UpdateAsync(business);
+
+        var response = await _authService.SwitchBranchAsync(UserId, BranchId);
+        return Ok(response);
     }
 }
 

@@ -19,6 +19,8 @@ public partial class Business
 
     public bool TrialUsed { get; set; }
 
+    public bool OnboardingCompleted { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

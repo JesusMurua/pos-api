@@ -274,7 +274,8 @@ public class AuthService : IAuthService
             new("branches", branchesJson),
             new("planType", business.PlanType.ToString()),
             new("businessType", business.BusinessType.ToString()),
-            new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? "")
+            new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
+            new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower())
         };
 
         var token = new JwtSecurityToken(
