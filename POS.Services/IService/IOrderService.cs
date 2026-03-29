@@ -138,6 +138,7 @@ public class SyncResult
 public class OrderPullDto
 {
     public string Id { get; set; } = null!;
+    public int BranchId { get; set; }
     public string? FolioNumber { get; set; }
     public int? TableId { get; set; }
     public string? TableName { get; set; }
@@ -156,6 +157,7 @@ public class OrderPullDto
 
 public class OrderPullItemDto
 {
+    public int Id { get; set; }
     public string ProductName { get; set; } = null!;
     public int Quantity { get; set; }
     public int UnitPriceCents { get; set; }

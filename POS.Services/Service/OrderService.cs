@@ -328,6 +328,7 @@ public class OrderService : IOrderService
         return orders.Select(o => new OrderPullDto
         {
             Id = o.Id,
+            BranchId = o.BranchId,
             FolioNumber = o.FolioNumber,
             TableId = o.TableId,
             TableName = o.TableName,
@@ -342,6 +343,7 @@ public class OrderService : IOrderService
             OrderNumber = o.OrderNumber,
             Items = o.Items?.Select(i => new OrderPullItemDto
             {
+                Id = i.Id,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
                 UnitPriceCents = i.UnitPriceCents
