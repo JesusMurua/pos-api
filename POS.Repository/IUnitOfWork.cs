@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Storage;
 using POS.Repository.IRepository;
 
 namespace POS.Repository;
@@ -23,6 +24,8 @@ public interface IUnitOfWork : IDisposable
     IPromotionRepository Promotions { get; }
     IPromotionUsageRepository PromotionUsages { get; }
     IZoneRepository Zones { get; }
+    ICatalogRepository Catalog { get; }
 
     Task<int> SaveChangesAsync();
+    Task<IDbContextTransaction> BeginTransactionAsync();
 }

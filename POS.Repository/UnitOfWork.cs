@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Storage;
 using POS.Repository.IRepository;
 using POS.Repository.Repository;
 
@@ -26,6 +27,7 @@ public class UnitOfWork : IUnitOfWork
     private IPromotionRepository? _promotions;
     private IPromotionUsageRepository? _promotionUsages;
     private IZoneRepository? _zones;
+    private ICatalogRepository? _catalog;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -89,9 +91,17 @@ public class UnitOfWork : IUnitOfWork
     public IZoneRepository Zones =>
         _zones ??= new ZoneRepository(_context);
 
+    public ICatalogRepository Catalog =>
+        _catalog ??= new CatalogRepository(_context);
+
     public async Task<int> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync();
+    }
+
+    public async Task<IDbContextTransaction> BeginTransactionAsync()
+    {
+        return await _context.Database.BeginTransactionAsync();
     }
 
     public void Dispose()

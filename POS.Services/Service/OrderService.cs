@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -12,18 +11,15 @@ public class OrderService : IOrderService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPushNotificationService _pushService;
     private readonly IPromotionService _promotionService;
-    private readonly ApplicationDbContext _context;
 
     public OrderService(
         IUnitOfWork unitOfWork,
         IPushNotificationService pushService,
-        IPromotionService promotionService,
-        ApplicationDbContext context)
+        IPromotionService promotionService)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
         _promotionService = promotionService;
-        _context = context;
     }
 
     #region Public API Methods
@@ -315,15 +311,7 @@ public class OrderService : IOrderService
     {
         var cutoff = since ?? DateTime.UtcNow.AddHours(-24);
 
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => o.BranchId == branchId
-                && o.CancellationReason == null
-                && (o.UpdatedAt > cutoff || o.CreatedAt > cutoff))
-            .Include(o => o.Items)
-            .Include(o => o.Payments)
-            .OrderByDescending(o => o.UpdatedAt ?? o.CreatedAt)
-            .ToListAsync();
+        var orders = await _unitOfWork.Orders.GetPullOrdersAsync(branchId, cutoff);
 
         return orders.Select(o => new OrderPullDto
         {
@@ -367,7 +355,7 @@ public class OrderService : IOrderService
         if (sourceOrderId == targetOrderId)
             throw new ValidationException("Source and target orders must be different");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
         var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == sourceOrderId, "Items");
         var source = sourceResults.FirstOrDefault()
@@ -462,7 +450,7 @@ public class OrderService : IOrderService
         if (sourceOrderId == targetOrderId)
             throw new ValidationException("Source and target orders must be different");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
         var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == sourceOrderId, "Items");
         var source = sourceResults.FirstOrDefault()
@@ -543,7 +531,7 @@ public class OrderService : IOrderService
         if (splits.Count < 2)
             throw new ValidationException("At least 2 split groups are required");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
         var sourceResults = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Items");
         var source = sourceResults.FirstOrDefault()
@@ -573,15 +561,8 @@ public class OrderService : IOrderService
             string? folioNumber = null;
             try
             {
-                var counters = await _context.Database
-                    .SqlQuery<int>($@"
-                        UPDATE ""Branches""
-                        SET ""FolioCounter"" = ""FolioCounter"" + 1
-                        WHERE ""Id"" = {branchId}
-                        RETURNING ""FolioCounter""")
-                    .ToListAsync();
-                var counter = counters.FirstOrDefault();
-                if (counter > 0) folioNumber = counter.ToString("D4");
+                var (counter, prefix, format) = await _unitOfWork.Branches.IncrementFolioCounterAsync(branchId);
+                folioNumber = !string.IsNullOrEmpty(prefix) ? $"{prefix}-{counter:D4}" : counter.ToString("D4");
             }
             catch { /* folio generation is best-effort */ }
 

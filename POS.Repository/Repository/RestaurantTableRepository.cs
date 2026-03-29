@@ -27,4 +27,40 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             .Include(t => t.Orders!.Where(o => o.CancellationReason == null))
             .FirstOrDefaultAsync(t => t.Id == id);
     }
+
+    public async Task<IEnumerable<TableStatusProjection>> GetTableStatusProjectionsAsync(int branchId)
+    {
+        var tables = await _context.RestaurantTables
+            .AsNoTracking()
+            .Where(t => t.BranchId == branchId && t.IsActive)
+            .Select(t => new { t.Id, t.Name, t.ZoneId, ZoneName = t.Zone != null ? t.Zone.Name : "" })
+            .ToListAsync();
+
+        var activeOrders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId && o.TableId != null
+                && o.CancellationReason == null && o.IsPaid == false)
+            .Select(o => new { o.TableId, o.Id, o.TotalCents, o.KitchenStatus, o.CreatedAt })
+            .ToListAsync();
+
+        var orderByTable = activeOrders
+            .GroupBy(o => o.TableId)
+            .ToDictionary(g => g.Key!.Value, g => g.OrderByDescending(o => o.CreatedAt).First());
+
+        return tables.Select(t =>
+        {
+            var hasOrder = orderByTable.TryGetValue(t.Id, out var order);
+            return new TableStatusProjection
+            {
+                TableId = t.Id,
+                TableName = t.Name,
+                ZoneId = t.ZoneId,
+                ZoneName = t.ZoneName,
+                OrderId = hasOrder ? order!.Id : null,
+                OrderTotalCents = hasOrder ? order!.TotalCents : null,
+                OrderKitchenStatus = hasOrder ? order!.KitchenStatus : null,
+                OrderCreatedAt = hasOrder ? order!.CreatedAt : null
+            };
+        });
+    }
 }

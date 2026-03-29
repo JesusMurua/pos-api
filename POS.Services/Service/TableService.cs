@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -13,12 +12,10 @@ namespace POS.Services.Service;
 public class TableService : ITableService
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly ApplicationDbContext _context;
 
-    public TableService(IUnitOfWork unitOfWork, ApplicationDbContext context)
+    public TableService(IUnitOfWork unitOfWork)
     {
         _unitOfWork = unitOfWork;
-        _context = context;
     }
 
     #region Public API Methods
@@ -118,55 +115,21 @@ public class TableService : ITableService
     /// </summary>
     public async Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId)
     {
-        var tables = await _context.RestaurantTables
-            .AsNoTracking()
-            .Where(t => t.BranchId == branchId && t.IsActive)
-            .Select(t => new
-            {
-                t.Id,
-                t.Name,
-                t.ZoneId,
-                ZoneName = t.Zone != null ? t.Zone.Name : ""
-            })
-            .ToListAsync();
+        var projections = await _unitOfWork.RestaurantTables.GetTableStatusProjectionsAsync(branchId);
 
-        var activeOrders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => o.BranchId == branchId
-                && o.TableId != null
-                && o.CancellationReason == null
-                && o.IsPaid == false)
-            .Select(o => new
-            {
-                o.TableId,
-                o.Id,
-                o.TotalCents,
-                o.KitchenStatus,
-                o.CreatedAt
-            })
-            .ToListAsync();
-
-        var orderByTable = activeOrders
-            .GroupBy(o => o.TableId)
-            .ToDictionary(
-                g => g.Key!.Value,
-                g => g.OrderByDescending(o => o.CreatedAt).First());
-
-        return tables.Select(t =>
+        return projections.Select(p => new TableStatusDto
         {
-            var hasOrder = orderByTable.TryGetValue(t.Id, out var order);
-            return new TableStatusDto
-            {
-                TableId = t.Id,
-                TableName = t.Name,
-                ZoneId = t.ZoneId,
-                ZoneName = t.ZoneName,
-                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus) : "free",
-                OrderTotalCents = hasOrder ? order!.TotalCents : null,
-                OrderId = hasOrder ? order!.Id : null,
-                GuestName = null,
-                ReservationTime = null
-            };
+            TableId = p.TableId,
+            TableName = p.TableName,
+            ZoneId = p.ZoneId,
+            ZoneName = p.ZoneName,
+            DisplayStatus = p.OrderKitchenStatus.HasValue
+                ? MapKitchenToDisplay(p.OrderKitchenStatus.Value)
+                : "free",
+            OrderTotalCents = p.OrderTotalCents,
+            OrderId = p.OrderId,
+            GuestName = null,
+            ReservationTime = null
         });
     }
 

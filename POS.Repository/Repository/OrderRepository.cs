@@ -37,4 +37,17 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .Include(o => o.Items)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Order>> GetPullOrdersAsync(int branchId, DateTime since)
+    {
+        return await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                && o.CancellationReason == null
+                && (o.UpdatedAt > since || o.CreatedAt > since))
+            .Include(o => o.Items)
+            .Include(o => o.Payments)
+            .OrderByDescending(o => o.UpdatedAt ?? o.CreatedAt)
+            .ToListAsync();
+    }
 }
