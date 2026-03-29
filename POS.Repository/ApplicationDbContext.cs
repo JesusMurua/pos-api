@@ -11,6 +11,17 @@ public class ApplicationDbContext : DbContext
     {
     }
 
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<Order>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
     #region DbSets
 
     public DbSet<Business> Businesses { get; set; } = null!;
@@ -192,8 +203,9 @@ public class ApplicationDbContext : DbContext
             entity.Property(o => o.IsPaid).HasDefaultValue(false);
 
             entity.Property(o => o.KitchenStatus)
+                .HasConversion<string>()
                 .HasMaxLength(20)
-                .HasDefaultValue("Pending");
+                .HasDefaultValue(KitchenStatus.Pending);
 
             entity.Property(o => o.OrderPromotionName).HasMaxLength(100);
 

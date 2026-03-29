@@ -48,11 +48,12 @@ public partial class Order
 
     public bool IsPaid { get; set; } = false;
 
-    [MaxLength(20)]
-    public string KitchenStatus { get; set; } = "Pending";
+    public KitchenStatus KitchenStatus { get; set; } = KitchenStatus.Pending;
 
     [MaxLength(20)]
     public string? FolioNumber { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
 
     public int? TableId { get; set; }
 

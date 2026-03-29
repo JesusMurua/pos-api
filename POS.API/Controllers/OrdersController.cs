@@ -83,6 +83,21 @@ public class OrdersController : BaseApiController
     }
 
     /// <summary>
+    /// Returns orders updated since a timestamp for bidirectional sync.
+    /// </summary>
+    /// <param name="since">ISO 8601 timestamp. Null = last 24 hours.</param>
+    /// <returns>A list of orders with items and payments.</returns>
+    /// <response code="200">Returns the list of orders.</response>
+    [HttpGet("pull")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [ProducesResponseType(typeof(IEnumerable<OrderPullDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Pull([FromQuery] DateTime? since)
+    {
+        var orders = await _orderService.GetPullOrdersAsync(BranchId, since);
+        return Ok(orders);
+    }
+
+    /// <summary>
     /// Gets active (non-cancelled) orders for a specific table.
     /// </summary>
     /// <param name="tableId">The table identifier.</param>

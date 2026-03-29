@@ -59,6 +59,11 @@ public interface IOrderService
     Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId);
 
     /// <summary>
+    /// Returns orders updated since a given timestamp for bidirectional sync.
+    /// </summary>
+    Task<IEnumerable<OrderPullDto>> GetPullOrdersAsync(int branchId, DateTime? since);
+
+    /// <summary>
     /// Moves items from one order to another. Recalculates totals on both.
     /// If source order becomes empty, marks it completed and frees the table.
     /// </summary>
@@ -128,4 +133,36 @@ public class SyncResult
     public int Updated { get; set; }
     public int Skipped { get; set; }
     public int Failed { get; set; }
+}
+
+public class OrderPullDto
+{
+    public string Id { get; set; } = null!;
+    public string? FolioNumber { get; set; }
+    public int? TableId { get; set; }
+    public string? TableName { get; set; }
+    public string KitchenStatus { get; set; } = null!;
+    public bool IsPaid { get; set; }
+    public int TotalCents { get; set; }
+    public int SubtotalCents { get; set; }
+    public int PaidCents { get; set; }
+    public int ChangeCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public int OrderNumber { get; set; }
+    public List<OrderPullItemDto> Items { get; set; } = new();
+    public List<OrderPullPaymentDto> Payments { get; set; } = new();
+}
+
+public class OrderPullItemDto
+{
+    public string ProductName { get; set; } = null!;
+    public int Quantity { get; set; }
+    public int UnitPriceCents { get; set; }
+}
+
+public class OrderPullPaymentDto
+{
+    public string Method { get; set; } = null!;
+    public int AmountCents { get; set; }
 }

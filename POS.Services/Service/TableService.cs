@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -160,7 +161,7 @@ public class TableService : ITableService
                 TableName = t.Name,
                 ZoneId = t.ZoneId,
                 ZoneName = t.ZoneName,
-                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus) : "free",
+                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus.ToString()) : "free",
                 OrderTotalCents = hasOrder ? order!.TotalCents : null,
                 OrderId = hasOrder ? order!.Id : null,
                 GuestName = null,
@@ -175,13 +176,23 @@ public class TableService : ITableService
 
     private static string MapKitchenToDisplay(string? kitchenStatus)
     {
+        if (Enum.TryParse<KitchenStatus>(kitchenStatus, true, out var status))
+        {
+            return status switch
+            {
+                KitchenStatus.Pending => "with_order",
+                KitchenStatus.Preparing => "in_kitchen",
+                KitchenStatus.Ready => "ready",
+                KitchenStatus.Delivered => "paid",
+                _ => "with_order"
+            };
+        }
+
         return (kitchenStatus?.ToLowerInvariant()) switch
         {
-            "new" or "pending" => "with_order",
-            "sent" or "preparing" => "in_kitchen",
-            "ready" or "done" => "ready",
+            "new" or "sent" => "with_order",
             "waiting_bill" => "waiting_bill",
-            "completed" or "paid" => "paid",
+            "completed" or "paid" or "done" => "paid",
             _ => "with_order"
         };
     }

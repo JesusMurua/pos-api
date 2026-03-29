@@ -29,6 +29,8 @@ public class SyncOrderRequest
 
     public bool IsPaid { get; set; } = false;
 
+    public string? KitchenStatus { get; set; }
+
     public int? TableId { get; set; }
 
     [MaxLength(50)]

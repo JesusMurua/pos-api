@@ -56,6 +56,7 @@ public class OrderService : IOrderService
                     existingOrder.OrderPromotionId = request.OrderPromotionId;
                     existingOrder.OrderPromotionName = request.OrderPromotionName;
                     existingOrder.IsPaid = request.IsPaid;
+                    existingOrder.KitchenStatus = ParseKitchenStatus(request.KitchenStatus);
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
                     existingOrder.SyncedAt = DateTime.UtcNow;
@@ -192,19 +193,17 @@ public class OrderService : IOrderService
     /// </summary>
     public async Task<Order> UpdateKitchenStatusAsync(string orderId, string status)
     {
-        var validStatuses = new[] { "Pending", "Preparing", "Ready", "Delivered" };
-        if (!validStatuses.Contains(status))
-            throw new ValidationException($"Invalid kitchen status: {status}");
+        var kitchenStatus = ParseKitchenStatus(status);
 
         var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException($"Order with id {orderId} not found");
 
-        order.KitchenStatus = status;
+        order.KitchenStatus = kitchenStatus;
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
 
-        if (status == "Ready")
+        if (kitchenStatus == KitchenStatus.Ready)
         {
             _ = Task.Run(async () =>
             {
@@ -310,6 +309,52 @@ public class OrderService : IOrderService
     }
 
     /// <summary>
+    /// Returns orders updated since a given timestamp for bidirectional sync.
+    /// </summary>
+    public async Task<IEnumerable<OrderPullDto>> GetPullOrdersAsync(int branchId, DateTime? since)
+    {
+        var cutoff = since ?? DateTime.UtcNow.AddHours(-24);
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                && o.CancellationReason == null
+                && (o.UpdatedAt > cutoff || o.CreatedAt > cutoff))
+            .Include(o => o.Items)
+            .Include(o => o.Payments)
+            .OrderByDescending(o => o.UpdatedAt ?? o.CreatedAt)
+            .ToListAsync();
+
+        return orders.Select(o => new OrderPullDto
+        {
+            Id = o.Id,
+            FolioNumber = o.FolioNumber,
+            TableId = o.TableId,
+            TableName = o.TableName,
+            KitchenStatus = o.KitchenStatus.ToString(),
+            IsPaid = o.IsPaid,
+            TotalCents = o.TotalCents,
+            SubtotalCents = o.SubtotalCents,
+            PaidCents = o.PaidCents,
+            ChangeCents = o.ChangeCents,
+            CreatedAt = o.CreatedAt,
+            UpdatedAt = o.UpdatedAt,
+            OrderNumber = o.OrderNumber,
+            Items = o.Items?.Select(i => new OrderPullItemDto
+            {
+                ProductName = i.ProductName,
+                Quantity = i.Quantity,
+                UnitPriceCents = i.UnitPriceCents
+            }).ToList() ?? new(),
+            Payments = o.Payments.Select(p => new OrderPullPaymentDto
+            {
+                Method = p.Method.ToString(),
+                AmountCents = p.AmountCents
+            }).ToList()
+        });
+    }
+
+    /// <summary>
     /// Moves items from one order to another in a single transaction.
     /// </summary>
     public async Task<MoveItemsResult> MoveItemsAsync(string sourceOrderId, string targetOrderId, List<int> itemIds, int branchId)
@@ -366,7 +411,7 @@ public class OrderService : IOrderService
         // If source has no items left, complete it and free table
         if (source.Items == null || source.Items.Count == 0)
         {
-            source.KitchenStatus = "Delivered";
+            source.KitchenStatus = KitchenStatus.Delivered;
             source.IsPaid = true;
 
             if (source.TableId.HasValue)
@@ -449,7 +494,7 @@ public class OrderService : IOrderService
         source.SubtotalCents = 0;
         source.TotalCents = 0;
         source.TotalDiscountCents = source.OrderDiscountCents;
-        source.KitchenStatus = "Delivered";
+        source.KitchenStatus = KitchenStatus.Delivered;
         source.IsPaid = true;
 
         // Free source table
@@ -631,10 +676,25 @@ public class OrderService : IOrderService
             OrderPromotionId = request.OrderPromotionId,
             OrderPromotionName = request.OrderPromotionName,
             IsPaid = request.IsPaid,
+            KitchenStatus = ParseKitchenStatus(request.KitchenStatus),
             TableId = request.TableId,
             TableName = request.TableName,
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
             Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
+        };
+    }
+
+    private static KitchenStatus ParseKitchenStatus(string? status)
+    {
+        if (string.IsNullOrEmpty(status)) return KitchenStatus.Pending;
+
+        return status.ToLowerInvariant() switch
+        {
+            "pending" => KitchenStatus.Pending,
+            "preparing" => KitchenStatus.Preparing,
+            "ready" => KitchenStatus.Ready,
+            "delivered" => KitchenStatus.Delivered,
+            _ => KitchenStatus.Pending
         };
     }
 
