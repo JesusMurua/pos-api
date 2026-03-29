@@ -20,6 +20,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<Reservation>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 
@@ -50,6 +56,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
     public DbSet<Zone> Zones { get; set; } = null!;
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
+    public DbSet<Reservation> Reservations { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -619,6 +626,39 @@ public class ApplicationDbContext : DbContext
             new UserBranch { UserId = 2, BranchId = 1, IsDefault = true },
             new UserBranch { UserId = 3, BranchId = 1, IsDefault = true }
         );
+
+        #endregion
+
+        #region Reservation Configuration
+
+        modelBuilder.Entity<Reservation>(entity =>
+        {
+            entity.Property(r => r.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(r => r.GuestName).HasMaxLength(100);
+            entity.Property(r => r.GuestPhone).HasMaxLength(20);
+            entity.Property(r => r.Notes).HasMaxLength(500);
+
+            entity.HasOne(r => r.Branch)
+                .WithMany(b => b.Reservations)
+                .HasForeignKey(r => r.BranchId);
+
+            entity.HasOne(r => r.Table)
+                .WithMany(t => t.Reservations)
+                .HasForeignKey(r => r.TableId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(r => r.CreatedByUser)
+                .WithMany(u => u.CreatedReservations)
+                .HasForeignKey(r => r.CreatedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(r => new { r.BranchId, r.ReservationDate });
+            entity.HasIndex(r => new { r.TableId, r.ReservationDate, r.Status });
+        });
 
         #endregion
     }

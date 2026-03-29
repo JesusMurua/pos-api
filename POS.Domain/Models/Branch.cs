@@ -49,4 +49,6 @@ public partial class Branch
     /// Users assigned to this branch (many-to-many via UserBranch).
     /// </summary>
     public virtual ICollection<UserBranch>? UserBranches { get; set; }
+
+    public virtual ICollection<Reservation>? Reservations { get; set; }
 }

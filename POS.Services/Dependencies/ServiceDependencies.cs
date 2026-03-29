@@ -28,6 +28,7 @@ public static class ServiceDependencies
         services.AddScoped<IFolioService, FolioService>();
         services.AddScoped<IZoneService, ZoneService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReservationService, ReservationService>();
 
         return services;
     }

@@ -59,7 +59,8 @@ public static class DbInitializer
                 new UserRoleCatalog { Code = "Cashier", Name = "Cajero", Level = 3 },
                 new UserRoleCatalog { Code = "Kitchen", Name = "Cocina", Level = 4 },
                 new UserRoleCatalog { Code = "Waiter", Name = "Mesero", Level = 5 },
-                new UserRoleCatalog { Code = "Kiosk", Name = "Kiosk", Level = 6 }
+                new UserRoleCatalog { Code = "Kiosk", Name = "Kiosk", Level = 6 },
+                new UserRoleCatalog { Code = "Host", Name = "Hostess", Level = 7 }
             );
             await context.SaveChangesAsync();
         }
@@ -214,7 +215,8 @@ public static class DbInitializer
         var cashier = CreateUser(business.Id, branch.Id, "Ana García", null, UserRole.Cashier);
         var waiter = CreateUser(business.Id, branch.Id, "Luis Martínez", null, UserRole.Waiter);
         var kitchen = CreateUser(business.Id, branch.Id, "Chef Rodríguez", null, UserRole.Kitchen);
-        context.Users.AddRange(owner, manager, cashier, waiter, kitchen);
+        var host = CreateUser(business.Id, branch.Id, "Sofía Ramírez", null, UserRole.Host);
+        context.Users.AddRange(owner, manager, cashier, waiter, kitchen, host);
         await context.SaveChangesAsync();
 
         context.UserBranches.AddRange(
@@ -222,7 +224,8 @@ public static class DbInitializer
             new UserBranch { UserId = manager.Id, BranchId = branch.Id, IsDefault = true },
             new UserBranch { UserId = cashier.Id, BranchId = branch.Id, IsDefault = true },
             new UserBranch { UserId = waiter.Id, BranchId = branch.Id, IsDefault = true },
-            new UserBranch { UserId = kitchen.Id, BranchId = branch.Id, IsDefault = true }
+            new UserBranch { UserId = kitchen.Id, BranchId = branch.Id, IsDefault = true },
+            new UserBranch { UserId = host.Id, BranchId = branch.Id, IsDefault = true }
         );
         await context.SaveChangesAsync();
 

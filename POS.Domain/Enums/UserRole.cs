@@ -7,5 +7,6 @@ public enum UserRole
     Cashier,
     Kitchen,
     Waiter,
-    Kiosk
+    Kiosk,
+    Host
 }

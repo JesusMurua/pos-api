@@ -31,4 +31,6 @@ public partial class RestaurantTable
     public virtual Zone? Zone { get; set; }
 
     public virtual ICollection<Order>? Orders { get; set; }
+
+    public virtual ICollection<Reservation>? Reservations { get; set; }
 }

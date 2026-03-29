@@ -39,6 +39,7 @@ public static class RepositoryDependencies
         services.AddScoped<IPromotionRepository, PromotionRepository>();
         services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
         services.AddScoped<IZoneRepository, ZoneRepository>();
+        services.AddScoped<IReservationRepository, ReservationRepository>();
 
         return services;
     }

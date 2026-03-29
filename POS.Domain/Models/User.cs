@@ -40,4 +40,6 @@ public partial class User
     /// Branches this user belongs to (many-to-many via UserBranch).
     /// </summary>
     public virtual ICollection<UserBranch>? UserBranches { get; set; }
+
+    public virtual ICollection<Reservation>? CreatedReservations { get; set; }
 }

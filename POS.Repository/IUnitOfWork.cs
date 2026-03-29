@@ -25,6 +25,7 @@ public interface IUnitOfWork : IDisposable
     IPromotionUsageRepository PromotionUsages { get; }
     IZoneRepository Zones { get; }
     ICatalogRepository Catalog { get; }
+    IReservationRepository Reservations { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();
