@@ -178,10 +178,9 @@ public class TableService : ITableService
     {
         return status switch
         {
-            KitchenStatus.Pending => "with_order",
-            KitchenStatus.Preparing => "in_kitchen",
+            KitchenStatus.Pending => "in_kitchen",
             KitchenStatus.Ready => "ready",
-            KitchenStatus.Delivered => "paid",
+            KitchenStatus.Delivered => "with_order",
             _ => "with_order"
         };
     }

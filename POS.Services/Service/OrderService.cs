@@ -691,7 +691,7 @@ public class OrderService : IOrderService
         return status.ToLowerInvariant() switch
         {
             "pending" => KitchenStatus.Pending,
-            "preparing" => KitchenStatus.Preparing,
+            "preparing" => KitchenStatus.Pending,
             "ready" => KitchenStatus.Ready,
             "delivered" => KitchenStatus.Delivered,
             _ => KitchenStatus.Pending

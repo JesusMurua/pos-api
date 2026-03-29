@@ -153,9 +153,9 @@ public class OrdersController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var validStatuses = new[] { "Preparing", "Ready", "Delivered" };
+        var validStatuses = new[] { "Pending", "Ready", "Delivered" };
         if (!validStatuses.Contains(request.Status))
-            return BadRequest(new { message = "Status must be 'Preparing', 'Ready', or 'Delivered'" });
+            return BadRequest(new { message = "Status must be 'Pending', 'Ready', or 'Delivered'" });
 
         var order = await _orderService.UpdateKitchenStatusAsync(id, request.Status);
         return Ok(order);
