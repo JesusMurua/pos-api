@@ -14,5 +14,9 @@ public class BusinessTypeCatalog
 
     public bool HasKitchen { get; set; }
     public bool HasTables { get; set; }
+
+    [Required, MaxLength(20)]
+    public string PosExperience { get; set; } = null!;
+
     public int SortOrder { get; set; }
 }

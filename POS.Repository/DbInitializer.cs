@@ -28,18 +28,7 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        if (!await context.BusinessTypeCatalogs.AnyAsync())
-        {
-            context.BusinessTypeCatalogs.AddRange(
-                new BusinessTypeCatalog { Code = "Restaurant", Name = "Restaurante", HasKitchen = true, HasTables = true, SortOrder = 1 },
-                new BusinessTypeCatalog { Code = "Retail", Name = "Abarrotes", HasKitchen = false, HasTables = false, SortOrder = 2 },
-                new BusinessTypeCatalog { Code = "Cafe", Name = "Café", HasKitchen = true, HasTables = true, SortOrder = 3 },
-                new BusinessTypeCatalog { Code = "Bar", Name = "Bar", HasKitchen = true, HasTables = true, SortOrder = 4 },
-                new BusinessTypeCatalog { Code = "FoodTruck", Name = "Food Truck", HasKitchen = true, HasTables = false, SortOrder = 5 },
-                new BusinessTypeCatalog { Code = "General", Name = "General", HasKitchen = false, HasTables = false, SortOrder = 6 }
-            );
-            await context.SaveChangesAsync();
-        }
+        await UpsertBusinessTypeCatalogsAsync(context);
 
         if (!await context.ZoneTypeCatalogs.AnyAsync())
         {
@@ -155,6 +144,7 @@ public static class DbInitializer
         await SeedMinisuperProgresoAsync(context);
         await SeedTacosGueroAsync(context);
         await SeedPapeleriaEstudianteAsync(context);
+        await SeedAbarrotesGueroAsync(context);
     }
 
     #region Business 1 — Fonda La Esperanza (Restaurant)
@@ -642,6 +632,70 @@ public static class DbInitializer
 
     #endregion
 
+    #region Business 7 — Abarrotes El Güero (Abarrotes)
+
+    private static async Task SeedAbarrotesGueroAsync(ApplicationDbContext context)
+    {
+        if (await context.Businesses.AnyAsync(b => b.Name == "Abarrotes El Güero")) return;
+
+        var business = new Business
+        {
+            Name = "Abarrotes El Güero",
+            BusinessType = BusinessType.Abarrotes,
+            PlanType = PlanType.Free,
+            OnboardingCompleted = true,
+            IsActive = true,
+            CreatedAt = SeedDate
+        };
+        context.Businesses.Add(business);
+        await context.SaveChangesAsync();
+
+        var branch = new Branch
+        {
+            BusinessId = business.Id,
+            Name = "Calle Sonora 45",
+            FolioPrefix = "ABG",
+            IsMatrix = true,
+            HasKitchen = false,
+            HasTables = false,
+            IsActive = true,
+            CreatedAt = SeedDate
+        };
+        context.Branches.Add(branch);
+        await context.SaveChangesAsync();
+
+        var owner = CreateUser(business.Id, null, "Pedro Gutiérrez", "pedro@abarroteselguero.com", UserRole.Owner, hasPassword: true);
+        var cashier = CreateUser(business.Id, branch.Id, "María López", null, UserRole.Cashier);
+        context.Users.AddRange(owner, cashier);
+        await context.SaveChangesAsync();
+
+        context.UserBranches.AddRange(
+            new UserBranch { UserId = owner.Id, BranchId = branch.Id, IsDefault = true },
+            new UserBranch { UserId = cashier.Id, BranchId = branch.Id, IsDefault = true }
+        );
+        await context.SaveChangesAsync();
+
+        var bebidas = new Category { BranchId = branch.Id, Name = "Bebidas", Icon = "pi-filter", SortOrder = 1, IsActive = true };
+        var botanas = new Category { BranchId = branch.Id, Name = "Botanas", Icon = "pi-star", SortOrder = 2, IsActive = true };
+        var lacteos = new Category { BranchId = branch.Id, Name = "Lácteos", Icon = "pi-heart", SortOrder = 3, IsActive = true };
+        context.Categories.AddRange(bebidas, botanas, lacteos);
+        await context.SaveChangesAsync();
+
+        context.Products.AddRange(
+            P(branch.Id, bebidas.Id, "Coca Cola 600ml", 2200),
+            P(branch.Id, bebidas.Id, "Agua Natural 1L", 1500),
+            P(branch.Id, bebidas.Id, "Jugo Del Valle", 1800),
+            P(branch.Id, botanas.Id, "Sabritas Clásicas", 1800),
+            P(branch.Id, botanas.Id, "Ruffles", 2000),
+            P(branch.Id, botanas.Id, "Doritos", 1800),
+            P(branch.Id, lacteos.Id, "Leche Lala 1L", 2500),
+            P(branch.Id, lacteos.Id, "Yogurt Individual", 1200)
+        );
+        await context.SaveChangesAsync();
+    }
+
+    #endregion
+
     #region Helpers
 
     private static User CreateUser(int businessId, int? branchId, string name, string? email, UserRole role, bool hasPassword = false)
@@ -675,6 +729,50 @@ public static class DbInitializer
             CurrentStock = stock,
             LowStockThreshold = trackStock ? 5 : 0
         };
+    }
+
+    #endregion
+
+    #region Catalog Upsert Helpers
+
+    private static async Task UpsertBusinessTypeCatalogsAsync(ApplicationDbContext context)
+    {
+        var desired = new List<BusinessTypeCatalog>
+        {
+            new() { Code = "Restaurant",  Name = "Restaurante",   HasKitchen = true,  HasTables = true,  PosExperience = "Restaurant", SortOrder = 1 },
+            new() { Code = "Cafe",        Name = "Café",          HasKitchen = true,  HasTables = true,  PosExperience = "Restaurant", SortOrder = 2 },
+            new() { Code = "Bar",         Name = "Bar",           HasKitchen = true,  HasTables = true,  PosExperience = "Restaurant", SortOrder = 3 },
+            new() { Code = "FoodTruck",   Name = "Food Truck",    HasKitchen = true,  HasTables = false, PosExperience = "Counter",    SortOrder = 4 },
+            new() { Code = "Taqueria",    Name = "Taquería",      HasKitchen = true,  HasTables = false, PosExperience = "Counter",    SortOrder = 5 },
+            new() { Code = "Retail",      Name = "Tienda",        HasKitchen = false, HasTables = false, PosExperience = "Retail",     SortOrder = 6 },
+            new() { Code = "Abarrotes",   Name = "Abarrotes",     HasKitchen = false, HasTables = false, PosExperience = "Retail",     SortOrder = 7 },
+            new() { Code = "Ferreteria",  Name = "Ferretería",    HasKitchen = false, HasTables = false, PosExperience = "Retail",     SortOrder = 8 },
+            new() { Code = "Papeleria",   Name = "Papelería",     HasKitchen = false, HasTables = false, PosExperience = "Retail",     SortOrder = 9 },
+            new() { Code = "Farmacia",    Name = "Farmacia",      HasKitchen = false, HasTables = false, PosExperience = "Retail",     SortOrder = 10 },
+            new() { Code = "General",     Name = "General",       HasKitchen = false, HasTables = false, PosExperience = "Quick",      SortOrder = 11 },
+            new() { Code = "Servicios",   Name = "Servicios",     HasKitchen = false, HasTables = false, PosExperience = "Quick",      SortOrder = 12 },
+        };
+
+        var existing = await context.BusinessTypeCatalogs.ToListAsync();
+        var existingByCode = existing.ToDictionary(e => e.Code);
+
+        foreach (var item in desired)
+        {
+            if (existingByCode.TryGetValue(item.Code, out var row))
+            {
+                row.Name = item.Name;
+                row.HasKitchen = item.HasKitchen;
+                row.HasTables = item.HasTables;
+                row.PosExperience = item.PosExperience;
+                row.SortOrder = item.SortOrder;
+            }
+            else
+            {
+                context.BusinessTypeCatalogs.Add(item);
+            }
+        }
+
+        await context.SaveChangesAsync();
     }
 
     #endregion

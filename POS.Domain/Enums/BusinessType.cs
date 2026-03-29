@@ -7,5 +7,11 @@ public enum BusinessType
     Cafe,
     Bar,
     FoodTruck,
-    General
+    General,
+    Taqueria,
+    Abarrotes,
+    Ferreteria,
+    Papeleria,
+    Farmacia,
+    Servicios
 }
