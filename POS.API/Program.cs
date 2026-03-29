@@ -118,9 +118,11 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 
+    await DbInitializer.SeedSystemDataAsync(db);
+
     if (app.Environment.IsDevelopment())
     {
-        await DbInitializer.SeedAsync(db);
+        await DbInitializer.SeedTestDataAsync(db);
     }
 }
 

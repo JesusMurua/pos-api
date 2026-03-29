@@ -11,7 +11,19 @@ public static class DbInitializer
     private const string SeedPasswordHash = "$2a$11$Rz8aG9t5Kq7LmN2wX4Y6vuJfHgD3sE1bC0oP9iU8yT7rQ6wV5xZa";
     private const string SeedPinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi";
 
-    public static async Task SeedAsync(ApplicationDbContext context)
+    /// <summary>
+    /// Seeds system-level catalogs that are always needed.
+    /// Placeholder — no system catalogs defined yet.
+    /// </summary>
+    public static async Task SeedSystemDataAsync(ApplicationDbContext context)
+    {
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Seeds test businesses with realistic data. Development only.
+    /// </summary>
+    public static async Task SeedTestDataAsync(ApplicationDbContext context)
     {
         await SeedFondaEsperanzaAsync(context);
         await SeedBarCoyoteAsync(context);

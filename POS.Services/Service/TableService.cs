@@ -161,7 +161,7 @@ public class TableService : ITableService
                 TableName = t.Name,
                 ZoneId = t.ZoneId,
                 ZoneName = t.ZoneName,
-                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus.ToString()) : "free",
+                DisplayStatus = hasOrder ? MapKitchenToDisplay(order!.KitchenStatus) : "free",
                 OrderTotalCents = hasOrder ? order!.TotalCents : null,
                 OrderId = hasOrder ? order!.Id : null,
                 GuestName = null,
@@ -174,25 +174,14 @@ public class TableService : ITableService
 
     #region Private Helper Methods
 
-    private static string MapKitchenToDisplay(string? kitchenStatus)
+    private static string MapKitchenToDisplay(KitchenStatus status)
     {
-        if (Enum.TryParse<KitchenStatus>(kitchenStatus, true, out var status))
+        return status switch
         {
-            return status switch
-            {
-                KitchenStatus.Pending => "with_order",
-                KitchenStatus.Preparing => "in_kitchen",
-                KitchenStatus.Ready => "ready",
-                KitchenStatus.Delivered => "paid",
-                _ => "with_order"
-            };
-        }
-
-        return (kitchenStatus?.ToLowerInvariant()) switch
-        {
-            "new" or "sent" => "with_order",
-            "waiting_bill" => "waiting_bill",
-            "completed" or "paid" or "done" => "paid",
+            KitchenStatus.Pending => "with_order",
+            KitchenStatus.Preparing => "in_kitchen",
+            KitchenStatus.Ready => "ready",
+            KitchenStatus.Delivered => "paid",
             _ => "with_order"
         };
     }
