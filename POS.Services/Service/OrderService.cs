@@ -346,7 +346,10 @@ public class OrderService : IOrderService
                 Id = i.Id,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
-                UnitPriceCents = i.UnitPriceCents
+                UnitPriceCents = i.UnitPriceCents,
+                SizeName = i.SizeName,
+                Notes = i.Notes,
+                Extras = ParseExtrasNames(i.ExtrasJson)
             }).ToList() ?? new(),
             Payments = o.Payments.Select(p => new OrderPullPaymentDto
             {
@@ -684,6 +687,25 @@ public class OrderService : IOrderService
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
             Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
         };
+    }
+
+    private static List<string> ParseExtrasNames(string? extrasJson)
+    {
+        if (string.IsNullOrEmpty(extrasJson)) return new();
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(extrasJson);
+            return doc.RootElement.EnumerateArray()
+                .Select(e => e.TryGetProperty("name", out var n) ? n.GetString() ?? "" :
+                             e.TryGetProperty("label", out var l) ? l.GetString() ?? "" : "")
+                .Where(n => n.Length > 0)
+                .ToList();
+        }
+        catch
+        {
+            return new();
+        }
     }
 
     private static KitchenStatus ParseKitchenStatus(string? status)

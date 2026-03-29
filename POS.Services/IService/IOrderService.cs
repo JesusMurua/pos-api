@@ -161,6 +161,9 @@ public class OrderPullItemDto
     public string ProductName { get; set; } = null!;
     public int Quantity { get; set; }
     public int UnitPriceCents { get; set; }
+    public string? SizeName { get; set; }
+    public string? Notes { get; set; }
+    public List<string> Extras { get; set; } = new();
 }
 
 public class OrderPullPaymentDto
