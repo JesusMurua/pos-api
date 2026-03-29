@@ -31,6 +31,10 @@ public partial class Branch
     [MaxLength(30)]
     public string? FolioFormat { get; set; }
 
+    public bool HasKitchen { get; set; } = true;
+
+    public bool HasTables { get; set; } = true;
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

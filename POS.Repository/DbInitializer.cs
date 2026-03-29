@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Repository;
 
@@ -12,12 +13,134 @@ public static class DbInitializer
     private const string SeedPinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi";
 
     /// <summary>
-    /// Seeds system-level catalogs that are always needed.
-    /// Placeholder — no system catalogs defined yet.
+    /// Seeds system-level catalogs. Runs in ALL environments.
     /// </summary>
     public static async Task SeedSystemDataAsync(ApplicationDbContext context)
     {
-        await Task.CompletedTask;
+        if (!await context.PlanTypeCatalogs.AnyAsync())
+        {
+            context.PlanTypeCatalogs.AddRange(
+                new PlanTypeCatalog { Code = "Free", Name = "Gratis", SortOrder = 0 },
+                new PlanTypeCatalog { Code = "Basic", Name = "Básico", SortOrder = 1 },
+                new PlanTypeCatalog { Code = "Pro", Name = "Pro", SortOrder = 2 },
+                new PlanTypeCatalog { Code = "Enterprise", Name = "Enterprise", SortOrder = 3 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.BusinessTypeCatalogs.AnyAsync())
+        {
+            context.BusinessTypeCatalogs.AddRange(
+                new BusinessTypeCatalog { Code = "Restaurant", Name = "Restaurante", HasKitchen = true, HasTables = true, SortOrder = 1 },
+                new BusinessTypeCatalog { Code = "Retail", Name = "Abarrotes", HasKitchen = false, HasTables = false, SortOrder = 2 },
+                new BusinessTypeCatalog { Code = "Cafe", Name = "Café", HasKitchen = true, HasTables = true, SortOrder = 3 },
+                new BusinessTypeCatalog { Code = "Bar", Name = "Bar", HasKitchen = true, HasTables = true, SortOrder = 4 },
+                new BusinessTypeCatalog { Code = "FoodTruck", Name = "Food Truck", HasKitchen = true, HasTables = false, SortOrder = 5 },
+                new BusinessTypeCatalog { Code = "General", Name = "General", HasKitchen = false, HasTables = false, SortOrder = 6 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.ZoneTypeCatalogs.AnyAsync())
+        {
+            context.ZoneTypeCatalogs.AddRange(
+                new ZoneTypeCatalog { Code = "Salon", Name = "Salón", SortOrder = 1 },
+                new ZoneTypeCatalog { Code = "BarSeats", Name = "Barra", SortOrder = 2 },
+                new ZoneTypeCatalog { Code = "Other", Name = "Otro", SortOrder = 3 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.UserRoleCatalogs.AnyAsync())
+        {
+            context.UserRoleCatalogs.AddRange(
+                new UserRoleCatalog { Code = "Owner", Name = "Dueño", Level = 1 },
+                new UserRoleCatalog { Code = "Manager", Name = "Gerente", Level = 2 },
+                new UserRoleCatalog { Code = "Cashier", Name = "Cajero", Level = 3 },
+                new UserRoleCatalog { Code = "Kitchen", Name = "Cocina", Level = 4 },
+                new UserRoleCatalog { Code = "Waiter", Name = "Mesero", Level = 5 },
+                new UserRoleCatalog { Code = "Kiosk", Name = "Kiosk", Level = 6 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.PaymentMethodCatalogs.AnyAsync())
+        {
+            context.PaymentMethodCatalogs.AddRange(
+                new PaymentMethodCatalog { Code = "Cash", Name = "Efectivo", SortOrder = 1 },
+                new PaymentMethodCatalog { Code = "Card", Name = "Tarjeta", SortOrder = 2 },
+                new PaymentMethodCatalog { Code = "Transfer", Name = "Transferencia", SortOrder = 3 },
+                new PaymentMethodCatalog { Code = "Other", Name = "Otro", SortOrder = 4 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.KitchenStatusCatalogs.AnyAsync())
+        {
+            context.KitchenStatusCatalogs.AddRange(
+                new KitchenStatusCatalog { Code = "Pending", Name = "En cocina", Color = "#F59E0B", SortOrder = 1 },
+                new KitchenStatusCatalog { Code = "Ready", Name = "Listo", Color = "#10B981", SortOrder = 2 },
+                new KitchenStatusCatalog { Code = "Delivered", Name = "Entregado", Color = "#3B82F6", SortOrder = 3 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.DisplayStatusCatalogs.AnyAsync())
+        {
+            context.DisplayStatusCatalogs.AddRange(
+                new DisplayStatusCatalog { Code = "free", Name = "Disponible", Color = "#6B7280", SortOrder = 1 },
+                new DisplayStatusCatalog { Code = "in_kitchen", Name = "En cocina", Color = "#F59E0B", SortOrder = 2 },
+                new DisplayStatusCatalog { Code = "ready", Name = "Listo", Color = "#10B981", SortOrder = 3 },
+                new DisplayStatusCatalog { Code = "waiting_bill", Name = "Pidió cuenta", Color = "#3B82F6", SortOrder = 4 },
+                new DisplayStatusCatalog { Code = "paid", Name = "Pagada", Color = "#6B7280", SortOrder = 5 },
+                new DisplayStatusCatalog { Code = "reserved", Name = "Reservada", Color = "#8B5CF6", SortOrder = 6 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.DeviceModeCatalogs.AnyAsync())
+        {
+            context.DeviceModeCatalogs.AddRange(
+                new DeviceModeCatalog { Code = "cashier", Name = "Cajero", Description = "POS estándar de cobro" },
+                new DeviceModeCatalog { Code = "kiosk", Name = "Kiosk", Description = "Autoservicio para clientes" },
+                new DeviceModeCatalog { Code = "tables", Name = "Mesas", Description = "Vista de mesas para meseros" },
+                new DeviceModeCatalog { Code = "kitchen", Name = "Cocina", Description = "Pantalla de cocina KDS" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.PromotionTypeCatalogs.AnyAsync())
+        {
+            context.PromotionTypeCatalogs.AddRange(
+                new PromotionTypeCatalog { Code = "Percentage", Name = "Descuento porcentaje", SortOrder = 1 },
+                new PromotionTypeCatalog { Code = "Fixed", Name = "Descuento fijo", SortOrder = 2 },
+                new PromotionTypeCatalog { Code = "Bogo", Name = "2x1", SortOrder = 3 },
+                new PromotionTypeCatalog { Code = "Bundle", Name = "Paquete", SortOrder = 4 },
+                new PromotionTypeCatalog { Code = "OrderDiscount", Name = "Descuento en orden", SortOrder = 5 },
+                new PromotionTypeCatalog { Code = "FreeProduct", Name = "Producto gratis", SortOrder = 6 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.PromotionScopeCatalogs.AnyAsync())
+        {
+            context.PromotionScopeCatalogs.AddRange(
+                new PromotionScopeCatalog { Code = "All", Name = "Todos los productos" },
+                new PromotionScopeCatalog { Code = "Category", Name = "Por categoría" },
+                new PromotionScopeCatalog { Code = "Product", Name = "Por producto" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.OrderSyncStatusCatalogs.AnyAsync())
+        {
+            context.OrderSyncStatusCatalogs.AddRange(
+                new OrderSyncStatusCatalog { Code = "Pending", Name = "Pendiente" },
+                new OrderSyncStatusCatalog { Code = "Synced", Name = "Sincronizado" },
+                new OrderSyncStatusCatalog { Code = "Failed", Name = "Error" }
+            );
+            await context.SaveChangesAsync();
+        }
     }
 
     /// <summary>

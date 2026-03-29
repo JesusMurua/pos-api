@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Repository;
 
@@ -49,6 +50,19 @@ public class ApplicationDbContext : DbContext
     public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
     public DbSet<Zone> Zones { get; set; } = null!;
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
+
+    // System catalogs
+    public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
+    public DbSet<BusinessTypeCatalog> BusinessTypeCatalogs { get; set; } = null!;
+    public DbSet<ZoneTypeCatalog> ZoneTypeCatalogs { get; set; } = null!;
+    public DbSet<UserRoleCatalog> UserRoleCatalogs { get; set; } = null!;
+    public DbSet<PaymentMethodCatalog> PaymentMethodCatalogs { get; set; } = null!;
+    public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
+    public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
+    public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
+    public DbSet<PromotionTypeCatalog> PromotionTypeCatalogs { get; set; } = null!;
+    public DbSet<PromotionScopeCatalog> PromotionScopeCatalogs { get; set; } = null!;
+    public DbSet<OrderSyncStatusCatalog> OrderSyncStatusCatalogs { get; set; } = null!;
 
     #endregion
 
@@ -443,6 +457,22 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(z => new { z.BranchId, z.SortOrder });
         });
+
+        #endregion
+
+        #region System Catalogs Configuration
+
+        modelBuilder.Entity<PlanTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<BusinessTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<ZoneTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<UserRoleCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<PaymentMethodCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<KitchenStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<DisplayStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<DeviceModeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<PromotionTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<PromotionScopeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<OrderSyncStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
 
         #endregion
 

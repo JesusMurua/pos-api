@@ -175,12 +175,16 @@ public class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync();
 
         // Create matrix Branch
+        var hasKitchen = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar or BusinessType.FoodTruck;
+        var hasTables = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar;
         var branch = new Branch
         {
             BusinessId = business.Id,
             Name = $"{request.BusinessName} Principal",
             IsMatrix = true,
             IsActive = true,
+            HasKitchen = hasKitchen,
+            HasTables = hasTables,
             FolioCounter = 0,
             CreatedAt = DateTime.UtcNow
         };

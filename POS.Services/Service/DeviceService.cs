@@ -25,9 +25,9 @@ public class DeviceService : IDeviceService
     public async Task<GenerateCodeResponse> GenerateActivationCodeAsync(
         int businessId, int branchId, string mode, int createdBy)
     {
-        var validModes = new[] { "counter", "cashier", "tables", "waiter", "kitchen", "kiosk" };
+        var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
         if (!validModes.Contains(mode.ToLowerInvariant()))
-            throw new ValidationException("Mode must be 'counter', 'cashier', 'tables', 'waiter', 'kitchen', or 'kiosk'");
+            throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
 
         string code;
         var attempts = 0;

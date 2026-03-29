@@ -239,6 +239,28 @@ public class BranchController : BaseApiController
 
         return Ok(new { message = "Folio config updated" });
     }
+
+    /// <summary>
+    /// Updates branch feature settings (kitchen, tables).
+    /// </summary>
+    /// <param name="id">The branch identifier.</param>
+    /// <param name="request">The settings to update.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Settings updated.</response>
+    /// <response code="404">If the branch is not found.</response>
+    [HttpPatch("{id}/settings")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSettings(int id, [FromBody] BranchSettingsRequest request)
+    {
+        var branch = await _branchService.GetConfigAsync(id);
+        branch.HasKitchen = request.HasKitchen;
+        branch.HasTables = request.HasTables;
+        await _branchService.UpdateAsync(id, branch);
+
+        return Ok(new { message = "Branch settings updated" });
+    }
 }
 
 /// <summary>
@@ -248,4 +270,13 @@ public class FolioConfigRequest
 {
     public string? FolioPrefix { get; set; }
     public string? FolioFormat { get; set; }
+}
+
+/// <summary>
+/// Request body for branch feature settings.
+/// </summary>
+public class BranchSettingsRequest
+{
+    public bool HasKitchen { get; set; }
+    public bool HasTables { get; set; }
 }
