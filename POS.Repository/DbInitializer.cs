@@ -9,8 +9,8 @@ public static class DbInitializer
 {
     private static readonly DateTime SeedDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     // Pre-computed BCrypt hashes for "Kaja2024!" and "1234"
-    private const string SeedPasswordHash = "$2a$11$Rz8aG9t5Kq7LmN2wX4Y6vuJfHgD3sE1bC0oP9iU8yT7rQ6wV5xZa";
-    private const string SeedPinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi";
+    private const string SeedPasswordHash = "$2a$11$bvzWRKS52z4IaCQp9Mc6T.sazNlm8M2rufyPm82D/Ph9migBYj.aC";
+    private const string SeedPinHash = "$2a$11$7cjv37Hi2RKFIasBx1KtIO8muTOKzPQ1pQMnnDACjMwIYpTzGJSci";
 
     /// <summary>
     /// Seeds system-level catalogs. Runs in ALL environments.
