@@ -28,4 +28,6 @@ public partial class Business
     public virtual ICollection<Branch>? Branches { get; set; }
 
     public virtual ICollection<User>? Users { get; set; }
+
+    public Subscription? Subscription { get; set; }
 }

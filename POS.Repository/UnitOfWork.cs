@@ -29,6 +29,7 @@ public class UnitOfWork : IUnitOfWork
     private IZoneRepository? _zones;
     private ICatalogRepository? _catalog;
     private IReservationRepository? _reservations;
+    private ISubscriptionRepository? _subscriptions;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -97,6 +98,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IReservationRepository Reservations =>
         _reservations ??= new ReservationRepository(_context);
+
+    public ISubscriptionRepository Subscriptions =>
+        _subscriptions ??= new SubscriptionRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

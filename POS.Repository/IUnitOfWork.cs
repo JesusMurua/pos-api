@@ -26,6 +26,7 @@ public interface IUnitOfWork : IDisposable
     IZoneRepository Zones { get; }
     ICatalogRepository Catalog { get; }
     IReservationRepository Reservations { get; }
+    ISubscriptionRepository Subscriptions { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

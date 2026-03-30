@@ -43,6 +43,14 @@ var supabaseKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY");
 if (!string.IsNullOrEmpty(supabaseKey))
     builder.Configuration["Supabase:ServiceKey"] = supabaseKey;
 
+var stripeSecret = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY");
+if (!string.IsNullOrEmpty(stripeSecret))
+    builder.Configuration["Stripe:SecretKey"] = stripeSecret;
+
+var stripeWebhookSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET");
+if (!string.IsNullOrEmpty(stripeWebhookSecret))
+    builder.Configuration["Stripe:WebhookSecret"] = stripeWebhookSecret;
+
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
@@ -72,6 +80,10 @@ builder.Services.Configure<VapidSettings>(builder.Configuration.GetSection("Vapi
 
 // Supabase Configuration
 builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("Supabase"));
+
+// Stripe Configuration
+builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
+Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
 builder.Services.AddAuthentication(options =>
 {

@@ -40,6 +40,7 @@ public static class RepositoryDependencies
         services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
         services.AddScoped<IZoneRepository, ZoneRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
+        services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
 
         return services;
     }

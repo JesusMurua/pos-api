@@ -145,6 +145,7 @@ public static class DbInitializer
         await SeedTacosGueroAsync(context);
         await SeedPapeleriaEstudianteAsync(context);
         await SeedAbarrotesGueroAsync(context);
+        await SeedFreeTrialSubscriptionsAsync(context);
     }
 
     #region Business 1 — Fonda La Esperanza (Restaurant)
@@ -691,6 +692,43 @@ public static class DbInitializer
             P(branch.Id, lacteos.Id, "Leche Lala 1L", 2500),
             P(branch.Id, lacteos.Id, "Yogurt Individual", 1200)
         );
+        await context.SaveChangesAsync();
+    }
+
+    #endregion
+
+    #region Subscription Seed
+
+    private static async Task SeedFreeTrialSubscriptionsAsync(ApplicationDbContext context)
+    {
+        var businesses = await context.Businesses
+            .Where(b => !context.Subscriptions.Any(s => s.BusinessId == b.Id))
+            .ToListAsync();
+
+        if (!businesses.Any()) return;
+
+        var trialEnd = DateTime.UtcNow.AddMonths(3);
+        var now = DateTime.UtcNow;
+
+        foreach (var business in businesses)
+        {
+            context.Subscriptions.Add(new Subscription
+            {
+                BusinessId = business.Id,
+                StripeCustomerId = $"test_customer_{business.Id}",
+                StripeSubscriptionId = $"test_sub_{business.Id}",
+                StripePriceId = "free",
+                PlanType = "Free",
+                BillingCycle = "Monthly",
+                PricingGroup = Domain.Helpers.StripeConstants.GetPricingGroup(business.BusinessType.ToString()),
+                Status = "trialing",
+                TrialEndsAt = trialEnd,
+                CurrentPeriodStart = now,
+                CurrentPeriodEnd = trialEnd,
+                UpdatedAt = now
+            });
+        }
+
         await context.SaveChangesAsync();
     }
 

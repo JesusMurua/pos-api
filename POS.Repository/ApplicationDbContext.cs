@@ -26,6 +26,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<Subscription>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 
@@ -57,6 +63,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Zone> Zones { get; set; } = null!;
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
+    public DbSet<Subscription> Subscriptions { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -98,6 +105,29 @@ public class ApplicationDbContext : DbContext
             entity.HasMany(b => b.Users)
                 .WithOne(u => u.Business)
                 .HasForeignKey(u => u.BusinessId);
+
+            entity.HasOne(b => b.Subscription)
+                .WithOne(s => s.Business)
+                .HasForeignKey<Subscription>(s => s.BusinessId);
+        });
+
+        #endregion
+
+        #region Subscription Configuration
+
+        modelBuilder.Entity<Subscription>(entity =>
+        {
+            entity.Property(s => s.StripeCustomerId).HasMaxLength(255);
+            entity.Property(s => s.StripeSubscriptionId).HasMaxLength(255);
+            entity.Property(s => s.StripePriceId).HasMaxLength(255);
+            entity.Property(s => s.PlanType).HasMaxLength(20);
+            entity.Property(s => s.BillingCycle).HasMaxLength(20);
+            entity.Property(s => s.PricingGroup).HasMaxLength(20);
+            entity.Property(s => s.Status).HasMaxLength(20);
+
+            entity.HasIndex(s => s.BusinessId).IsUnique();
+            entity.HasIndex(s => s.StripeCustomerId);
+            entity.HasIndex(s => s.StripeSubscriptionId);
         });
 
         #endregion
