@@ -30,6 +30,8 @@ public class UnitOfWork : IUnitOfWork
     private ICatalogRepository? _catalog;
     private IReservationRepository? _reservations;
     private ISubscriptionRepository? _subscriptions;
+    private ISupplierRepository? _suppliers;
+    private IStockReceiptRepository? _stockReceipts;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -101,6 +103,12 @@ public class UnitOfWork : IUnitOfWork
 
     public ISubscriptionRepository Subscriptions =>
         _subscriptions ??= new SubscriptionRepository(_context);
+
+    public ISupplierRepository Suppliers =>
+        _suppliers ??= new SupplierRepository(_context);
+
+    public IStockReceiptRepository StockReceipts =>
+        _stockReceipts ??= new StockReceiptRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

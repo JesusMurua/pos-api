@@ -27,6 +27,8 @@ public interface IUnitOfWork : IDisposable
     ICatalogRepository Catalog { get; }
     IReservationRepository Reservations { get; }
     ISubscriptionRepository Subscriptions { get; }
+    ISupplierRepository Suppliers { get; }
+    IStockReceiptRepository StockReceipts { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

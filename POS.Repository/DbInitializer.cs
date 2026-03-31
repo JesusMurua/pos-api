@@ -507,6 +507,60 @@ public static class DbInitializer
             P(branch.Id, carnesFrias.Id, "Salchicha Viena 200g", 3200, trackStock: true, stock: 20)
         );
         await context.SaveChangesAsync();
+
+        // Suppliers
+        var bimbo = new Supplier
+        {
+            BranchId = branch.Id,
+            Name = "Distribuidora Bimbo Hermosillo",
+            ContactName = "Carlos Mendoza",
+            Phone = "662-555-0001",
+            IsActive = true,
+            CreatedAt = SeedDate,
+            UpdatedAt = SeedDate
+        };
+        var femsa = new Supplier
+        {
+            BranchId = branch.Id,
+            Name = "FEMSA / Coca Cola Hermosillo",
+            ContactName = "Laura Ríos",
+            Phone = "662-555-0002",
+            IsActive = true,
+            CreatedAt = SeedDate,
+            UpdatedAt = SeedDate
+        };
+        context.Suppliers.AddRange(bimbo, femsa);
+        await context.SaveChangesAsync();
+
+        // Grab Bimbo-related products for stock receipt
+        var pinguinos = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Marinela Pingüinos");
+        var jamon = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Jamón de pierna 200g");
+        var salchicha = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Salchicha Viena 200g");
+
+        var receipt = new StockReceipt
+        {
+            BranchId = branch.Id,
+            SupplierId = bimbo.Id,
+            ReceivedByUserId = owner.Id,
+            ReceivedAt = SeedDate,
+            Notes = "Pedido semanal Bimbo",
+            TotalCents = 0,
+            CreatedAt = SeedDate
+        };
+        context.StockReceipts.Add(receipt);
+        await context.SaveChangesAsync();
+
+        var receiptItems = new List<StockReceiptItem>
+        {
+            new() { StockReceiptId = receipt.Id, ProductId = pinguinos.Id, Quantity = 24, CostCents = 900, TotalCents = 21600, Notes = "Caja ×24" },
+            new() { StockReceiptId = receipt.Id, ProductId = jamon.Id, Quantity = 10, CostCents = 3200, TotalCents = 32000 },
+            new() { StockReceiptId = receipt.Id, ProductId = salchicha.Id, Quantity = 15, CostCents = 2200, TotalCents = 33000 }
+        };
+        context.StockReceiptItems.AddRange(receiptItems);
+
+        receipt.TotalCents = receiptItems.Sum(i => i.TotalCents);
+        context.StockReceipts.Update(receipt);
+        await context.SaveChangesAsync();
     }
 
     #endregion

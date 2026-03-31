@@ -51,4 +51,8 @@ public partial class Branch
     public virtual ICollection<UserBranch>? UserBranches { get; set; }
 
     public virtual ICollection<Reservation>? Reservations { get; set; }
+
+    public virtual ICollection<Supplier>? Suppliers { get; set; }
+
+    public virtual ICollection<StockReceipt>? StockReceipts { get; set; }
 }

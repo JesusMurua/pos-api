@@ -32,6 +32,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<Supplier>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 
@@ -64,6 +70,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<Subscription> Subscriptions { get; set; } = null!;
+    public DbSet<Supplier> Suppliers { get; set; } = null!;
+    public DbSet<StockReceipt> StockReceipts { get; set; } = null!;
+    public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -418,6 +427,67 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(pc => new { pc.ProductId, pc.InventoryItemId })
                 .IsUnique();
+        });
+
+        #endregion
+
+        #region Supplier & StockReceipt Configuration
+
+        modelBuilder.Entity<Supplier>(entity =>
+        {
+            entity.Property(s => s.Name).IsRequired().HasMaxLength(100);
+            entity.Property(s => s.ContactName).HasMaxLength(100);
+            entity.Property(s => s.Phone).HasMaxLength(20);
+            entity.Property(s => s.Notes).HasMaxLength(500);
+
+            entity.HasOne(s => s.Branch)
+                .WithMany(b => b.Suppliers)
+                .HasForeignKey(s => s.BranchId);
+
+            entity.HasMany(s => s.StockReceipts)
+                .WithOne(r => r.Supplier)
+                .HasForeignKey(r => r.SupplierId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(s => s.BranchId);
+        });
+
+        modelBuilder.Entity<StockReceipt>(entity =>
+        {
+            entity.Property(r => r.Notes).HasMaxLength(500);
+
+            entity.HasOne(r => r.Branch)
+                .WithMany(b => b.StockReceipts)
+                .HasForeignKey(r => r.BranchId);
+
+            entity.HasOne(r => r.ReceivedBy)
+                .WithMany()
+                .HasForeignKey(r => r.ReceivedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasMany(r => r.Items)
+                .WithOne(i => i.StockReceipt)
+                .HasForeignKey(i => i.StockReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(r => r.BranchId);
+            entity.HasIndex(r => r.SupplierId);
+        });
+
+        modelBuilder.Entity<StockReceiptItem>(entity =>
+        {
+            entity.Property(i => i.Quantity).HasPrecision(18, 4);
+            entity.Property(i => i.Notes).HasMaxLength(200);
+
+            entity.HasOne(i => i.InventoryItem)
+                .WithMany()
+                .HasForeignKey(i => i.InventoryItemId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(i => i.Product)
+                .WithMany()
+                .HasForeignKey(i => i.ProductId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         #endregion
