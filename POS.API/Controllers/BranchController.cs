@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.API.Models;
 using POS.Domain.Models;
+using POS.Domain.PartialModels;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -113,7 +114,7 @@ public class BranchController : BaseApiController
     }
 
     /// <summary>
-    /// Retrieves branch configuration with business data.
+    /// Retrieves branch configuration with business data as a flat DTO.
     /// </summary>
     /// <param name="id">The branch identifier.</param>
     /// <returns>The branch configuration.</returns>
@@ -121,12 +122,12 @@ public class BranchController : BaseApiController
     /// <response code="404">If the branch is not found.</response>
     [HttpGet("{id}/config")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
-    [ProducesResponseType(typeof(Branch), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BranchConfigDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetConfig(int id)
     {
-        var branch = await _branchService.GetConfigAsync(id);
-        return Ok(branch);
+        var config = await _branchService.GetBranchConfigDtoAsync(id);
+        return Ok(config);
     }
 
     /// <summary>

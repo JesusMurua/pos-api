@@ -1,4 +1,5 @@
 using POS.Domain.Models;
+using POS.Domain.PartialModels;
 
 namespace POS.Services.IService;
 
@@ -37,6 +38,11 @@ public interface IBranchService
     /// Retrieves a branch with its business configuration.
     /// </summary>
     Task<Branch> GetConfigAsync(int branchId);
+
+    /// <summary>
+    /// Retrieves a flat DTO with branch and business configuration.
+    /// </summary>
+    Task<BranchConfigDto> GetBranchConfigDtoAsync(int branchId);
 
     /// <summary>
     /// Updates the branch name and location.

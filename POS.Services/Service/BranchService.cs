@@ -1,5 +1,6 @@
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
+using POS.Domain.PartialModels;
 using POS.Repository;
 using POS.Services.IService;
 
@@ -91,6 +92,38 @@ public class BranchService : IBranchService
             throw new NotFoundException($"Branch with id {branchId} not found");
 
         return branch;
+    }
+
+    /// <summary>
+    /// Retrieves a flat DTO with branch and business configuration.
+    /// </summary>
+    public async Task<BranchConfigDto> GetBranchConfigDtoAsync(int branchId)
+    {
+        var branch = await _unitOfWork.Branches.GetByIdWithConfigAsync(branchId);
+
+        if (branch == null)
+            throw new NotFoundException($"Branch with id {branchId} not found");
+
+        var businessTypeCode = branch.Business!.BusinessType.ToString();
+        var catalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
+        var catalog = catalogs.FirstOrDefault(c => c.Code == businessTypeCode);
+
+        return new BranchConfigDto
+        {
+            Id = branch.Id,
+            BusinessId = branch.BusinessId,
+            BusinessName = branch.Business.Name,
+            BranchName = branch.Name,
+            LocationName = branch.LocationName,
+            HasKitchen = branch.HasKitchen,
+            HasTables = branch.HasTables,
+            FolioPrefix = branch.FolioPrefix,
+            FolioFormat = branch.FolioFormat,
+            FolioCounter = branch.FolioCounter,
+            PlanType = branch.Business.PlanType.ToString(),
+            BusinessType = businessTypeCode,
+            PosExperience = catalog?.PosExperience ?? "Quick"
+        };
     }
 
     /// <summary>
