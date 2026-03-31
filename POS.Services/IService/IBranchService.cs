@@ -24,9 +24,9 @@ public interface IBranchService
     Task<Branch> CreateAsync(Branch branch);
 
     /// <summary>
-    /// Updates an existing branch's name and location.
+    /// Updates an existing branch's name and location, and optionally kitchen/tables settings.
     /// </summary>
-    Task<Branch> UpdateAsync(int id, Branch branch);
+    Task<Branch> UpdateAsync(int id, Branch branch, bool? hasKitchen = null, bool? hasTables = null);
 
     /// <summary>
     /// Copies the full catalog (categories, products, sizes, extras) from one branch to another.

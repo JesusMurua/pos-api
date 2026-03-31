@@ -10,6 +10,9 @@ public class UpdateConfigRequest
 
     [MaxLength(200)]
     public string? LocationName { get; set; }
+
+    public bool? HasKitchen { get; set; }
+    public bool? HasTables { get; set; }
 }
 
 public class VerifyPinRequest

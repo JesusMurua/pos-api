@@ -63,7 +63,7 @@ public class BranchService : IBranchService
     /// <summary>
     /// Updates an existing branch's name and location.
     /// </summary>
-    public async Task<Branch> UpdateAsync(int id, Branch branch)
+    public async Task<Branch> UpdateAsync(int id, Branch branch, bool? hasKitchen = null, bool? hasTables = null)
     {
         var existing = await _unitOfWork.Branches.GetByIdAsync(id);
 
@@ -75,6 +75,11 @@ public class BranchService : IBranchService
 
         existing.Name = branch.Name;
         existing.LocationName = branch.LocationName;
+
+        if (hasKitchen.HasValue)
+            existing.HasKitchen = hasKitchen.Value;
+        if (hasTables.HasValue)
+            existing.HasTables = hasTables.Value;
 
         _unitOfWork.Branches.Update(existing);
         await _unitOfWork.SaveChangesAsync();

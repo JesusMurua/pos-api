@@ -83,10 +83,12 @@ public class BranchController : BaseApiController
         {
             BusinessId = BusinessId,
             Name = request.Name,
-            LocationName = request.LocationName
+            LocationName = request.LocationName,
+            HasKitchen = request.HasKitchen ?? false,
+            HasTables = request.HasTables ?? false
         };
 
-        var updated = await _branchService.UpdateAsync(id, branch);
+        var updated = await _branchService.UpdateAsync(id, branch, request.HasKitchen, request.HasTables);
         return Ok(updated);
     }
 
