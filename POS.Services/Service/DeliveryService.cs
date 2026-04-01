@@ -94,11 +94,34 @@ public class DeliveryService : IDeliveryService
     }
 
     /// <summary>
-    /// Gets all active (non-terminal) delivery orders for a branch.
+    /// Gets all active (non-terminal) delivery orders for a branch, mapped to DTOs.
     /// </summary>
-    public async Task<IEnumerable<Order>> GetActiveDeliveryOrdersAsync(int branchId)
+    public async Task<IEnumerable<DeliveryOrderDto>> GetActiveDeliveryOrdersAsync(int branchId)
     {
-        return await _unitOfWork.Orders.GetActiveDeliveryOrdersAsync(branchId);
+        var orders = await _unitOfWork.Orders.GetActiveDeliveryOrdersAsync(branchId);
+
+        return orders.Select(order => new DeliveryOrderDto
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            OrderSource = order.OrderSource.ToString(),
+            ExternalOrderId = order.ExternalOrderId,
+            DeliveryStatus = order.DeliveryStatus.ToString(),
+            DeliveryCustomerName = order.DeliveryCustomerName,
+            EstimatedPickupAt = order.EstimatedPickupAt,
+            TotalCents = order.TotalCents,
+            KitchenStatus = order.KitchenStatus.ToString(),
+            CreatedAt = order.CreatedAt,
+            Items = order.Items.Select(i => new DeliveryOrderItemDto
+            {
+                Id = i.Id,
+                ProductName = i.ProductName,
+                Quantity = i.Quantity,
+                UnitPriceCents = i.UnitPriceCents,
+                Notes = i.Notes,
+                SizeName = i.SizeName
+            }).ToList()
+        });
     }
 
     /// <summary>

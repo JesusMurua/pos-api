@@ -30,7 +30,7 @@ public class DeliveryController : BaseApiController
     /// <response code="200">Returns active delivery orders.</response>
     [HttpGet("active")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen")]
-    [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<DeliveryOrderDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActive()
     {
         var orders = await _deliveryService.GetActiveDeliveryOrdersAsync(BranchId);
