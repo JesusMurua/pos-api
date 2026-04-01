@@ -151,6 +151,10 @@ public class OrderPullDto
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public int OrderNumber { get; set; }
+    public string OrderSource { get; set; } = "Direct";
+    public string? DeliveryStatus { get; set; }
+    public string? ExternalOrderId { get; set; }
+    public string? DeliveryCustomerName { get; set; }
     public List<OrderPullItemDto> Items { get; set; } = new();
     public List<OrderPullPaymentDto> Payments { get; set; } = new();
 }

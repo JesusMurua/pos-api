@@ -329,6 +329,10 @@ public class OrderService : IOrderService
             CreatedAt = o.CreatedAt,
             UpdatedAt = o.UpdatedAt,
             OrderNumber = o.OrderNumber,
+            OrderSource = o.OrderSource.ToString(),
+            DeliveryStatus = o.DeliveryStatus?.ToString(),
+            ExternalOrderId = o.ExternalOrderId,
+            DeliveryCustomerName = o.DeliveryCustomerName,
             Items = o.Items?.Select(i => new OrderPullItemDto
             {
                 Id = i.Id,
