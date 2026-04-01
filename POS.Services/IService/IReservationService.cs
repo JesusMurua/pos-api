@@ -15,6 +15,8 @@ public interface IReservationService
 
     Task<Reservation> UpdateAsync(int id, Reservation reservation, int branchId);
 
+    Task ConfirmAsync(int id, int branchId);
+
     Task CancelAsync(int id, int branchId);
 
     Task MarkNoShowAsync(int id, int branchId);

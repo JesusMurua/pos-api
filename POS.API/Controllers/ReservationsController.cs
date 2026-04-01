@@ -93,6 +93,31 @@ public class ReservationsController : BaseApiController
     }
 
     /// <summary>
+    /// Confirms a pending reservation.
+    /// </summary>
+    [HttpPatch("{id}/confirm")]
+    [Authorize(Roles = "Owner,Manager,Host")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Confirm(int id)
+    {
+        try
+        {
+            await _reservationService.ConfirmAsync(id, BranchId);
+            return NoContent();
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (ValidationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Cancels a reservation.
     /// </summary>
     [HttpPatch("{id}/cancel")]

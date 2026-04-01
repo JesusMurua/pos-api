@@ -58,15 +58,14 @@ public class ReservationService : IReservationService
     {
         var reservation = await GetByIdAndBranchAsync(id, branchId);
 
+        reservation.TableId = updated.TableId;
         reservation.GuestName = updated.GuestName;
         reservation.GuestPhone = updated.GuestPhone;
         reservation.PartySize = updated.PartySize;
         reservation.ReservationDate = updated.ReservationDate;
         reservation.ReservationTime = updated.ReservationTime;
         reservation.DurationMinutes = updated.DurationMinutes;
-        reservation.Status = updated.Status;
         reservation.Notes = updated.Notes;
-        reservation.TableId = updated.TableId;
 
         if (reservation.TableId.HasValue)
         {
@@ -85,6 +84,18 @@ public class ReservationService : IReservationService
         await _unitOfWork.SaveChangesAsync();
 
         return reservation;
+    }
+
+    public async Task ConfirmAsync(int id, int branchId)
+    {
+        var reservation = await GetByIdAndBranchAsync(id, branchId);
+
+        if (reservation.Status != ReservationStatus.Pending)
+            throw new ValidationException("Only pending reservations can be confirmed.");
+
+        reservation.Status = ReservationStatus.Confirmed;
+        _unitOfWork.Reservations.Update(reservation);
+        await _unitOfWork.SaveChangesAsync();
     }
 
     public async Task CancelAsync(int id, int branchId)
