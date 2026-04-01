@@ -16,7 +16,10 @@ public static class RepositoryDependencies
         services.AddSingleton<AuditInterceptor>();
 
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"))
+            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"), npgsqlOptions =>
+                {
+                    npgsqlOptions.MaxBatchSize(1);
+                })
                 .AddInterceptors(sp.GetRequiredService<AuditInterceptor>()));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
