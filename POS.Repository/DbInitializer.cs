@@ -460,6 +460,7 @@ public static class DbInitializer
             BusinessId = business.Id,
             Name = "Col. Centro, Nogales",
             FolioPrefix = "PRG",
+            HasDelivery = false,
             IsMatrix = true,
             IsActive = true,
             CreatedAt = SeedDate
@@ -588,6 +589,7 @@ public static class DbInitializer
             BusinessId = business.Id,
             Name = "Mercado Municipal",
             FolioPrefix = "GRO",
+            HasDelivery = true,
             IsMatrix = true,
             IsActive = true,
             CreatedAt = SeedDate
@@ -619,6 +621,57 @@ public static class DbInitializer
             P(branch.Id, extras.Id, "Guacamole", 1500),
             P(branch.Id, extras.Id, "Queso extra", 1000),
             P(branch.Id, extras.Id, "Orden de tortillas", 1200)
+        );
+        await context.SaveChangesAsync();
+
+        // Delivery orders
+        var tacoPastor = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Taco de adobada");
+        var aguaFresca = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Agua fresca");
+        var quesadilla = await context.Products.FirstAsync(p => p.BranchId == branch.Id && p.Name == "Taco de carne asada");
+
+        var deliveryOrder1 = new Order
+        {
+            Id = Guid.NewGuid().ToString(),
+            BranchId = branch.Id,
+            OrderSource = OrderSource.Rappi,
+            ExternalOrderId = "RP-00001",
+            DeliveryStatus = DeliveryStatus.PendingAcceptance,
+            DeliveryCustomerName = "Carlos M.",
+            TotalCents = 18500,
+            SubtotalCents = 18500,
+            KitchenStatus = KitchenStatus.Pending,
+            SyncStatus = OrderSyncStatus.Synced,
+            IsPaid = false,
+            CreatedAt = SeedDate
+        };
+        context.Orders.Add(deliveryOrder1);
+        await context.SaveChangesAsync();
+
+        context.OrderItems.AddRange(
+            new OrderItem { OrderId = deliveryOrder1.Id, ProductId = tacoPastor.Id, ProductName = "Tacos al pastor", Quantity = 2, UnitPriceCents = 6500 },
+            new OrderItem { OrderId = deliveryOrder1.Id, ProductId = aguaFresca.Id, ProductName = "Agua fresca", Quantity = 1, UnitPriceCents = 2500, Notes = "Sin picante" }
+        );
+
+        var deliveryOrder2 = new Order
+        {
+            Id = Guid.NewGuid().ToString(),
+            BranchId = branch.Id,
+            OrderSource = OrderSource.UberEats,
+            ExternalOrderId = "UE-00001",
+            DeliveryStatus = DeliveryStatus.Accepted,
+            DeliveryCustomerName = "Ana R.",
+            TotalCents = 24000,
+            SubtotalCents = 24000,
+            KitchenStatus = KitchenStatus.Pending,
+            SyncStatus = OrderSyncStatus.Synced,
+            IsPaid = false,
+            CreatedAt = SeedDate
+        };
+        context.Orders.Add(deliveryOrder2);
+        await context.SaveChangesAsync();
+
+        context.OrderItems.AddRange(
+            new OrderItem { OrderId = deliveryOrder2.Id, ProductId = quesadilla.Id, ProductName = "Quesadilla", Quantity = 3, UnitPriceCents = 8000 }
         );
         await context.SaveChangesAsync();
     }

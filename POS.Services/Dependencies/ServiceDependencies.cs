@@ -32,6 +32,7 @@ public static class ServiceDependencies
         services.AddScoped<IStripeService, StripeService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IStockReceiptService, StockReceiptService>();
+        services.AddScoped<IDeliveryService, DeliveryService>();
 
         return services;
     }

@@ -53,6 +53,23 @@ public partial class Order
     [MaxLength(20)]
     public string? FolioNumber { get; set; }
 
+    /// <summary>Origin of the order (direct POS or delivery platform).</summary>
+    public OrderSource OrderSource { get; set; } = OrderSource.Direct;
+
+    /// <summary>External order ID from the delivery platform (e.g. UE-4821).</summary>
+    [MaxLength(50)]
+    public string? ExternalOrderId { get; set; }
+
+    /// <summary>Delivery lifecycle status. Null when OrderSource is Direct.</summary>
+    public DeliveryStatus? DeliveryStatus { get; set; }
+
+    /// <summary>Name or phone used by the customer on the delivery platform.</summary>
+    [MaxLength(100)]
+    public string? DeliveryCustomerName { get; set; }
+
+    /// <summary>Estimated pickup time provided by the platform (UTC).</summary>
+    public DateTime? EstimatedPickupAt { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
 
     public int? TableId { get; set; }

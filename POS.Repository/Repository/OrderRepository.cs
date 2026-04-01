@@ -50,4 +50,23 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .OrderByDescending(o => o.UpdatedAt ?? o.CreatedAt)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Order>> GetActiveDeliveryOrdersAsync(int branchId)
+    {
+        return await _context.Orders
+            .Where(o => o.BranchId == branchId
+                && o.OrderSource != OrderSource.Direct
+                && o.DeliveryStatus != DeliveryStatus.PickedUp
+                && o.DeliveryStatus != DeliveryStatus.Rejected)
+            .Include(o => o.Items)
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task<Order?> GetByExternalIdAsync(int branchId, string externalOrderId)
+    {
+        return await _context.Orders
+            .FirstOrDefaultAsync(o => o.BranchId == branchId
+                && o.ExternalOrderId == externalOrderId);
+    }
 }

@@ -35,6 +35,9 @@ public partial class Branch
 
     public bool HasTables { get; set; } = true;
 
+    /// <summary>Whether this branch accepts orders from delivery platforms.</summary>
+    public bool HasDelivery { get; set; } = false;
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

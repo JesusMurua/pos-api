@@ -149,6 +149,7 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(255);
 
             entity.Property(b => b.IsMatrix).HasDefaultValue(false);
+            entity.Property(b => b.HasDelivery).HasDefaultValue(false);
         });
 
         #endregion
@@ -266,6 +267,18 @@ public class ApplicationDbContext : DbContext
                 .HasConversion<string>()
                 .HasMaxLength(20)
                 .HasDefaultValue(KitchenStatus.Pending);
+
+            entity.Property(o => o.OrderSource)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(OrderSource.Direct);
+
+            entity.Property(o => o.DeliveryStatus)
+                .HasConversion<string>()
+                .HasMaxLength(30);
+
+            entity.Property(o => o.ExternalOrderId).HasMaxLength(50);
+            entity.Property(o => o.DeliveryCustomerName).HasMaxLength(100);
 
             entity.Property(o => o.OrderPromotionName).HasMaxLength(100);
 
