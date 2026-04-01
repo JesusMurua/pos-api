@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using POS.API.Middleware;
 using POS.Domain.Settings;
@@ -118,6 +119,10 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Data Protection (used for encrypting delivery API keys)
+builder.Services.AddDataProtection()
+    .SetApplicationName("KajaPOS");
+
 // Register dependencies
 builder.Services.AddRepositoryDependencies(builder.Configuration);
 builder.Services.AddServiceDependencies();
@@ -134,7 +139,8 @@ using (var scope = app.Services.CreateScope())
 
     if (app.Environment.IsDevelopment())
     {
-        await DbInitializer.SeedTestDataAsync(db);
+        var encryptor = scope.ServiceProvider.GetRequiredService<POS.Services.Adapter.DataProtectionHelper>();
+        await DbInitializer.SeedTestDataAsync(db, encryptor);
     }
 }
 

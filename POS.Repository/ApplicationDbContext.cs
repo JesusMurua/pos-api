@@ -38,6 +38,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<BranchDeliveryConfig>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 
@@ -73,6 +79,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Supplier> Suppliers { get; set; } = null!;
     public DbSet<StockReceipt> StockReceipts { get; set; } = null!;
     public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
+    public DbSet<BranchDeliveryConfig> BranchDeliveryConfigs { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -501,6 +508,29 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        #endregion
+
+        #region BranchDeliveryConfig Configuration
+
+        modelBuilder.Entity<BranchDeliveryConfig>(entity =>
+        {
+            entity.Property(e => e.Platform)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.Property(e => e.StoreId).HasMaxLength(100);
+            entity.Property(e => e.ApiKeyEncrypted).HasMaxLength(1000);
+            entity.Property(e => e.WebhookSecret).HasMaxLength(255);
+            entity.Property(e => e.IsActive).HasDefaultValue(false);
+
+            entity.HasIndex(e => new { e.BranchId, e.Platform }).IsUnique();
+
+            entity.HasOne(e => e.Branch)
+                .WithMany(b => b.DeliveryConfigs)
+                .HasForeignKey(e => e.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         #endregion

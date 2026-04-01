@@ -43,6 +43,7 @@ public static class RepositoryDependencies
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IStockReceiptRepository, StockReceiptRepository>();
+        services.AddScoped<IBranchDeliveryConfigRepository, BranchDeliveryConfigRepository>();
 
         return services;
     }

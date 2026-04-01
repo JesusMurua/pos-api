@@ -5,6 +5,14 @@ using POS.Domain.Models.Catalogs;
 
 namespace POS.Repository;
 
+/// <summary>
+/// Functional interface for encrypting strings during seed data generation.
+/// </summary>
+public interface ISeedEncryptor
+{
+    string Encrypt(string plainText);
+}
+
 public static class DbInitializer
 {
     private static readonly DateTime SeedDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -136,13 +144,13 @@ public static class DbInitializer
     /// <summary>
     /// Seeds test businesses with realistic data. Development only.
     /// </summary>
-    public static async Task SeedTestDataAsync(ApplicationDbContext context)
+    public static async Task SeedTestDataAsync(ApplicationDbContext context, ISeedEncryptor? encryptor = null)
     {
         await SeedFondaEsperanzaAsync(context);
         await SeedBarCoyoteAsync(context);
         await SeedCafeNogalesAsync(context);
         await SeedMinisuperProgresoAsync(context);
-        await SeedTacosGueroAsync(context);
+        await SeedTacosGueroAsync(context, encryptor);
         await SeedPapeleriaEstudianteAsync(context);
         await SeedAbarrotesGueroAsync(context);
         await SeedFreeTrialSubscriptionsAsync(context);
@@ -568,7 +576,7 @@ public static class DbInitializer
 
     #region Business 5 — Tacos El Güero (FoodTruck)
 
-    private static async Task SeedTacosGueroAsync(ApplicationDbContext context)
+    private static async Task SeedTacosGueroAsync(ApplicationDbContext context, ISeedEncryptor? encryptor)
     {
         if (await context.Businesses.AnyAsync(b => b.Name == "Tacos El Güero")) return;
 
@@ -674,6 +682,34 @@ public static class DbInitializer
             new OrderItem { OrderId = deliveryOrder2.Id, ProductId = quesadilla.Id, ProductName = "Quesadilla", Quantity = 3, UnitPriceCents = 8000 }
         );
         await context.SaveChangesAsync();
+
+        // Delivery platform configs
+        if (!await context.BranchDeliveryConfigs.AnyAsync(c => c.BranchId == branch.Id))
+        {
+            context.BranchDeliveryConfigs.AddRange(
+                new BranchDeliveryConfig
+                {
+                    BranchId = branch.Id,
+                    Platform = OrderSource.Rappi,
+                    IsActive = true,
+                    StoreId = "RP-TEST-001",
+                    WebhookSecret = "rappi-test-secret-tacos-001",
+                    ApiKeyEncrypted = encryptor?.Encrypt("rappi-test-api-key"),
+                    CreatedAt = SeedDate
+                },
+                new BranchDeliveryConfig
+                {
+                    BranchId = branch.Id,
+                    Platform = OrderSource.UberEats,
+                    IsActive = true,
+                    StoreId = "UE-TEST-001",
+                    WebhookSecret = "uber-test-secret-tacos-001",
+                    ApiKeyEncrypted = encryptor?.Encrypt("uber-test-api-key"),
+                    CreatedAt = SeedDate
+                }
+            );
+            await context.SaveChangesAsync();
+        }
     }
 
     #endregion

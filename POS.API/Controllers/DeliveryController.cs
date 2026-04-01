@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
+using POS.Repository;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -14,12 +15,12 @@ namespace POS.API.Controllers;
 public class DeliveryController : BaseApiController
 {
     private readonly IDeliveryService _deliveryService;
-    private readonly IConfiguration _configuration;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public DeliveryController(IDeliveryService deliveryService, IConfiguration configuration)
+    public DeliveryController(IDeliveryService deliveryService, IUnitOfWork unitOfWork)
     {
         _deliveryService = deliveryService;
-        _configuration = configuration;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -161,7 +162,7 @@ public class DeliveryController : BaseApiController
 
     /// <summary>
     /// Webhook endpoint for delivery platforms to push new orders.
-    /// Secured via X-Webhook-Secret header, not JWT.
+    /// Secured via X-Webhook-Secret header validated against per-branch config.
     /// </summary>
     /// <param name="source">The delivery platform (UberEats, Rappi, DidiFood).</param>
     /// <param name="branchId">The target branch identifier.</param>
@@ -170,21 +171,30 @@ public class DeliveryController : BaseApiController
     /// <response code="200">Order ingested successfully.</response>
     /// <response code="400">If validation fails or duplicate external ID.</response>
     /// <response code="401">If the webhook secret is invalid.</response>
+    /// <response code="404">If the platform is not configured for this branch.</response>
     [HttpPost("webhook/{source}/{branchId}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Webhook(string source, int branchId, [FromBody] IngestDeliveryOrderRequest request)
     {
-        var expectedSecret = _configuration["Delivery:WebhookSecret"];
-        var providedSecret = Request.Headers["X-Webhook-Secret"].FirstOrDefault();
-
-        if (string.IsNullOrEmpty(expectedSecret) || providedSecret != expectedSecret)
-            return Unauthorized(new { message = "Invalid webhook secret." });
-
         if (!Enum.TryParse<OrderSource>(source, true, out var orderSource) || orderSource == OrderSource.Direct)
             return BadRequest(new { message = $"Invalid delivery source: {source}" });
+
+        var config = await _unitOfWork.BranchDeliveryConfigs
+            .GetByBranchAndPlatformAsync(branchId, orderSource);
+
+        if (config == null)
+            return NotFound(new { message = $"Platform {source} not configured for this branch." });
+
+        if (!config.IsActive)
+            return BadRequest(new { message = $"Platform {source} integration is not active." });
+
+        var providedSecret = Request.Headers["X-Webhook-Secret"].FirstOrDefault();
+        if (string.IsNullOrEmpty(config.WebhookSecret) || providedSecret != config.WebhookSecret)
+            return Unauthorized(new { message = "Invalid webhook secret." });
 
         if (!ModelState.IsValid) return BadRequest(ModelState);
 

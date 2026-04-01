@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using POS.Services.Adapter;
 using POS.Services.IService;
 using POS.Services.Service;
 
@@ -33,6 +34,8 @@ public static class ServiceDependencies
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IStockReceiptService, StockReceiptService>();
         services.AddScoped<IDeliveryService, DeliveryService>();
+        services.AddScoped<IBranchDeliveryConfigService, BranchDeliveryConfigService>();
+        services.AddSingleton<DataProtectionHelper>();
 
         return services;
     }

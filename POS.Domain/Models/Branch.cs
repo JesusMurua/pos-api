@@ -58,4 +58,6 @@ public partial class Branch
     public virtual ICollection<Supplier>? Suppliers { get; set; }
 
     public virtual ICollection<StockReceipt>? StockReceipts { get; set; }
+
+    public virtual ICollection<BranchDeliveryConfig>? DeliveryConfigs { get; set; }
 }

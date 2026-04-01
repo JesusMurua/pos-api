@@ -29,6 +29,7 @@ public interface IUnitOfWork : IDisposable
     ISubscriptionRepository Subscriptions { get; }
     ISupplierRepository Suppliers { get; }
     IStockReceiptRepository StockReceipts { get; }
+    IBranchDeliveryConfigRepository BranchDeliveryConfigs { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();
