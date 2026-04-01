@@ -52,13 +52,6 @@ namespace POS.Repository.Migrations
                 type: "boolean",
                 nullable: false,
                 defaultValue: false);
-
-            migrationBuilder.UpdateData(
-                table: "Branches",
-                keyColumn: "Id",
-                keyValue: 1,
-                columns: new string[0],
-                values: new object[0]);
         }
 
         /// <inheritdoc />
