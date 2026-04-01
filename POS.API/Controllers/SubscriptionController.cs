@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.API.Models;
 using POS.Domain.Exceptions;
@@ -12,35 +13,27 @@ namespace POS.API.Controllers;
 public class SubscriptionController : BaseApiController
 {
     private readonly IStripeService _stripeService;
+    private readonly ISubscriptionService _subscriptionService;
 
-    public SubscriptionController(IStripeService stripeService)
+    public SubscriptionController(IStripeService stripeService, ISubscriptionService subscriptionService)
     {
         _stripeService = stripeService;
+        _subscriptionService = subscriptionService;
     }
 
     /// <summary>
-    /// Returns the current subscription for the authenticated business.
+    /// Returns the current subscription status for the authenticated business.
+    /// Always returns a valid response — Free plan defaults when no Stripe subscription exists.
     /// </summary>
     [HttpGet("status")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStatus()
     {
         try
         {
-            var subscription = await _stripeService.GetSubscriptionStatusAsync(BusinessId);
-            if (subscription == null)
-                return NotFound(new { message = "No subscription found" });
-
-            return Ok(new
-            {
-                subscription.PlanType,
-                subscription.Status,
-                subscription.TrialEndsAt,
-                subscription.CurrentPeriodEnd,
-                subscription.BillingCycle,
-                subscription.PricingGroup
-            });
+            var status = await _subscriptionService.GetStatusAsync(BusinessId);
+            return Ok(status);
         }
         catch (Exception ex)
         {

@@ -31,6 +31,7 @@ public static class ServiceDependencies
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IStripeService, StripeService>();
+        services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IStockReceiptService, StockReceiptService>();
         services.AddScoped<IDeliveryService, DeliveryService>();

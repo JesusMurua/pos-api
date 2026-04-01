@@ -75,7 +75,7 @@ public class StripeService : IStripeService
         var subscription = await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId)
             ?? throw new NotFoundException($"No active subscription found for business {businessId}");
 
-        var service = new SubscriptionService();
+        var service = new Stripe.SubscriptionService();
         await service.UpdateAsync(subscription.StripeSubscriptionId, new SubscriptionUpdateOptions
         {
             CancelAtPeriodEnd = true
