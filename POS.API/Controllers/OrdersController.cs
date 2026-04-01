@@ -98,6 +98,24 @@ public class OrdersController : BaseApiController
     }
 
     /// <summary>
+    /// Returns a single order by ID for the current branch.
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <returns>The order with items and payments.</returns>
+    /// <response code="200">Returns the order.</response>
+    /// <response code="404">If the order is not found in this branch.</response>
+    [HttpGet("{id}")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [ProducesResponseType(typeof(OrderPullDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(string id)
+    {
+        var dto = await _orderService.GetByIdAsDtoAsync(id, BranchId);
+        if (dto == null) return NotFound();
+        return Ok(dto);
+    }
+
+    /// <summary>
     /// Gets active (non-cancelled) orders for a specific table.
     /// </summary>
     /// <param name="tableId">The table identifier.</param>

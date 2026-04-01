@@ -305,6 +305,21 @@ public class OrderService : IOrderService
     }
 
     /// <summary>
+    /// Returns a single order by ID as a DTO, scoped to the given branch.
+    /// </summary>
+    public async Task<OrderPullDto?> GetByIdAsDtoAsync(string orderId, int branchId)
+    {
+        var results = await _unitOfWork.Orders.GetAsync(
+            o => o.Id == orderId && o.BranchId == branchId,
+            "Items,Payments");
+
+        var o = results.FirstOrDefault();
+        if (o == null) return null;
+
+        return MapToOrderPullDto(o);
+    }
+
+    /// <summary>
     /// Returns orders updated since a given timestamp for bidirectional sync.
     /// </summary>
     public async Task<IEnumerable<OrderPullDto>> GetPullOrdersAsync(int branchId, DateTime? since)
@@ -313,42 +328,7 @@ public class OrderService : IOrderService
 
         var orders = await _unitOfWork.Orders.GetPullOrdersAsync(branchId, cutoff);
 
-        return orders.Select(o => new OrderPullDto
-        {
-            Id = o.Id,
-            BranchId = o.BranchId,
-            FolioNumber = o.FolioNumber,
-            TableId = o.TableId,
-            TableName = o.TableName,
-            KitchenStatus = o.KitchenStatus.ToString(),
-            IsPaid = o.IsPaid,
-            TotalCents = o.TotalCents,
-            SubtotalCents = o.SubtotalCents,
-            PaidCents = o.PaidCents,
-            ChangeCents = o.ChangeCents,
-            CreatedAt = o.CreatedAt,
-            UpdatedAt = o.UpdatedAt,
-            OrderNumber = o.OrderNumber,
-            OrderSource = o.OrderSource.ToString(),
-            DeliveryStatus = o.DeliveryStatus?.ToString(),
-            ExternalOrderId = o.ExternalOrderId,
-            DeliveryCustomerName = o.DeliveryCustomerName,
-            Items = o.Items?.Select(i => new OrderPullItemDto
-            {
-                Id = i.Id,
-                ProductName = i.ProductName,
-                Quantity = i.Quantity,
-                UnitPriceCents = i.UnitPriceCents,
-                SizeName = i.SizeName,
-                Notes = i.Notes,
-                Extras = ParseExtrasNames(i.ExtrasJson)
-            }).ToList() ?? new(),
-            Payments = o.Payments.Select(p => new OrderPullPaymentDto
-            {
-                Method = p.Method.ToString(),
-                AmountCents = p.AmountCents
-            }).ToList()
-        });
+        return orders.Select(MapToOrderPullDto);
     }
 
     /// <summary>
@@ -671,6 +651,46 @@ public class OrderService : IOrderService
             TableName = request.TableName,
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
             Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
+        };
+    }
+
+    private static OrderPullDto MapToOrderPullDto(Order o)
+    {
+        return new OrderPullDto
+        {
+            Id = o.Id,
+            BranchId = o.BranchId,
+            FolioNumber = o.FolioNumber,
+            TableId = o.TableId,
+            TableName = o.TableName,
+            KitchenStatus = o.KitchenStatus.ToString(),
+            IsPaid = o.IsPaid,
+            TotalCents = o.TotalCents,
+            SubtotalCents = o.SubtotalCents,
+            PaidCents = o.PaidCents,
+            ChangeCents = o.ChangeCents,
+            CreatedAt = o.CreatedAt,
+            UpdatedAt = o.UpdatedAt,
+            OrderNumber = o.OrderNumber,
+            OrderSource = o.OrderSource.ToString(),
+            DeliveryStatus = o.DeliveryStatus?.ToString(),
+            ExternalOrderId = o.ExternalOrderId,
+            DeliveryCustomerName = o.DeliveryCustomerName,
+            Items = o.Items?.Select(i => new OrderPullItemDto
+            {
+                Id = i.Id,
+                ProductName = i.ProductName,
+                Quantity = i.Quantity,
+                UnitPriceCents = i.UnitPriceCents,
+                SizeName = i.SizeName,
+                Notes = i.Notes,
+                Extras = ParseExtrasNames(i.ExtrasJson)
+            }).ToList() ?? new(),
+            Payments = o.Payments?.Select(p => new OrderPullPaymentDto
+            {
+                Method = p.Method.ToString(),
+                AmountCents = p.AmountCents
+            }).ToList() ?? new()
         };
     }
 

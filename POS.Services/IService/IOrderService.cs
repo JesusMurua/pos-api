@@ -59,6 +59,11 @@ public interface IOrderService
     Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId);
 
     /// <summary>
+    /// Returns a single order by ID as a DTO, scoped to the given branch.
+    /// </summary>
+    Task<OrderPullDto?> GetByIdAsDtoAsync(string orderId, int branchId);
+
+    /// <summary>
     /// Returns orders updated since a given timestamp for bidirectional sync.
     /// </summary>
     Task<IEnumerable<OrderPullDto>> GetPullOrdersAsync(int branchId, DateTime? since);
