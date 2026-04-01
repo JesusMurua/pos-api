@@ -201,7 +201,7 @@ public class DeliveryController : BaseApiController
         try
         {
             request.Source = orderSource;
-            var order = await _deliveryService.IngestWebhookOrderAsync(request, branchId);
+            var order = await _deliveryService.IngestWebhookOrderAsync(request, branchId, config.IsPrepaidByPlatform);
             return Ok(order);
         }
         catch (ValidationException ex)

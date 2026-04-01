@@ -128,7 +128,7 @@ public class DeliveryService : IDeliveryService
     /// Ingests an order from an external delivery platform webhook.
     /// Rejects duplicates based on ExternalOrderId.
     /// </summary>
-    public async Task<Order> IngestWebhookOrderAsync(IngestDeliveryOrderRequest request, int branchId)
+    public async Task<Order> IngestWebhookOrderAsync(IngestDeliveryOrderRequest request, int branchId, bool isPrepaidByPlatform)
     {
         var existing = await _unitOfWork.Orders.GetByExternalIdAsync(branchId, request.ExternalOrderId);
         if (existing != null)
@@ -146,7 +146,7 @@ public class DeliveryService : IDeliveryService
             BranchId = branchId,
             TotalCents = request.TotalCents,
             SubtotalCents = request.TotalCents,
-            IsPaid = false,
+            IsPaid = isPrepaidByPlatform,
             SyncStatus = OrderSyncStatus.Synced,
             CreatedAt = DateTime.UtcNow,
             Items = request.Items.Select(i => new OrderItem

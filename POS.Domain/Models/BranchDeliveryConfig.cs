@@ -14,6 +14,13 @@ public class BranchDeliveryConfig
     /// <summary>Whether this platform integration is active for this branch.</summary>
     public bool IsActive { get; set; } = false;
 
+    /// <summary>
+    /// When true, the platform pre-collects payment from the customer.
+    /// Orders ingested via webhook will be marked as IsPaid = true automatically.
+    /// When false, the customer pays at pickup — order remains unpaid until collected.
+    /// </summary>
+    public bool IsPrepaidByPlatform { get; set; } = true;
+
     /// <summary>Store/restaurant ID assigned by the delivery platform.</summary>
     public string? StoreId { get; set; }
 

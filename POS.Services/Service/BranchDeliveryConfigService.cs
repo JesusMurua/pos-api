@@ -50,6 +50,7 @@ public class BranchDeliveryConfigService : IBranchDeliveryConfigService
                 BranchId = branchId,
                 Platform = request.Platform,
                 IsActive = request.IsActive,
+                IsPrepaidByPlatform = request.IsPrepaidByPlatform,
                 StoreId = request.StoreId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -66,6 +67,7 @@ public class BranchDeliveryConfigService : IBranchDeliveryConfigService
         {
             config = existing;
             config.IsActive = request.IsActive;
+            config.IsPrepaidByPlatform = request.IsPrepaidByPlatform;
             config.StoreId = request.StoreId;
 
             if (!string.IsNullOrEmpty(request.ApiKey))
@@ -124,6 +126,7 @@ public class BranchDeliveryConfigService : IBranchDeliveryConfigService
             Id = config.Id,
             Platform = config.Platform,
             IsActive = config.IsActive,
+            IsPrepaidByPlatform = config.IsPrepaidByPlatform,
             StoreId = config.StoreId,
             HasApiKey = !string.IsNullOrEmpty(config.ApiKeyEncrypted),
             HasWebhookSecret = !string.IsNullOrEmpty(config.WebhookSecret),

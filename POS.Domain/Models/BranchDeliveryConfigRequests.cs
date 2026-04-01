@@ -12,6 +12,9 @@ public class UpsertDeliveryConfigRequest
 
     public bool IsActive { get; set; } = false;
 
+    /// <summary>Whether the platform pre-collects payment from the customer.</summary>
+    public bool IsPrepaidByPlatform { get; set; } = true;
+
     [MaxLength(100)]
     public string? StoreId { get; set; }
 

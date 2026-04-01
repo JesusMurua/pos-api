@@ -524,6 +524,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.ApiKeyEncrypted).HasMaxLength(1000);
             entity.Property(e => e.WebhookSecret).HasMaxLength(255);
             entity.Property(e => e.IsActive).HasDefaultValue(false);
+            entity.Property(e => e.IsPrepaidByPlatform).HasDefaultValue(true);
 
             entity.HasIndex(e => new { e.BranchId, e.Platform }).IsUnique();
 

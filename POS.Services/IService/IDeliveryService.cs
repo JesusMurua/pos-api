@@ -9,5 +9,5 @@ public interface IDeliveryService
     Task<Order> MarkReadyForPickupAsync(string orderId, int branchId);
     Task<Order> MarkPickedUpAsync(string orderId, int branchId);
     Task<IEnumerable<DeliveryOrderDto>> GetActiveDeliveryOrdersAsync(int branchId);
-    Task<Order> IngestWebhookOrderAsync(IngestDeliveryOrderRequest request, int branchId);
+    Task<Order> IngestWebhookOrderAsync(IngestDeliveryOrderRequest request, int branchId, bool isPrepaidByPlatform);
 }

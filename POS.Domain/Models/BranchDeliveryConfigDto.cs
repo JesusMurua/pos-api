@@ -10,6 +10,9 @@ public class BranchDeliveryConfigDto
 
     public bool IsActive { get; set; }
 
+    /// <summary>Whether the platform pre-collects payment from the customer.</summary>
+    public bool IsPrepaidByPlatform { get; set; }
+
     public string? StoreId { get; set; }
 
     /// <summary>True if an API key has been stored. Never expose the key itself.</summary>
