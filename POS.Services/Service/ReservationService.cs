@@ -27,13 +27,7 @@ public class ReservationService : IReservationService
         var startDate = new DateOnly(year, month, 1);
         var endDate = startDate.AddMonths(1);
 
-        var reservations = await _unitOfWork.Reservations.GetAsync(
-            r => r.BranchId == branchId
-                && r.ReservationDate >= startDate
-                && r.ReservationDate < endDate,
-            "Table,CreatedByUser");
-
-        return reservations.OrderBy(r => r.ReservationDate).ThenBy(r => r.ReservationTime);
+        return await _unitOfWork.Reservations.GetByBranchAndMonthAsync(branchId, startDate, endDate);
     }
 
     public async Task<Reservation> CreateAsync(Reservation reservation, int branchId, int userId)

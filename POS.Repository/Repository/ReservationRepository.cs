@@ -14,10 +14,27 @@ public class ReservationRepository : GenericRepository<Reservation>, IReservatio
     public async Task<IEnumerable<Reservation>> GetByBranchAndDateAsync(int branchId, DateOnly date)
     {
         return await _context.Reservations
+            .AsNoTracking()
             .Where(r => r.BranchId == branchId && r.ReservationDate == date)
             .Include(r => r.Table)
             .Include(r => r.CreatedByUser)
             .OrderBy(r => r.ReservationTime)
+            .AsSplitQuery()
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Reservation>> GetByBranchAndMonthAsync(int branchId, DateOnly startDate, DateOnly endDate)
+    {
+        return await _context.Reservations
+            .AsNoTracking()
+            .Where(r => r.BranchId == branchId
+                && r.ReservationDate >= startDate
+                && r.ReservationDate < endDate)
+            .Include(r => r.Table)
+            .Include(r => r.CreatedByUser)
+            .OrderBy(r => r.ReservationDate)
+            .ThenBy(r => r.ReservationTime)
+            .AsSplitQuery()
             .ToListAsync();
     }
 

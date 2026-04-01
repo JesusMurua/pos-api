@@ -19,6 +19,7 @@ public static class RepositoryDependencies
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"), npgsqlOptions =>
                 {
                     npgsqlOptions.MaxBatchSize(1);
+                    npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
                 })
                 .AddInterceptors(sp.GetRequiredService<AuditInterceptor>()));
 
