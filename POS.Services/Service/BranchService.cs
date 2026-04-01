@@ -122,6 +122,7 @@ public class BranchService : IBranchService
             LocationName = branch.LocationName,
             HasKitchen = branch.HasKitchen,
             HasTables = branch.HasTables,
+            HasDelivery = branch.HasDelivery,
             FolioPrefix = branch.FolioPrefix,
             FolioFormat = branch.FolioFormat,
             FolioCounter = branch.FolioCounter,

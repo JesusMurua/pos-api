@@ -12,6 +12,7 @@ public class BranchConfigDto
     public string? LocationName { get; set; }
     public bool HasKitchen { get; set; }
     public bool HasTables { get; set; }
+    public bool HasDelivery { get; set; }
     public string? FolioPrefix { get; set; }
     public string? FolioFormat { get; set; }
     public int FolioCounter { get; set; }
