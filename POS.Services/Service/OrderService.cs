@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -25,26 +26,32 @@ public class OrderService : IOrderService
     #region Public API Methods
 
     /// <summary>
-    /// Syncs a batch of offline orders. Processes each order individually.
-    /// Skips duplicates by UUID, marks failures, never aborts the batch.
+    /// Syncs a batch of offline orders using bulk operations.
+    /// Fetches existing orders in a single query, classifies into inserts/updates,
+    /// and persists with a single SaveChangesAsync to prevent N+1 connection exhaustion.
     /// </summary>
     public async Task<SyncResult> SyncOrdersAsync(IEnumerable<SyncOrderRequest> orders)
     {
         var result = new SyncResult();
+        var requests = orders.ToList();
+        if (requests.Count == 0) return result;
 
-        foreach (var request in orders)
+        // ── Phase 1: Single query to fetch all existing orders ──
+        var requestIds = requests.Select(r => r.Id).ToList();
+        var existingOrders = (await _unitOfWork.Orders.GetAsync(
+            o => requestIds.Contains(o.Id), "Items,Payments"))
+            .ToDictionary(o => o.Id);
+
+        // ── Phase 2: Classify into inserts vs updates ──
+        var ordersToInsert = new List<Order>();
+        var failedRequests = new List<SyncOrderRequest>();
+
+        foreach (var request in requests)
         {
             try
             {
-                var existing = await _unitOfWork.Orders.GetAsync(
-                    o => o.Id == request.Id);
-
-                if (existing.Any())
+                if (existingOrders.TryGetValue(request.Id, out var existingOrder))
                 {
-                    var withRelations = await _unitOfWork.Orders.GetAsync(
-                        o => o.Id == request.Id, "Items,Payments");
-                    var existingOrder = withRelations.First();
-
                     existingOrder.TotalCents = request.TotalCents;
                     existingOrder.SubtotalCents = request.SubtotalCents;
                     existingOrder.OrderDiscountCents = request.OrderDiscountCents;
@@ -57,7 +64,6 @@ public class OrderService : IOrderService
                     existingOrder.TableName = request.TableName;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
-                    // Replace items
                     existingOrder.Items?.Clear();
                     foreach (var i in request.Items)
                     {
@@ -65,76 +71,211 @@ public class OrderService : IOrderService
                         existingOrder.Items.Add(MapToOrderItem(request.Id, i));
                     }
 
-                    // Replace payments
                     existingOrder.Payments.Clear();
                     foreach (var p in request.Payments)
                         existingOrder.Payments.Add(MapToPayment(request.Id, p));
 
                     RecalculatePaymentTotals(existingOrder);
-
                     _unitOfWork.Orders.Update(existingOrder);
-                    await _unitOfWork.SaveChangesAsync();
-
                     result.Updated++;
-                    continue;
                 }
-
-                var order = MapToOrder(request);
-                order.SyncStatus = OrderSyncStatus.Synced;
-                order.SyncedAt = DateTime.UtcNow;
-
-                RecalculateTotals(order);
-                RecalculatePaymentTotals(order);
-
-                await _unitOfWork.Orders.AddAsync(order);
-                await _unitOfWork.SaveChangesAsync();
-
-                await RecordPromotionUsagesAsync(order);
-
-                if (order.TableId.HasValue)
+                else
                 {
-                    var table = await _unitOfWork.RestaurantTables.GetByIdAsync(order.TableId.Value);
-                    if (table != null)
-                    {
-                        table.Status = order.CancellationReason == null ? "occupied" : "available";
-                        _unitOfWork.RestaurantTables.Update(table);
-                        await _unitOfWork.SaveChangesAsync();
-                    }
+                    var order = MapToOrder(request);
+                    order.SyncStatus = OrderSyncStatus.Synced;
+                    order.SyncedAt = DateTime.UtcNow;
 
-                    await AutoSeatReservationAsync(order.TableId.Value, order.BranchId);
+                    RecalculateTotals(order);
+                    RecalculatePaymentTotals(order);
+                    ordersToInsert.Add(order);
+                    result.Synced++;
                 }
-
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var tableInfo = order.TableName != null ? $" - Mesa {order.TableName}" : "";
-                        await _pushService.SendToBranchAsync(
-                            order.BranchId,
-                            "Nueva orden 🛎️",
-                            $"Orden #{order.OrderNumber}{tableInfo}",
-                            new { orderId = order.Id, orderNumber = order.OrderNumber, tableId = order.TableId, tableName = order.TableName });
-                    }
-                    catch { /* best-effort */ }
-                });
-
-                result.Synced++;
             }
             catch
             {
-                try
-                {
-                    var failedOrder = MapToOrder(request);
-                    failedOrder.SyncStatus = OrderSyncStatus.Failed;
-                    failedOrder.SyncedAt = DateTime.UtcNow;
-
-                    await _unitOfWork.Orders.AddAsync(failedOrder);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-                catch { }
-
+                failedRequests.Add(request);
                 result.Failed++;
             }
+        }
+
+        // ── Phase 3: Batch persist — single SaveChangesAsync ──
+        if (ordersToInsert.Count > 0)
+            await _unitOfWork.Orders.AddRangeAsync(ordersToInsert);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch
+        {
+            // DbContext is tainted — tracked entities have stale Added/Modified state.
+            // Re-adding Failed orders with the same IDs would throw InvalidOperationException.
+            // Abandon this context entirely.
+            result.Synced = 0;
+            result.Updated = 0;
+            result.Failed = requests.Count;
+            return result;
+        }
+
+        // ── Phase 4: Save failed mapping orders (separate from main batch) ──
+        if (failedRequests.Count > 0)
+        {
+            var failedOrders = new List<Order>();
+            foreach (var req in failedRequests)
+            {
+                try
+                {
+                    var failedOrder = MapToOrder(req);
+                    failedOrder.SyncStatus = OrderSyncStatus.Failed;
+                    failedOrder.SyncedAt = DateTime.UtcNow;
+                    failedOrders.Add(failedOrder);
+                }
+                catch { /* can't even map — skip */ }
+            }
+
+            if (failedOrders.Count > 0)
+            {
+                try
+                {
+                    await _unitOfWork.Orders.AddRangeAsync(failedOrders);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+                catch { /* best-effort */ }
+            }
+        }
+
+        // ── Phase 5: Batch table status + inlined auto-seat reservations ──
+        var newOrdersWithTables = ordersToInsert
+            .Where(o => o.TableId.HasValue)
+            .ToList();
+
+        if (newOrdersWithTables.Count > 0)
+        {
+            var tableIds = newOrdersWithTables
+                .Select(o => o.TableId!.Value)
+                .Distinct()
+                .ToList();
+
+            var tables = (await _unitOfWork.RestaurantTables.GetAsync(
+                t => tableIds.Contains(t.Id)))
+                .ToDictionary(t => t.Id);
+
+            foreach (var order in newOrdersWithTables)
+            {
+                if (tables.TryGetValue(order.TableId!.Value, out var table))
+                {
+                    table.Status = order.CancellationReason == null ? "occupied" : "available";
+                    _unitOfWork.RestaurantTables.Update(table);
+                }
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var branchIds = newOrdersWithTables.Select(o => o.BranchId).Distinct().ToList();
+
+            var confirmedReservations = (await _unitOfWork.Reservations.GetAsync(
+                r => tableIds.Contains(r.TableId!.Value)
+                    && branchIds.Contains(r.BranchId)
+                    && r.ReservationDate == today
+                    && r.Status == ReservationStatus.Confirmed))
+                .ToList();
+
+            foreach (var reservation in confirmedReservations)
+            {
+                reservation.Status = ReservationStatus.Seated;
+                _unitOfWork.Reservations.Update(reservation);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        // ── Phase 6: Batch promotion usage recording ──
+        if (ordersToInsert.Count > 0)
+        {
+            try
+            {
+                var promoOrderPairs = new List<(int PromotionId, int BranchId, string OrderId)>();
+
+                foreach (var order in ordersToInsert)
+                {
+                    if (order.Items != null)
+                    {
+                        foreach (var item in order.Items.Where(i => i.PromotionId.HasValue))
+                            promoOrderPairs.Add((item.PromotionId!.Value, order.BranchId, order.Id));
+                    }
+
+                    if (order.OrderPromotionId.HasValue)
+                        promoOrderPairs.Add((order.OrderPromotionId.Value, order.BranchId, order.Id));
+                }
+
+                if (promoOrderPairs.Count > 0)
+                {
+                    var uniquePromoIds = promoOrderPairs.Select(p => p.PromotionId).Distinct().ToList();
+                    var promotions = (await _unitOfWork.Promotions.GetAsync(
+                        p => uniquePromoIds.Contains(p.Id)))
+                        .ToDictionary(p => p.Id);
+
+                    var usages = new List<PromotionUsage>();
+                    var recordedPerOrder = new Dictionary<string, HashSet<int>>();
+
+                    foreach (var (promoId, branchId, orderId) in promoOrderPairs)
+                    {
+                        if (!promotions.TryGetValue(promoId, out var promo) || promo.BranchId != branchId)
+                        {
+                            var order = ordersToInsert.First(o => o.Id == orderId);
+                            if (order.OrderPromotionId == promoId)
+                                order.OrderPromotionId = null;
+                            if (order.Items != null)
+                            {
+                                foreach (var item in order.Items.Where(i => i.PromotionId == promoId))
+                                    item.PromotionId = null;
+                            }
+                            continue;
+                        }
+
+                        if (!recordedPerOrder.TryGetValue(orderId, out var recorded))
+                        {
+                            recorded = new HashSet<int>();
+                            recordedPerOrder[orderId] = recorded;
+                        }
+
+                        if (recorded.Add(promoId))
+                        {
+                            usages.Add(new PromotionUsage
+                            {
+                                PromotionId = promoId,
+                                BranchId = branchId,
+                                OrderId = orderId,
+                                UsedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    if (usages.Count > 0)
+                        await _unitOfWork.PromotionUsages.AddRangeAsync(usages);
+
+                    await _unitOfWork.SaveChangesAsync();
+                }
+            }
+            catch { /* best-effort */ }
+        }
+
+        // ── Phase 7: Push notifications (fire-and-forget, no DB) ──
+        foreach (var order in ordersToInsert)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var tableInfo = order.TableName != null ? $" - Mesa {order.TableName}" : "";
+                    await _pushService.SendToBranchAsync(
+                        order.BranchId,
+                        "Nueva orden 🛎️",
+                        $"Orden #{order.OrderNumber}{tableInfo}",
+                        new { orderId = order.Id, orderNumber = order.OrderNumber,
+                              tableId = order.TableId, tableName = order.TableName });
+                }
+                catch { /* best-effort */ }
+            });
         }
 
         return result;
@@ -182,7 +323,14 @@ public class OrderService : IOrderService
         order.CancelledBy = cancelledBy;
 
         _unitOfWork.Orders.Update(order);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
         return order;
     }
 
@@ -199,7 +347,14 @@ public class OrderService : IOrderService
 
         order.KitchenStatus = kitchenStatus;
         _unitOfWork.Orders.Update(order);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
 
         if (kitchenStatus == KitchenStatus.Ready)
         {
@@ -265,7 +420,14 @@ public class OrderService : IOrderService
         order.IsPaid = order.PaidCents >= order.TotalCents;
 
         _unitOfWork.Orders.Update(order);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
 
         return payment;
     }
@@ -290,7 +452,14 @@ public class OrderService : IOrderService
         order.IsPaid = order.PaidCents >= order.TotalCents;
 
         _unitOfWork.Orders.Update(order);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
     }
 
     /// <summary>
@@ -409,7 +578,14 @@ public class OrderService : IOrderService
 
         _unitOfWork.Orders.Update(source);
         _unitOfWork.Orders.Update(target);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
         await transaction.CommitAsync();
 
         return new MoveItemsResult
@@ -495,7 +671,14 @@ public class OrderService : IOrderService
 
         _unitOfWork.Orders.Update(source);
         _unitOfWork.Orders.Update(target);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
         await transaction.CommitAsync();
 
         return new MergeResult
@@ -605,7 +788,14 @@ public class OrderService : IOrderService
         source.TotalCents = 0;
 
         _unitOfWork.Orders.Update(source);
-        await _unitOfWork.SaveChangesAsync();
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
         await transaction.CommitAsync();
 
         return new SplitResult

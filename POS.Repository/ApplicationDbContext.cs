@@ -310,6 +310,11 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
             entity.HasIndex(o => o.SyncStatus);
+
+            entity.Property<uint>("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
         });
 
         #endregion
@@ -401,6 +406,11 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(t => new { t.BranchId, t.IsActive });
+
+            entity.Property<uint>("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
         });
 
         #endregion
