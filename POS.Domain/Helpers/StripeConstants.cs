@@ -80,4 +80,41 @@ public static class StripeConstants
             "Cafe" or "FoodTruck" or "Taqueria" => "Standard",
             _ => "General"
         };
+
+    /// <summary>
+    /// Maps Stripe Price IDs to (PlanType, BillingCycle, PricingGroup) tuples.
+    /// </summary>
+    public static readonly Dictionary<string, (string Plan, string Cycle, string Group)> PriceMap = new()
+    {
+        // Basico
+        { Basico.General.Monthly, ("Basico", "Monthly", "General") },
+        { Basico.General.Annual, ("Basico", "Annual", "General") },
+        { Basico.Standard.Monthly, ("Basico", "Monthly", "Standard") },
+        { Basico.Standard.Annual, ("Basico", "Annual", "Standard") },
+        { Basico.Restaurant.Monthly, ("Basico", "Monthly", "Restaurant") },
+        { Basico.Restaurant.Annual, ("Basico", "Annual", "Restaurant") },
+        // Pro
+        { Pro.General.Monthly, ("Pro", "Monthly", "General") },
+        { Pro.General.Annual, ("Pro", "Annual", "General") },
+        { Pro.Standard.Monthly, ("Pro", "Monthly", "Standard") },
+        { Pro.Standard.Annual, ("Pro", "Annual", "Standard") },
+        { Pro.Restaurant.Monthly, ("Pro", "Monthly", "Restaurant") },
+        { Pro.Restaurant.Annual, ("Pro", "Annual", "Restaurant") },
+        // Enterprise
+        { Enterprise.General.Monthly, ("Enterprise", "Monthly", "General") },
+        { Enterprise.General.Annual, ("Enterprise", "Annual", "General") },
+        { Enterprise.Standard.Monthly, ("Enterprise", "Monthly", "Standard") },
+        { Enterprise.Standard.Annual, ("Enterprise", "Annual", "Standard") },
+        { Enterprise.Restaurant.Monthly, ("Enterprise", "Monthly", "Restaurant") },
+        { Enterprise.Restaurant.Annual, ("Enterprise", "Annual", "Restaurant") },
+    };
+
+    public static string ResolvePlanType(string priceId) =>
+        PriceMap.TryGetValue(priceId, out var info) ? info.Plan : "Free";
+
+    public static string ResolveBillingCycle(string priceId) =>
+        PriceMap.TryGetValue(priceId, out var info) ? info.Cycle : "Monthly";
+
+    public static string ResolvePricingGroup(string priceId) =>
+        PriceMap.TryGetValue(priceId, out var info) ? info.Group : "General";
 }

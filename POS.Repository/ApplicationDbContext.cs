@@ -81,6 +81,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
     public DbSet<BranchDeliveryConfig> BranchDeliveryConfigs { get; set; } = null!;
 
+    public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
+
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
     public DbSet<BusinessTypeCatalog> BusinessTypeCatalogs { get; set; } = null!;
@@ -617,6 +619,24 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(z => new { z.BranchId, z.SortOrder });
+        });
+
+        #endregion
+
+        #region StripeEventInbox Configuration
+
+        modelBuilder.Entity<StripeEventInbox>(entity =>
+        {
+            entity.Property(e => e.StripeEventId).HasMaxLength(255);
+            entity.Property(e => e.Type).HasMaxLength(100);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.HasIndex(e => e.StripeEventId).IsUnique();
+            entity.HasIndex(e => e.Status);
         });
 
         #endregion

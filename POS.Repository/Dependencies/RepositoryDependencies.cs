@@ -45,6 +45,7 @@ public static class RepositoryDependencies
         services.AddScoped<IZoneRepository, ZoneRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddScoped<IStripeEventInboxRepository, StripeEventInboxRepository>();
         services.AddScoped<ISupplierRepository, SupplierRepository>();
         services.AddScoped<IStockReceiptRepository, StockReceiptRepository>();
         services.AddScoped<IBranchDeliveryConfigRepository, BranchDeliveryConfigRepository>();

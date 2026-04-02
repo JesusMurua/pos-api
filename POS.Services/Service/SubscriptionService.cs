@@ -1,3 +1,4 @@
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -26,7 +27,7 @@ public class SubscriptionService : ISubscriptionService
             return new SubscriptionStatusDto
             {
                 PlanType = "Free",
-                Status = "active",
+                Status = StripeSubscriptionStatus.Active,
                 PricingGroup = "General",
                 BillingCycle = "Monthly",
                 IsActive = true,
@@ -42,7 +43,8 @@ public class SubscriptionService : ISubscriptionService
             BillingCycle = subscription.BillingCycle,
             CurrentPeriodEnd = subscription.CurrentPeriodEnd,
             TrialEndsAt = subscription.TrialEndsAt,
-            IsActive = subscription.Status is "active" or "trialing"
+            IsActive = subscription.Status is StripeSubscriptionStatus.Active
+                or StripeSubscriptionStatus.Trialing
         };
     }
 }

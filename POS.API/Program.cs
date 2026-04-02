@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using POS.API.Middleware;
+using POS.API.Workers;
 using POS.Domain.Settings;
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 using POS.Repository;
 using POS.Repository.Dependencies;
 using POS.Services.Dependencies;
@@ -84,7 +86,8 @@ builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("S
 
 // Stripe Configuration
 builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
-Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
+var stripeSecretKey = builder.Configuration["Stripe:SecretKey"];
+builder.Services.AddSingleton<IStripeClient>(new StripeClient(stripeSecretKey));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -127,6 +130,9 @@ builder.Services.AddDataProtection()
 builder.Services.AddRepositoryDependencies(builder.Configuration);
 builder.Services.AddServiceDependencies();
 
+// Background workers
+builder.Services.AddHostedService<StripeEventProcessorWorker>();
+
 var app = builder.Build();
 
 // Apply pending migrations automatically on startup
@@ -143,6 +149,13 @@ using (var scope = app.Services.CreateScope())
         await DbInitializer.SeedTestDataAsync(db, encryptor);
     }
 }
+
+// Enable request body buffering for Stripe webhook signature verification
+app.Use((context, next) =>
+{
+    context.Request.EnableBuffering();
+    return next();
+});
 
 // Middleware order matters — exception handler first
 app.UseExceptionMiddleware();

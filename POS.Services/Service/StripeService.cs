@@ -1,4 +1,5 @@
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -13,10 +14,12 @@ namespace POS.Services.Service;
 public class StripeService : IStripeService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IStripeClient _stripeClient;
 
-    public StripeService(IUnitOfWork unitOfWork)
+    public StripeService(IUnitOfWork unitOfWork, IStripeClient stripeClient)
     {
         _unitOfWork = unitOfWork;
+        _stripeClient = stripeClient;
     }
 
     #region Public API Methods
@@ -57,7 +60,7 @@ public class StripeService : IStripeService
             }
         };
 
-        var service = new SessionService();
+        var service = new SessionService(_stripeClient);
         var session = await service.CreateAsync(options);
 
         return session.Url;
@@ -75,13 +78,13 @@ public class StripeService : IStripeService
         var subscription = await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId)
             ?? throw new NotFoundException($"No active subscription found for business {businessId}");
 
-        var service = new Stripe.SubscriptionService();
-        await service.UpdateAsync(subscription.StripeSubscriptionId, new SubscriptionUpdateOptions
+        var stripeSubService = new Stripe.SubscriptionService(_stripeClient);
+        await stripeSubService.UpdateAsync(subscription.StripeSubscriptionId, new SubscriptionUpdateOptions
         {
             CancelAtPeriodEnd = true
         });
 
-        subscription.Status = "canceled";
+        subscription.Status = StripeSubscriptionStatus.Canceled;
         subscription.CanceledAt = DateTime.UtcNow;
         _unitOfWork.Subscriptions.Update(subscription);
         await _unitOfWork.SaveChangesAsync();
@@ -97,7 +100,7 @@ public class StripeService : IStripeService
         if (existingSubscription != null)
             return existingSubscription.StripeCustomerId;
 
-        var customerService = new CustomerService();
+        var customerService = new CustomerService(_stripeClient);
         var customer = await customerService.CreateAsync(new CustomerCreateOptions
         {
             Name = business.Name,

@@ -30,6 +30,7 @@ public class UnitOfWork : IUnitOfWork
     private ICatalogRepository? _catalog;
     private IReservationRepository? _reservations;
     private ISubscriptionRepository? _subscriptions;
+    private IStripeEventInboxRepository? _stripeEventInbox;
     private ISupplierRepository? _suppliers;
     private IStockReceiptRepository? _stockReceipts;
     private IBranchDeliveryConfigRepository? _branchDeliveryConfigs;
@@ -104,6 +105,9 @@ public class UnitOfWork : IUnitOfWork
 
     public ISubscriptionRepository Subscriptions =>
         _subscriptions ??= new SubscriptionRepository(_context);
+
+    public IStripeEventInboxRepository StripeEventInbox =>
+        _stripeEventInbox ??= new StripeEventInboxRepository(_context);
 
     public ISupplierRepository Suppliers =>
         _suppliers ??= new SupplierRepository(_context);
