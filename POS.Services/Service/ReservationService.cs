@@ -144,9 +144,13 @@ public class ReservationService : IReservationService
 
     private async Task<Reservation> GetByIdAndBranchAsync(int id, int branchId)
     {
-        var reservation = await _unitOfWork.Reservations.GetByIdAsync(id);
+        var results = await _unitOfWork.Reservations.GetAsync(
+            r => r.Id == id && r.BranchId == branchId,
+            "Table,CreatedByUser");
 
-        if (reservation == null || reservation.BranchId != branchId)
+        var reservation = results.FirstOrDefault();
+
+        if (reservation == null)
             throw new NotFoundException($"Reservation with id {id} not found.");
 
         return reservation;
