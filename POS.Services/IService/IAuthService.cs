@@ -64,6 +64,7 @@ public class AuthResponse
     public string PlanType { get; set; } = null!;
     public string BusinessType { get; set; } = null!;
     public string? TrialEndsAt { get; set; }
+    public string? SubscriptionStatus { get; set; }
     public bool OnboardingCompleted { get; set; }
 }
 
