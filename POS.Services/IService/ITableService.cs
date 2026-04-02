@@ -43,5 +43,5 @@ public interface ITableService
     /// Returns enriched status for all active tables in a branch,
     /// combining table status with active order kitchen status.
     /// </summary>
-    Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId);
+    Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId, string? timezone = null);
 }

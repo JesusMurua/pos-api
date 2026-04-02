@@ -113,9 +113,9 @@ public class TableService : ITableService
     /// <summary>
     /// Returns enriched status for all active tables in a branch.
     /// </summary>
-    public async Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId)
+    public async Task<IEnumerable<TableStatusDto>> GetTableStatusesAsync(int branchId, string? timezone = null)
     {
-        var projections = await _unitOfWork.RestaurantTables.GetTableStatusProjectionsAsync(branchId);
+        var projections = await _unitOfWork.RestaurantTables.GetTableStatusProjectionsAsync(branchId, timezone);
 
         return projections.Select(p =>
         {

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
 
@@ -29,7 +30,7 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             .FirstOrDefaultAsync(t => t.Id == id);
     }
 
-    public async Task<IEnumerable<TableStatusProjection>> GetTableStatusProjectionsAsync(int branchId)
+    public async Task<IEnumerable<TableStatusProjection>> GetTableStatusProjectionsAsync(int branchId, string? timezone = null)
     {
         var tables = await _context.RestaurantTables
             .AsNoTracking()
@@ -48,7 +49,7 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             .GroupBy(o => o.TableId)
             .ToDictionary(g => g.Key!.Value, g => g.OrderByDescending(o => o.CreatedAt).First());
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = TimeZoneHelper.GetLocalToday(timezone);
         var todayReservations = await _context.Reservations
             .AsNoTracking()
             .Where(r => r.BranchId == branchId

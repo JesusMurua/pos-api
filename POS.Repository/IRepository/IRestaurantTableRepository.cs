@@ -11,5 +11,5 @@ public interface IRestaurantTableRepository : IGenericRepository<RestaurantTable
     /// <summary>
     /// Returns lightweight table + active order projections for floor map.
     /// </summary>
-    Task<IEnumerable<TableStatusProjection>> GetTableStatusProjectionsAsync(int branchId);
+    Task<IEnumerable<TableStatusProjection>> GetTableStatusProjectionsAsync(int branchId, string? timezone = null);
 }

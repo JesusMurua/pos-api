@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Extensions;
 using POS.Domain.Models;
 using POS.Services.IService;
 
@@ -46,7 +47,8 @@ public class TableController : BaseApiController
     [ProducesResponseType(typeof(IEnumerable<TableStatusDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTableStatuses()
     {
-        var statuses = await _tableService.GetTableStatusesAsync(BranchId);
+        var timezone = HttpContext.GetClientTimeZone();
+        var statuses = await _tableService.GetTableStatusesAsync(BranchId, timezone);
         return Ok(statuses);
     }
 
