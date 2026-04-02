@@ -260,6 +260,7 @@ public class OrderService : IOrderService
         order.Payments.Add(payment);
 
         RecalculatePaymentTotals(order);
+        order.IsPaid = order.PaidCents >= order.TotalCents;
 
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
@@ -284,6 +285,7 @@ public class OrderService : IOrderService
 
         order.Payments.Remove(payment);
         RecalculatePaymentTotals(order);
+        order.IsPaid = order.PaidCents >= order.TotalCents;
 
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
