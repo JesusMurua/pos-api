@@ -42,7 +42,8 @@ public class AuthService : IAuthService
         var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
-        var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays));
+        var planType = await ResolveActivePlanTypeAsync(user.BusinessId);
+        var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType);
 
         return new AuthResponse
         {
@@ -52,8 +53,8 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanType = business!.PlanType.ToString(),
-            BusinessType = business.BusinessType.ToString(),
+            PlanType = planType,
+            BusinessType = business!.BusinessType.ToString(),
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -82,7 +83,8 @@ public class AuthService : IAuthService
         var business = await _unitOfWork.Business.GetByIdAsync(matchedUser.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
-        var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours));
+        var planType = await ResolveActivePlanTypeAsync(matchedUser.BusinessId);
+        var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType);
 
         return new AuthResponse
         {
@@ -92,8 +94,8 @@ public class AuthService : IAuthService
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanType = business!.PlanType.ToString(),
-            BusinessType = business.BusinessType.ToString(),
+            PlanType = planType,
+            BusinessType = business!.BusinessType.ToString(),
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -131,7 +133,8 @@ public class AuthService : IAuthService
             ? TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays)
             : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
 
-        var token = GenerateToken(user, business!, branchId, branches, expiration);
+        var planType = await ResolveActivePlanTypeAsync(user.BusinessId);
+        var token = GenerateToken(user, business!, branchId, branches, expiration, planType);
 
         return new AuthResponse
         {
@@ -141,8 +144,8 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
             Branches = branches,
-            PlanType = business!.PlanType.ToString(),
-            BusinessType = business.BusinessType.ToString(),
+            PlanType = planType,
+            BusinessType = business!.BusinessType.ToString(),
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -220,7 +223,7 @@ public class AuthService : IAuthService
 
         // Generate JWT
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays));
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), "Free");
 
         return new AuthResponse
         {
@@ -276,7 +279,13 @@ public class AuthService : IAuthService
         throw new ValidationException("User has no assigned branch");
     }
 
-    private string GenerateToken(User user, Business business, int branchId, List<BranchSummary> branches, TimeSpan expiration)
+    private async Task<string> ResolveActivePlanTypeAsync(int businessId)
+    {
+        var subscription = await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
+        return subscription != null ? subscription.PlanType : "Free";
+    }
+
+    private string GenerateToken(User user, Business business, int branchId, List<BranchSummary> branches, TimeSpan expiration, string planType)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -292,7 +301,7 @@ public class AuthService : IAuthService
             new("businessId", user.BusinessId.ToString()),
             new("branchId", branchId.ToString()),
             new("branches", branchesJson),
-            new("planType", business.PlanType.ToString()),
+            new("planType", planType),
             new("businessType", business.BusinessType.ToString()),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
             new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower())
