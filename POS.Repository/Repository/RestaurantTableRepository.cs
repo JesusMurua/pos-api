@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
 
@@ -47,9 +48,24 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             .GroupBy(o => o.TableId)
             .ToDictionary(g => g.Key!.Value, g => g.OrderByDescending(o => o.CreatedAt).First());
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var todayReservations = await _context.Reservations
+            .AsNoTracking()
+            .Where(r => r.BranchId == branchId
+                && r.ReservationDate == today
+                && r.TableId != null
+                && (r.Status == ReservationStatus.Confirmed || r.Status == ReservationStatus.Pending))
+            .Select(r => new { r.TableId, r.GuestName, r.ReservationTime })
+            .ToListAsync();
+
+        var reservationByTable = todayReservations
+            .GroupBy(r => r.TableId)
+            .ToDictionary(g => g.Key!.Value, g => g.OrderBy(r => r.ReservationTime).First());
+
         return tables.Select(t =>
         {
             var hasOrder = orderByTable.TryGetValue(t.Id, out var order);
+            var hasReservation = reservationByTable.TryGetValue(t.Id, out var reservation);
             return new TableStatusProjection
             {
                 TableId = t.Id,
@@ -59,7 +75,9 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
                 OrderId = hasOrder ? order!.Id : null,
                 OrderTotalCents = hasOrder ? order!.TotalCents : null,
                 OrderKitchenStatus = hasOrder ? order!.KitchenStatus : null,
-                OrderCreatedAt = hasOrder ? order!.CreatedAt : null
+                OrderCreatedAt = hasOrder ? order!.CreatedAt : null,
+                ReservationGuestName = hasReservation ? reservation!.GuestName : null,
+                ReservationTime = hasReservation ? reservation!.ReservationTime : null
             };
         });
     }

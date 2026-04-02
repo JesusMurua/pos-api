@@ -117,19 +117,28 @@ public class TableService : ITableService
     {
         var projections = await _unitOfWork.RestaurantTables.GetTableStatusProjectionsAsync(branchId);
 
-        return projections.Select(p => new TableStatusDto
+        return projections.Select(p =>
         {
-            TableId = p.TableId,
-            TableName = p.TableName,
-            ZoneId = p.ZoneId,
-            ZoneName = p.ZoneName,
-            DisplayStatus = p.OrderKitchenStatus.HasValue
-                ? MapKitchenToDisplay(p.OrderKitchenStatus.Value)
-                : "free",
-            OrderTotalCents = p.OrderTotalCents,
-            OrderId = p.OrderId,
-            GuestName = null,
-            ReservationTime = null
+            string displayStatus;
+            if (p.OrderKitchenStatus.HasValue)
+                displayStatus = MapKitchenToDisplay(p.OrderKitchenStatus.Value);
+            else if (p.ReservationGuestName != null)
+                displayStatus = "reserved";
+            else
+                displayStatus = "free";
+
+            return new TableStatusDto
+            {
+                TableId = p.TableId,
+                TableName = p.TableName,
+                ZoneId = p.ZoneId,
+                ZoneName = p.ZoneName,
+                DisplayStatus = displayStatus,
+                OrderTotalCents = p.OrderTotalCents,
+                OrderId = p.OrderId,
+                GuestName = p.ReservationGuestName,
+                ReservationTime = p.ReservationTime?.ToString("HH:mm")
+            };
         });
     }
 

@@ -15,4 +15,6 @@ public class TableStatusProjection
     public int? OrderTotalCents { get; set; }
     public KitchenStatus? OrderKitchenStatus { get; set; }
     public DateTime? OrderCreatedAt { get; set; }
+    public string? ReservationGuestName { get; set; }
+    public TimeOnly? ReservationTime { get; set; }
 }
