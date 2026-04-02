@@ -100,6 +100,8 @@ public class OrderService : IOrderService
                         _unitOfWork.RestaurantTables.Update(table);
                         await _unitOfWork.SaveChangesAsync();
                     }
+
+                    await AutoSeatReservationAsync(order.TableId.Value, order.BranchId);
                 }
 
                 _ = Task.Run(async () =>
@@ -771,6 +773,24 @@ public class OrderService : IOrderService
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
         if (order.TotalCents < 0) order.TotalCents = 0;
+    }
+
+    private async Task AutoSeatReservationAsync(int tableId, int branchId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var reservations = await _unitOfWork.Reservations.GetAsync(
+            r => r.TableId == tableId
+                && r.BranchId == branchId
+                && r.ReservationDate == today
+                && r.Status == ReservationStatus.Confirmed);
+
+        var reservation = reservations.FirstOrDefault();
+        if (reservation != null)
+        {
+            reservation.Status = ReservationStatus.Seated;
+            _unitOfWork.Reservations.Update(reservation);
+            await _unitOfWork.SaveChangesAsync();
+        }
     }
 
     private static void RecalculatePaymentTotals(Order order)

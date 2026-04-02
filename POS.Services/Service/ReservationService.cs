@@ -124,7 +124,7 @@ public class ReservationService : IReservationService
             var table = await _unitOfWork.RestaurantTables.GetByIdAsync(reservation.TableId.Value);
             if (table != null)
             {
-                table.Status = "in_kitchen";
+                table.Status = "occupied";
                 _unitOfWork.RestaurantTables.Update(table);
             }
         }
