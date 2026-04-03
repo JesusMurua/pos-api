@@ -36,6 +36,8 @@ public class SyncOrderRequest
     [MaxLength(50)]
     public string? TableName { get; set; }
 
+    public int? CashRegisterSessionId { get; set; }
+
     public List<SyncOrderItemRequest> Items { get; set; } = new();
 
     public List<SyncPaymentRequest> Payments { get; set; } = new();

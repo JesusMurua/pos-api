@@ -312,6 +312,12 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(o => o.UserId)
                 .IsRequired(false);
 
+            entity.HasOne(o => o.CashRegisterSession)
+                .WithMany(s => s.Orders)
+                .HasForeignKey(o => o.CashRegisterSessionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasMany(o => o.Items)
                 .WithOne(i => i.Order)
                 .HasForeignKey(i => i.OrderId)
@@ -324,6 +330,7 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
             entity.HasIndex(o => o.SyncStatus);
+            entity.HasIndex(o => o.CashRegisterSessionId);
 
             entity.Property<uint>("xmin")
                 .HasColumnType("xid")

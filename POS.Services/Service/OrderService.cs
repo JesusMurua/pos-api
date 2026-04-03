@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -33,7 +34,7 @@ public class OrderService : IOrderService
     /// Fetches existing orders in a single query, classifies into inserts/updates,
     /// and persists with a single SaveChangesAsync to prevent N+1 connection exhaustion.
     /// </summary>
-    public async Task<SyncResult> SyncOrdersAsync(IEnumerable<SyncOrderRequest> orders)
+    public async Task<SyncResult> SyncOrdersAsync(IEnumerable<SyncOrderRequest> orders, int branchId)
     {
         var result = new SyncResult();
         var requests = orders.ToList();
@@ -44,6 +45,24 @@ public class OrderService : IOrderService
         var existingOrders = (await _unitOfWork.Orders.GetAsync(
             o => requestIds.Contains(o.Id), "Items,Payments"))
             .ToDictionary(o => o.Id);
+
+        // ── Phase 1b: Validate cash register session ──
+        if (requests.Any(r => !r.CashRegisterSessionId.HasValue))
+            throw new ValidationException(
+                "CASH_SESSION_REQUIRED: Se requiere un turno de caja abierto para procesar órdenes locales.");
+
+        var distinctSessionIds = requests
+            .Select(r => r.CashRegisterSessionId!.Value)
+            .Distinct()
+            .ToList();
+
+        foreach (var sessionId in distinctSessionIds)
+        {
+            var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(sessionId);
+            if (session == null || session.BranchId != branchId || session.Status != CashRegisterStatus.Open)
+                throw new ValidationException(
+                    "CASH_SESSION_CLOSED: Se requiere un turno de caja abierto para procesar órdenes locales.");
+        }
 
         // ── Phase 2: Classify into inserts vs updates ──
         var ordersToInsert = new List<Order>();
@@ -68,6 +87,7 @@ public class OrderService : IOrderService
                     existingOrder.KitchenStatus = ParseKitchenStatus(request.KitchenStatus);
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
+                    existingOrder.CashRegisterSessionId = request.CashRegisterSessionId;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
                     existingOrder.Items?.Clear();
@@ -313,9 +333,9 @@ public class OrderService : IOrderService
                     var usages = new List<PromotionUsage>();
                     var recordedPerOrder = new Dictionary<string, HashSet<int>>();
 
-                    foreach (var (promoId, branchId, orderId) in promoOrderPairs)
+                    foreach (var (promoId, promoBranchId, orderId) in promoOrderPairs)
                     {
-                        if (!promotions.TryGetValue(promoId, out var promo) || promo.BranchId != branchId)
+                        if (!promotions.TryGetValue(promoId, out var promo) || promo.BranchId != promoBranchId)
                         {
                             var order = ordersToInsert.First(o => o.Id == orderId);
                             if (order.OrderPromotionId == promoId)
@@ -339,7 +359,7 @@ public class OrderService : IOrderService
                             usages.Add(new PromotionUsage
                             {
                                 PromotionId = promoId,
-                                BranchId = branchId,
+                                BranchId = promoBranchId,
                                 OrderId = orderId,
                                 UsedAt = DateTime.UtcNow
                             });
@@ -939,6 +959,7 @@ public class OrderService : IOrderService
             KitchenStatus = ParseKitchenStatus(request.KitchenStatus),
             TableId = request.TableId,
             TableName = request.TableName,
+            CashRegisterSessionId = request.CashRegisterSessionId,
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
             Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
         };

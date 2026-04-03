@@ -77,11 +77,15 @@ public partial class Order
     [MaxLength(50)]
     public string? TableName { get; set; }
 
+    public int? CashRegisterSessionId { get; set; }
+
     public virtual Branch? Branch { get; set; }
 
     public virtual User? User { get; set; }
 
     public virtual RestaurantTable? Table { get; set; }
+
+    public virtual CashRegisterSession? CashRegisterSession { get; set; }
 
     public virtual ICollection<OrderItem>? Items { get; set; }
 

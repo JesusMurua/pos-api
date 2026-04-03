@@ -34,7 +34,7 @@ public class OrdersController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var result = await _orderService.SyncOrdersAsync(orders);
+        var result = await _orderService.SyncOrdersAsync(orders, BranchId);
         return Ok(result);
     }
 

@@ -52,4 +52,6 @@ public class CashRegisterSession
     public virtual Branch? Branch { get; set; }
 
     public virtual ICollection<CashMovement>? Movements { get; set; }
+
+    public virtual ICollection<Order>? Orders { get; set; }
 }
