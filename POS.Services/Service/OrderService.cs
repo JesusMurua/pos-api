@@ -12,15 +12,18 @@ public class OrderService : IOrderService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPushNotificationService _pushService;
     private readonly IPromotionService _promotionService;
+    private readonly IInventoryService _inventoryService;
 
     public OrderService(
         IUnitOfWork unitOfWork,
         IPushNotificationService pushService,
-        IPromotionService promotionService)
+        IPromotionService promotionService,
+        IInventoryService inventoryService)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
         _promotionService = promotionService;
+        _inventoryService = inventoryService;
     }
 
     #region Public API Methods
@@ -188,7 +191,11 @@ public class OrderService : IOrderService
             await _unitOfWork.SaveChangesAsync();
         }
 
-        // ── Phase 6: Batch promotion usage recording ──
+        // ── Phase 6: Batch inventory deduction ──
+        if (ordersToInsert.Count > 0)
+            await _inventoryService.DeductFromOrdersBatchAsync(ordersToInsert);
+
+        // ── Phase 7: Batch promotion usage recording ──
         if (ordersToInsert.Count > 0)
         {
             try
@@ -259,7 +266,7 @@ public class OrderService : IOrderService
             catch { /* best-effort */ }
         }
 
-        // ── Phase 7: Push notifications (fire-and-forget, no DB) ──
+        // ── Phase 8: Push notifications (fire-and-forget, no DB) ──
         foreach (var order in ordersToInsert)
         {
             _ = Task.Run(async () =>

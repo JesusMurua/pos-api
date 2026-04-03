@@ -75,6 +75,12 @@ public interface IInventoryService
     Task DeductFromSaleAsync(string orderId, List<SaleItem> items);
 
     /// <summary>
+    /// Batch deducts inventory for multiple orders. Best-effort — never throws.
+    /// All DB lookups are batched (no N+1), movements are bulk-inserted.
+    /// </summary>
+    Task DeductFromOrdersBatchAsync(List<Order> orders);
+
+    /// <summary>
     /// Gets product IDs whose inventory items have zero or negative stock.
     /// </summary>
     Task<IEnumerable<int>> GetOutOfStockProductIdsAsync(int branchId);

@@ -224,69 +224,51 @@ public class InventoryService : IInventoryService
 
     /// <summary>
     /// Deducts inventory based on products sold. Best-effort — never throws.
-    /// Supports both TrackStock products (direct) and ProductConsumption (recipe-based).
+    /// All DB lookups are batched — zero queries inside loops.
     /// </summary>
     public async Task DeductFromSaleAsync(string orderId, List<SaleItem> items)
     {
-        foreach (var item in items)
+        try
         {
-            try
-            {
-                var product = await _unitOfWork.Products.GetByIdAsync(item.ProductId);
+            var orderItems = items
+                .Select(i => (OrderId: orderId, i.ProductId, Quantity: (decimal)i.Quantity))
+                .ToList();
 
-                if (product != null && product.TrackStock)
-                {
-                    // Direct stock tracking (abarrotes/papelería)
-                    product.CurrentStock -= item.Quantity;
-                    if (product.CurrentStock < 0) product.CurrentStock = 0;
-
-                    if (product.CurrentStock <= product.LowStockThreshold)
-                        product.IsAvailable = false;
-
-                    _unitOfWork.Products.Update(product);
-
-                    var movement = new InventoryMovement
-                    {
-                        ProductId = item.ProductId,
-                        Type = "out",
-                        Quantity = item.Quantity,
-                        Reason = $"Venta orden {orderId}",
-                        OrderId = orderId,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _unitOfWork.InventoryMovements.AddAsync(movement);
-                }
-                else
-                {
-                    // Recipe-based consumption (restaurante/fonda)
-                    var consumptions = await _unitOfWork.ProductConsumptions
-                        .GetByProductAsync(item.ProductId);
-
-                    foreach (var consumption in consumptions)
-                    {
-                        var quantityToDeduct = consumption.QuantityPerSale * item.Quantity;
-                        await AddMovementAsync(
-                            consumption.InventoryItemId,
-                            "out",
-                            quantityToDeduct,
-                            $"Venta orden {orderId}",
-                            orderId);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to deduct inventory for ProductId {ProductId} on Order {OrderId}",
-                    item.ProductId, orderId);
-            }
+            await DeductBatchCoreAsync(orderItems);
         }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to deduct inventory for Order {OrderId}", orderId);
+        }
+    }
 
-        await _unitOfWork.SaveChangesAsync();
+    /// <summary>
+    /// Batch deducts inventory for multiple orders. Best-effort — never throws.
+    /// All DB lookups are batched (no N+1), movements are bulk-inserted.
+    /// </summary>
+    public async Task DeductFromOrdersBatchAsync(List<Order> orders)
+    {
+        try
+        {
+            var orderItems = orders
+                .Where(o => o.Items != null)
+                .SelectMany(o => o.Items!.Select(i =>
+                    (OrderId: o.Id, i.ProductId, Quantity: (decimal)i.Quantity)))
+                .ToList();
+
+            if (orderItems.Count == 0) return;
+
+            await DeductBatchCoreAsync(orderItems);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to batch deduct inventory for {Count} orders", orders.Count);
+        }
     }
 
     /// <summary>
     /// Gets product IDs whose inventory items have zero or negative stock.
+    /// Batch query — no N+1.
     /// </summary>
     public async Task<IEnumerable<int>> GetOutOfStockProductIdsAsync(int branchId)
     {
@@ -296,18 +278,13 @@ public class InventoryService : IInventoryService
             .Select(i => i.Id)
             .ToList();
 
-        var productIds = new HashSet<int>();
-        foreach (var itemId in outOfStockItemIds)
-        {
-            var consumptions = await _unitOfWork.ProductConsumptions
-                .GetAsync(pc => pc.InventoryItemId == itemId);
-            foreach (var pc in consumptions)
-            {
-                productIds.Add(pc.ProductId);
-            }
-        }
+        if (outOfStockItemIds.Count == 0)
+            return Enumerable.Empty<int>();
 
-        return productIds;
+        var consumptions = await _unitOfWork.ProductConsumptions
+            .GetAsync(pc => outOfStockItemIds.Contains(pc.InventoryItemId));
+
+        return consumptions.Select(pc => pc.ProductId).Distinct();
     }
 
     /// <summary>
@@ -319,6 +296,126 @@ public class InventoryService : IInventoryService
             m => m.ProductId == productId);
 
         return movements.OrderByDescending(m => m.CreatedAt);
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Core batch deduction logic. Zero DB queries inside loops.
+    /// 1) Batch fetch products → separate TrackStock vs recipe
+    /// 2) Batch fetch consumptions + inventory items
+    /// 3) Calculate all deductions in memory
+    /// 4) AddRangeAsync movements + single SaveChangesAsync
+    /// </summary>
+    private async Task DeductBatchCoreAsync(List<(string OrderId, int ProductId, decimal Quantity)> orderItems)
+    {
+        // 1. Batch fetch all products referenced in the sale
+        var productIds = orderItems.Select(i => i.ProductId).Distinct().ToList();
+        var products = (await _unitOfWork.Products.GetAsync(p => productIds.Contains(p.Id)))
+            .ToDictionary(p => p.Id);
+
+        // 2. Separate TrackStock (direct deduction) vs recipe-based products
+        var trackStockProductIds = products.Values
+            .Where(p => p.TrackStock)
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        var recipeProductIds = productIds
+            .Where(id => !trackStockProductIds.Contains(id))
+            .ToList();
+
+        // 3. Batch fetch all ProductConsumption rules for recipe products (1 query)
+        var consumptions = recipeProductIds.Count > 0
+            ? (await _unitOfWork.ProductConsumptions
+                .GetAsync(pc => recipeProductIds.Contains(pc.ProductId)))
+                .ToList()
+            : new List<ProductConsumption>();
+
+        // 4. Batch fetch all InventoryItems that will be affected (1 query)
+        var inventoryItemIds = consumptions
+            .Select(c => c.InventoryItemId)
+            .Distinct()
+            .ToList();
+
+        var inventoryItems = inventoryItemIds.Count > 0
+            ? (await _unitOfWork.Inventory.GetAsync(i => inventoryItemIds.Contains(i.Id)))
+                .ToDictionary(i => i.Id)
+            : new Dictionary<int, InventoryItem>();
+
+        // Group consumptions by ProductId for fast lookup
+        var consumptionsByProduct = consumptions
+            .GroupBy(c => c.ProductId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // 5. Calculate all deductions in memory — no DB calls
+        var movements = new List<InventoryMovement>();
+
+        foreach (var (orderId, productId, quantity) in orderItems)
+        {
+            if (!products.TryGetValue(productId, out var product))
+                continue;
+
+            if (product.TrackStock)
+            {
+                // Path A: Direct stock deduction (abarrotes/papelería)
+                product.CurrentStock -= quantity;
+
+                if (product.CurrentStock <= product.LowStockThreshold)
+                    product.IsAvailable = false;
+
+                _unitOfWork.Products.Update(product);
+
+                movements.Add(new InventoryMovement
+                {
+                    ProductId = productId,
+                    Type = "out",
+                    Quantity = quantity,
+                    Reason = $"Venta orden {orderId}",
+                    OrderId = orderId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                // Path B: Recipe-based consumption (restaurante/fonda)
+                if (!consumptionsByProduct.TryGetValue(productId, out var productConsumptions))
+                    continue; // No recipe mapped — skip gracefully
+
+                foreach (var consumption in productConsumptions)
+                {
+                    if (!inventoryItems.TryGetValue(consumption.InventoryItemId, out var invItem))
+                        continue;
+
+                    var quantityToDeduct = consumption.QuantityPerSale * quantity;
+                    invItem.CurrentStock -= quantityToDeduct;
+
+                    if (invItem.CurrentStock <= invItem.LowStockThreshold)
+                        _logger.LogWarning(
+                            "Low stock alert: {ItemName} ({ItemId}) stock is {Stock}",
+                            invItem.Name, invItem.Id, invItem.CurrentStock);
+
+                    _unitOfWork.Inventory.Update(invItem);
+
+                    movements.Add(new InventoryMovement
+                    {
+                        InventoryItemId = consumption.InventoryItemId,
+                        Type = "out",
+                        Quantity = quantityToDeduct,
+                        Reason = $"Venta orden {orderId}",
+                        OrderId = orderId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+
+        // 6. Bulk insert all movements + single save
+        if (movements.Count > 0)
+            await _unitOfWork.InventoryMovements.AddRangeAsync(movements);
+
+        await _unitOfWork.SaveChangesAsync();
     }
 
     #endregion
