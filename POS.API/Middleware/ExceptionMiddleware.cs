@@ -31,6 +31,11 @@ public class ExceptionMiddleware
             _logger.LogWarning(ex, "Validation error: {Message}", ex.Message);
             await WriteErrorResponse(context, HttpStatusCode.BadRequest, "ValidationError", ex.Message);
         }
+        catch (ConcurrencyConflictException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict: {Message}", ex.Message);
+            await WriteErrorResponse(context, HttpStatusCode.Conflict, "ConcurrencyConflict", ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception: {Message}", ex.Message);

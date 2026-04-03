@@ -47,6 +47,7 @@ public class OrderService : IOrderService
 
         // ── Phase 2: Classify into inserts vs updates ──
         var ordersToInsert = new List<Order>();
+        var updatedOrdersWithNewTables = new List<Order>();
         var failedRequests = new List<SyncOrderRequest>();
 
         foreach (var request in requests)
@@ -55,6 +56,8 @@ public class OrderService : IOrderService
             {
                 if (existingOrders.TryGetValue(request.Id, out var existingOrder))
                 {
+                    var isNewTableAssignment = request.TableId.HasValue && existingOrder.TableId == null;
+
                     existingOrder.TotalCents = request.TotalCents;
                     existingOrder.SubtotalCents = request.SubtotalCents;
                     existingOrder.OrderDiscountCents = request.OrderDiscountCents;
@@ -80,6 +83,10 @@ public class OrderService : IOrderService
 
                     RecalculatePaymentTotals(existingOrder);
                     _unitOfWork.Orders.Update(existingOrder);
+
+                    if (isNewTableAssignment)
+                        updatedOrdersWithNewTables.Add(existingOrder);
+
                     result.Updated++;
                 }
                 else
@@ -101,23 +108,77 @@ public class OrderService : IOrderService
             }
         }
 
+        // ── Phase 2b: Validate Counter→Restaurant table assignments ──
+        if (updatedOrdersWithNewTables.Count > 0)
+        {
+            var assignTableIds = updatedOrdersWithNewTables
+                .Select(o => o.TableId!.Value).Distinct().ToList();
+
+            var tablesToOccupy = (await _unitOfWork.RestaurantTables.GetAsync(
+                t => assignTableIds.Contains(t.Id))).ToDictionary(t => t.Id);
+
+            foreach (var order in updatedOrdersWithNewTables)
+            {
+                if (!tablesToOccupy.TryGetValue(order.TableId!.Value, out var table))
+                    continue;
+
+                if (table.BranchId != order.BranchId)
+                    throw new ValidationException($"Table '{table.Name}' does not belong to this branch.");
+
+                if (!table.IsActive)
+                    throw new ValidationException($"Table '{table.Name}' is not active.");
+
+                if (table.Status == "occupied")
+                    throw new ConcurrencyConflictException(
+                        $"Table '{table.Name}' is already occupied by another order.");
+
+                table.Status = "occupied";
+                _unitOfWork.RestaurantTables.Update(table);
+            }
+        }
+
         // ── Phase 3: Batch persist — single SaveChangesAsync ──
         if (ordersToInsert.Count > 0)
             await _unitOfWork.Orders.AddRangeAsync(ordersToInsert);
 
-        try
+        if (updatedOrdersWithNewTables.Count > 0)
         {
-            await _unitOfWork.SaveChangesAsync();
+            // Explicit transaction: order TableId + table Status must be atomic
+            await using var syncTransaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConcurrencyConflictException(
+                    "A table or order was modified by another user. Please refresh and try again.");
+            }
+            catch
+            {
+                result.Synced = 0;
+                result.Updated = 0;
+                result.Failed = requests.Count;
+                return result;
+            }
+            await syncTransaction.CommitAsync();
         }
-        catch
+        else
         {
-            // DbContext is tainted — tracked entities have stale Added/Modified state.
-            // Re-adding Failed orders with the same IDs would throw InvalidOperationException.
-            // Abandon this context entirely.
-            result.Synced = 0;
-            result.Updated = 0;
-            result.Failed = requests.Count;
-            return result;
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch
+            {
+                // DbContext is tainted — tracked entities have stale Added/Modified state.
+                // Re-adding Failed orders with the same IDs would throw InvalidOperationException.
+                // Abandon this context entirely.
+                result.Synced = 0;
+                result.Updated = 0;
+                result.Failed = requests.Count;
+                return result;
+            }
         }
 
         // ── Phase 4: Save failed mapping orders (separate from main batch) ──
@@ -189,6 +250,34 @@ public class OrderService : IOrderService
             }
 
             await _unitOfWork.SaveChangesAsync();
+        }
+
+        // ── Phase 5b: Auto-seat reservations for Counter→Restaurant transitions ──
+        if (updatedOrdersWithNewTables.Count > 0)
+        {
+            var assignedTableIds = updatedOrdersWithNewTables
+                .Select(o => o.TableId!.Value).Distinct().ToList();
+            var assignBranchIds = updatedOrdersWithNewTables
+                .Select(o => o.BranchId).Distinct().ToList();
+            var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var seatedReservations = (await _unitOfWork.Reservations.GetAsync(
+                r => assignedTableIds.Contains(r.TableId!.Value)
+                    && assignBranchIds.Contains(r.BranchId)
+                    && r.ReservationDate == todayUtc
+                    && r.Status == ReservationStatus.Confirmed))
+                .ToList();
+
+            if (seatedReservations.Count > 0)
+            {
+                foreach (var reservation in seatedReservations)
+                {
+                    reservation.Status = ReservationStatus.Seated;
+                    _unitOfWork.Reservations.Update(reservation);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+            }
         }
 
         // ── Phase 6: Batch inventory deduction ──
