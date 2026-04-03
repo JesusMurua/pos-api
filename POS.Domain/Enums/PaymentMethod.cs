@@ -5,5 +5,11 @@ public enum PaymentMethod
     Cash,
     Card,
     Transfer,
-    Other
+    Other,
+    /// <summary>Payment processed via Clip physical terminal.</summary>
+    Clip,
+    /// <summary>Payment processed via MercadoPago QR or checkout.</summary>
+    MercadoPago,
+    /// <summary>Payment processed via a generic bank terminal (non-Clip).</summary>
+    BankTerminal
 }

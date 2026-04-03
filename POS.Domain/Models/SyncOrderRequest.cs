@@ -78,4 +78,19 @@ public class SyncPaymentRequest
 
     [MaxLength(50)]
     public string? Reference { get; set; }
+
+    /// <summary>External provider name: "Clip", "MercadoPago", or null for manual payments.</summary>
+    [MaxLength(30)]
+    public string? PaymentProvider { get; set; }
+
+    /// <summary>Transaction ID from the external provider.</summary>
+    [MaxLength(100)]
+    public string? ExternalTransactionId { get; set; }
+
+    /// <summary>JSON string with provider-specific data.</summary>
+    public string? PaymentMetadata { get; set; }
+
+    /// <summary>Internal tracking ID for the terminal operation.</summary>
+    [MaxLength(100)]
+    public string? OperationId { get; set; }
 }

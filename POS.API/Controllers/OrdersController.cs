@@ -221,7 +221,11 @@ public class OrdersController : BaseApiController
         {
             Method = method,
             AmountCents = request.AmountCents,
-            Reference = request.Reference
+            Reference = request.Reference,
+            PaymentProvider = request.PaymentProvider,
+            ExternalTransactionId = request.ExternalTransactionId,
+            PaymentMetadata = request.PaymentMetadata,
+            OperationId = request.OperationId
         };
 
         await _orderService.AddPaymentAsync(id, BranchId, payment);
@@ -366,4 +370,19 @@ public class AddPaymentRequest
 
     [System.ComponentModel.DataAnnotations.MaxLength(50)]
     public string? Reference { get; set; }
+
+    /// <summary>External provider name: "Clip", "MercadoPago", or null for manual payments.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(30)]
+    public string? PaymentProvider { get; set; }
+
+    /// <summary>Transaction ID from the external provider.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string? ExternalTransactionId { get; set; }
+
+    /// <summary>JSON string with provider-specific data.</summary>
+    public string? PaymentMetadata { get; set; }
+
+    /// <summary>Internal tracking ID for the terminal operation.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string? OperationId { get; set; }
 }

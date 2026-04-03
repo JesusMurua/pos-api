@@ -18,6 +18,21 @@ public class OrderPayment
     [MaxLength(50)]
     public string? Reference { get; set; }
 
+    /// <summary>External provider name: "Clip", "MercadoPago", or null for manual payments.</summary>
+    [MaxLength(30)]
+    public string? PaymentProvider { get; set; }
+
+    /// <summary>Transaction ID from the external provider (e.g., Clip transaction reference).</summary>
+    [MaxLength(100)]
+    public string? ExternalTransactionId { get; set; }
+
+    /// <summary>JSON string with provider-specific data (terminal ID, receipt URL, etc.).</summary>
+    public string? PaymentMetadata { get; set; }
+
+    /// <summary>Internal tracking ID for the terminal operation, assigned by the POS.</summary>
+    [MaxLength(100)]
+    public string? OperationId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Order Order { get; set; } = null!;

@@ -1000,7 +1000,10 @@ public class OrderService : IOrderService
             Payments = o.Payments?.Select(p => new OrderPullPaymentDto
             {
                 Method = p.Method.ToString(),
-                AmountCents = p.AmountCents
+                AmountCents = p.AmountCents,
+                PaymentProvider = p.PaymentProvider,
+                ExternalTransactionId = p.ExternalTransactionId,
+                OperationId = p.OperationId
             }).ToList() ?? new()
         };
     }
@@ -1067,6 +1070,10 @@ public class OrderService : IOrderService
             Method = method,
             AmountCents = p.AmountCents,
             Reference = p.Reference,
+            PaymentProvider = p.PaymentProvider,
+            ExternalTransactionId = p.ExternalTransactionId,
+            PaymentMetadata = p.PaymentMetadata,
+            OperationId = p.OperationId,
             CreatedAt = DateTime.UtcNow
         };
     }

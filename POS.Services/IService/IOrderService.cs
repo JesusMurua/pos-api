@@ -181,4 +181,10 @@ public class OrderPullPaymentDto
 {
     public string Method { get; set; } = null!;
     public int AmountCents { get; set; }
+    /// <summary>External provider name, or null for manual payments.</summary>
+    public string? PaymentProvider { get; set; }
+    /// <summary>Transaction ID from the external provider.</summary>
+    public string? ExternalTransactionId { get; set; }
+    /// <summary>Internal tracking ID for the terminal operation.</summary>
+    public string? OperationId { get; set; }
 }
