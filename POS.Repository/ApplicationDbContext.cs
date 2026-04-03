@@ -44,6 +44,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<CashRegisterSession>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 
@@ -383,6 +389,16 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(s => new { s.BranchId, s.Status });
             entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
+
+            // Only one open session per branch at any time
+            entity.HasIndex(s => s.BranchId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'open'");
+
+            entity.Property<uint>("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
         });
 
         #endregion

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
 
@@ -13,7 +14,7 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
     public async Task<CashRegisterSession?> GetOpenSessionAsync(int branchId)
     {
         return await _context.CashRegisterSessions
-            .Where(s => s.BranchId == branchId && s.Status == "open")
+            .Where(s => s.BranchId == branchId && s.Status == CashRegisterStatus.Open)
             .Include(s => s.Movements)
             .FirstOrDefaultAsync();
     }

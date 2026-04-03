@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Helpers;
 
 namespace POS.Domain.Models;
 
@@ -23,12 +24,30 @@ public class CashRegisterSession
 
     public int? CountedAmountCents { get; set; }
 
+    /// <summary>Sum of cash payments from orders during the session.</summary>
+    public int? CashSalesCents { get; set; }
+
+    /// <summary>Sum of "in" cash movements.</summary>
+    public int? TotalCashInCents { get; set; }
+
+    /// <summary>Sum of "out" cash movements.</summary>
+    public int? TotalCashOutCents { get; set; }
+
+    /// <summary>InitialAmountCents + CashSalesCents + TotalCashInCents - TotalCashOutCents.</summary>
+    public int? ExpectedAmountCents { get; set; }
+
+    /// <summary>CountedAmountCents - ExpectedAmountCents (positive = surplus, negative = shortage).</summary>
+    public int? DifferenceCents { get; set; }
+
     [MaxLength(500)]
     public string? Notes { get; set; }
 
     [Required]
     [MaxLength(20)]
-    public string Status { get; set; } = "open";
+    public string Status { get; set; } = CashRegisterStatus.Open;
+
+    /// <summary>Bumped on every mutation to trigger xmin concurrency token update.</summary>
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Branch? Branch { get; set; }
 
