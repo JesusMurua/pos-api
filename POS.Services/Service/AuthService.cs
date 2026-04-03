@@ -179,6 +179,13 @@ public class AuthService : IAuthService
         if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var businessType))
             businessType = BusinessType.General;
 
+        if (!Enum.TryParse<PlanType>(request.PlanType, true, out var planType))
+            planType = PlanType.Free;
+
+        // Paid plans get a 14-day trial; Free plan has no trial
+        var isPaidPlan = planType is PlanType.Basic or PlanType.Pro or PlanType.Enterprise;
+        DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
+
         var hasKitchen = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar or BusinessType.FoodTruck;
         var hasTables = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar;
 
@@ -187,8 +194,8 @@ public class AuthService : IAuthService
         {
             Name = request.BusinessName,
             BusinessType = businessType,
-            PlanType = PlanType.Free,
-            TrialEndsAt = DateTime.UtcNow.AddMonths(3),
+            PlanType = planType,
+            TrialEndsAt = trialEndsAt,
             TrialUsed = false,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -277,7 +284,7 @@ public class AuthService : IAuthService
 
         // Generate JWT
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), "Free");
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType.ToString());
 
         // Fire-and-forget: welcome email — never blocks the response
         _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);

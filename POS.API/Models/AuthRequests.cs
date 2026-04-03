@@ -55,4 +55,6 @@ public class RegisterApiRequest
     public string Password { get; set; } = null!;
 
     public string? BusinessType { get; set; }
+
+    public string? PlanType { get; set; }
 }

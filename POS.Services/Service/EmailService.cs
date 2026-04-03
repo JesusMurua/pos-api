@@ -59,18 +59,22 @@ public class EmailService : IEmailService
             else
             {
                 var body = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning(
-                    "Failed to send welcome email to {Email}. Status: {Status}, Response: {Body}",
-                    email, response.StatusCode, body);
+                _logger.LogError(
+                    "Resend API failed for {Email}. Status: {Status}, Response: {Body}",
+                    email, (int)response.StatusCode, body);
             }
         }
         catch (TaskCanceledException)
         {
-            _logger.LogWarning("Welcome email to {Email} timed out", email);
+            _logger.LogError("Welcome email to {Email} timed out after 10s", email);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Network error sending welcome email to {Email}", email);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send welcome email to {Email}", email);
+            _logger.LogError(ex, "Unexpected error sending welcome email to {Email}", email);
         }
     }
 

@@ -39,6 +39,7 @@ public class RegisterRequest
     public string Email { get; set; } = null!;
     public string Password { get; set; } = null!;
     public string? BusinessType { get; set; }
+    public string? PlanType { get; set; }
 }
 
 /// <summary>

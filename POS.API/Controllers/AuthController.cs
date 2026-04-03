@@ -108,7 +108,8 @@ public class AuthController : ControllerBase
                 OwnerName = request.OwnerName,
                 Email = request.Email,
                 Password = request.Password,
-                BusinessType = request.BusinessType
+                BusinessType = request.BusinessType,
+                PlanType = request.PlanType
             });
             return Ok(response);
         }
