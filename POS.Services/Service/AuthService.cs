@@ -19,11 +19,16 @@ public class AuthService : IAuthService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly JwtSettings _jwtSettings;
+    private readonly IEmailService _emailService;
 
-    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings)
+    public AuthService(
+        IUnitOfWork unitOfWork,
+        IOptions<JwtSettings> jwtSettings,
+        IEmailService emailService)
     {
         _unitOfWork = unitOfWork;
         _jwtSettings = jwtSettings.Value;
+        _emailService = emailService;
     }
 
     #region Public API Methods
@@ -273,6 +278,9 @@ public class AuthService : IAuthService
         // Generate JWT
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
         var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), "Free");
+
+        // Fire-and-forget: welcome email — never blocks the response
+        _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
 
         return new AuthResponse
         {

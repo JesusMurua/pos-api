@@ -56,6 +56,10 @@ var stripeWebhookSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SEC
 if (!string.IsNullOrEmpty(stripeWebhookSecret))
     builder.Configuration["Stripe:WebhookSecret"] = stripeWebhookSecret;
 
+var resendApiKey = Environment.GetEnvironmentVariable("RESEND_API_KEY");
+if (!string.IsNullOrEmpty(resendApiKey))
+    builder.Configuration["Email:ApiKey"] = resendApiKey;
+
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
@@ -85,6 +89,9 @@ builder.Services.Configure<VapidSettings>(builder.Configuration.GetSection("Vapi
 
 // Supabase Configuration
 builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("Supabase"));
+
+// Email Configuration (Resend)
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 
 // Stripe Configuration
 builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
