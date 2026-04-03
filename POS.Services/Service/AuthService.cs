@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using POS.Domain.Enums;
@@ -159,17 +161,23 @@ public class AuthService : IAuthService
 
     /// <summary>
     /// Registers a new business with owner account and matrix branch.
+    /// Atomic: single transaction, single SaveChangesAsync, full rollback on failure.
     /// </summary>
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
+        ValidatePasswordComplexity(request.Password);
+
         var existingUser = await _unitOfWork.Users.GetByEmailAsync(request.Email);
         if (existingUser != null)
-            throw new ValidationException("EMAIL_EXISTS");
+            throw new ValidationException("EMAIL_ALREADY_EXISTS");
 
         if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var businessType))
             businessType = BusinessType.General;
 
-        // Create Business
+        var hasKitchen = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar or BusinessType.FoodTruck;
+        var hasTables = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar;
+
+        // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
             Name = request.BusinessName,
@@ -180,15 +188,10 @@ public class AuthService : IAuthService
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
-        await _unitOfWork.Business.AddAsync(business);
-        await _unitOfWork.SaveChangesAsync();
 
-        // Create matrix Branch
-        var hasKitchen = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar or BusinessType.FoodTruck;
-        var hasTables = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar;
         var branch = new Branch
         {
-            BusinessId = business.Id,
+            Business = business,
             Name = $"{request.BusinessName} Principal",
             IsMatrix = true,
             IsActive = true,
@@ -197,13 +200,10 @@ public class AuthService : IAuthService
             FolioCounter = 0,
             CreatedAt = DateTime.UtcNow
         };
-        await _unitOfWork.Branches.AddAsync(branch);
-        await _unitOfWork.SaveChangesAsync();
 
-        // Create Owner user
         var user = new User
         {
-            BusinessId = business.Id,
+            Business = business,
             Name = request.OwnerName,
             Email = request.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
@@ -211,21 +211,64 @@ public class AuthService : IAuthService
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
-        await _unitOfWork.Users.AddAsync(user);
-        await _unitOfWork.SaveChangesAsync();
 
-        // Create UserBranch
         var userBranch = new UserBranch
         {
-            UserId = user.Id,
-            BranchId = branch.Id,
+            User = user,
+            Branch = branch,
             IsDefault = true
         };
-        await _unitOfWork.UserBranches.AddAsync(userBranch);
-        await _unitOfWork.SaveChangesAsync();
 
-        // Seed default zones based on business type
-        await SeedDefaultZonesAsync(branch.Id, businessType);
+        // Default zones
+        var zones = BuildDefaultZones(branch, businessType);
+
+        // Default category so the POS frontend doesn't crash on empty state
+        var defaultCategory = new Category
+        {
+            Branch = branch,
+            Name = "General",
+            Icon = "pi-tag",
+            SortOrder = 1,
+            IsActive = true
+        };
+
+        // ── Atomic transaction: single SaveChangesAsync ──
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+        try
+        {
+            await _unitOfWork.Business.AddAsync(business);
+            await _unitOfWork.Branches.AddAsync(branch);
+            await _unitOfWork.Users.AddAsync(user);
+            await _unitOfWork.UserBranches.AddAsync(userBranch);
+            await _unitOfWork.Categories.AddAsync(defaultCategory);
+
+            if (zones.Count > 0)
+                await _unitOfWork.Zones.AddRangeAsync(zones);
+
+            // Default table so table-service businesses have at least one
+            if (hasTables)
+            {
+                var defaultTable = new RestaurantTable
+                {
+                    Branch = branch,
+                    Zone = zones.FirstOrDefault(),
+                    Name = "Mesa 1",
+                    Capacity = 4,
+                    Status = "available",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _unitOfWork.RestaurantTables.AddAsync(defaultTable);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new ValidationException("EMAIL_ALREADY_EXISTS");
+        }
 
         // Generate JWT
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
@@ -323,25 +366,36 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private async Task SeedDefaultZonesAsync(int branchId, BusinessType businessType)
+    private static readonly Regex PasswordComplexityRegex = new(
+        @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$",
+        RegexOptions.Compiled);
+
+    private static void ValidatePasswordComplexity(string password)
+    {
+        if (!PasswordComplexityRegex.IsMatch(password))
+            throw new ValidationException(
+                "Password must be at least 8 characters and contain at least 1 uppercase letter, 1 lowercase letter, and 1 number");
+    }
+
+    /// <summary>
+    /// Builds default zone entities (not persisted yet) using navigation properties.
+    /// </summary>
+    private static List<Zone> BuildDefaultZones(Branch branch, BusinessType businessType)
     {
         if (businessType is BusinessType.Retail or BusinessType.FoodTruck or BusinessType.General)
-            return;
+            return [];
 
         var zones = new List<Zone>
         {
-            new() { BranchId = branchId, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true }
+            new() { Branch = branch, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true }
         };
 
         if (businessType == BusinessType.Bar)
-            zones.Add(new Zone { BranchId = branchId, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true });
+            zones.Add(new Zone { Branch = branch, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true });
 
-        zones.Add(new Zone { BranchId = branchId, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false });
+        zones.Add(new Zone { Branch = branch, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false });
 
-        foreach (var zone in zones)
-            await _unitOfWork.Zones.AddAsync(zone);
-
-        await _unitOfWork.SaveChangesAsync();
+        return zones;
     }
 
     #endregion
