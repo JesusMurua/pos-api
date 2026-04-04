@@ -20,7 +20,8 @@ public class PrintJobRepository : GenericRepository<PrintJob>, IPrintJobReposito
         PrintingDestination? destination)
     {
         var query = _context.PrintJobs
-            .Where(j => j.BranchId == branchId && j.Status == PrintJobStatus.Pending);
+            .Where(j => j.BranchId == branchId
+                && (j.Status == PrintJobStatus.Pending || j.Status == PrintJobStatus.InProgress));
 
         if (destination.HasValue)
             query = query.Where(j => j.Destination == destination.Value);

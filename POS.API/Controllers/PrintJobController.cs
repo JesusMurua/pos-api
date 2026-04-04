@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.IService;
 
 namespace POS.API.Controllers;
 
@@ -17,23 +18,26 @@ public class PrintJobController : BaseApiController
     private const int MaxAttempts = 3;
 
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPrintJobService _printJobService;
 
-    public PrintJobController(IUnitOfWork unitOfWork)
+    public PrintJobController(IUnitOfWork unitOfWork, IPrintJobService printJobService)
     {
         _unitOfWork = unitOfWork;
+        _printJobService = printJobService;
     }
 
     /// <summary>
-    /// Returns all pending print jobs for the current branch.
-    /// Results are ordered FIFO by <c>CreatedAt</c>.
-    /// Used by printers and KDS tablets to poll for new work.
+    /// Returns all active print jobs for the current branch.
+    /// Includes both <see cref="PrintJobStatus.Pending"/> and <see cref="PrintJobStatus.InProgress"/> jobs,
+    /// ordered FIFO by <c>CreatedAt</c>.
+    /// Used by printers and KDS tablets to poll for new and in-progress work.
     /// </summary>
     /// <param name="destination">
     /// Optional filter: <c>0</c> = Kitchen, <c>1</c> = Bar, <c>2</c> = Waiters.
-    /// Omit to retrieve pending jobs for all destinations.
+    /// Omit to retrieve active jobs for all destinations.
     /// </param>
-    /// <returns>List of pending <see cref="PrintJob"/>s.</returns>
-    /// <response code="200">Returns the list of pending print jobs.</response>
+    /// <returns>List of active <see cref="PrintJob"/>s.</returns>
+    /// <response code="200">Returns the list of active print jobs.</response>
     [HttpGet("pending")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<PrintJob>), StatusCodes.Status200OK)]
@@ -60,15 +64,44 @@ public class PrintJobController : BaseApiController
     }
 
     /// <summary>
+    /// Transitions a print job to <see cref="PrintJobStatus.InProgress"/>.
+    /// Signals that a KDS operator acknowledged the ticket and is actively preparing the items.
+    /// Only valid from <see cref="PrintJobStatus.Pending"/> status.
+    /// </summary>
+    /// <param name="id">The ID of the print job to transition.</param>
+    /// <returns>No content on success.</returns>
+    /// <response code="204">Transition applied successfully.</response>
+    /// <response code="404">If the print job is not found or does not belong to this branch.</response>
+    /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> status.</response>
+    [HttpPatch("{id:int}/in-progress")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MarkInProgress(int id)
+    {
+        try
+        {
+            var found = await _printJobService.MarkAsInProgressAsync(id, BranchId);
+            return found ? NoContent() : NotFound();
+        }
+        catch (POS.Domain.Exceptions.ValidationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Marks a print job as <see cref="PrintJobStatus.Printed"/>.
     /// Sets <c>PrintedAt</c> to the current UTC timestamp.
-    /// Called by the peripheral device after a successful print.
+    /// Valid from both <see cref="PrintJobStatus.Pending"/> and <see cref="PrintJobStatus.InProgress"/> status.
+    /// Called by the peripheral device after a successful print or by the KDS when the order is ready.
     /// </summary>
     /// <param name="id">The ID of the print job to acknowledge.</param>
     /// <returns>The updated <see cref="PrintJob"/>.</returns>
     /// <response code="200">Returns the updated print job.</response>
     /// <response code="404">If the print job is not found or does not belong to this branch.</response>
-    /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> state.</response>
+    /// <response code="400">If the job is already in a terminal state (<see cref="PrintJobStatus.Printed"/> or <see cref="PrintJobStatus.Failed"/>).</response>
     [HttpPatch("{id:int}/printed")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(PrintJob), StatusCodes.Status200OK)]
@@ -79,8 +112,8 @@ public class PrintJobController : BaseApiController
         var job = await _unitOfWork.PrintJobs.GetByIdAsync(id);
         if (job == null || job.BranchId != BranchId) return NotFound();
 
-        if (job.Status != PrintJobStatus.Pending)
-            return BadRequest($"Print job {id} is already in status '{job.Status}'.");
+        if (job.Status != PrintJobStatus.Pending && job.Status != PrintJobStatus.InProgress)
+            return BadRequest($"Print job {id} is already in terminal status '{job.Status}'.");
 
         job.Status    = PrintJobStatus.Printed;
         job.PrintedAt = DateTime.UtcNow;
@@ -99,7 +132,7 @@ public class PrintJobController : BaseApiController
     /// <returns>The updated <see cref="PrintJob"/>.</returns>
     /// <response code="200">Returns the updated print job.</response>
     /// <response code="404">If the print job is not found or does not belong to this branch.</response>
-    /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> state.</response>
+    /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> status.</response>
     [HttpPatch("{id:int}/failed")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(PrintJob), StatusCodes.Status200OK)]

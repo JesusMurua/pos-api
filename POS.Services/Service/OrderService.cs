@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
@@ -1330,13 +1331,14 @@ public class OrderService : IOrderService
 
                 printJobs.Add(new PrintJob
                 {
-                    OrderId    = order.Id,
-                    BranchId   = order.BranchId,
-                    Destination = group.Key,
-                    Status     = PrintJobStatus.Pending,
-                    RawContent = GeneratePrintContent(group.Key, group.ToList(), order),
-                    CreatedAt  = DateTime.UtcNow,
-                    AttemptCount = 0
+                    OrderId           = order.Id,
+                    BranchId          = order.BranchId,
+                    Destination       = group.Key,
+                    Status            = PrintJobStatus.Pending,
+                    RawContent        = GeneratePrintContent(group.Key, group.ToList(), order),
+                    StructuredContent = GenerateStructuredContent(group.Key, group.ToList(), order),
+                    CreatedAt         = DateTime.UtcNow,
+                    AttemptCount      = 0
                 });
             }
         }
@@ -1391,5 +1393,59 @@ public class OrderService : IOrderService
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Renders a structured JSON payload for KDS tablet rendering.
+    /// Provides machine-readable ticket data so the KDS can display items with
+    /// proper formatting, grouping, and visual emphasis — unlike the raw ESC/POS text.
+    /// </summary>
+    /// <param name="destination">The physical area this ticket targets.</param>
+    /// <param name="items">Order items routed to this destination.</param>
+    /// <param name="order">The parent order.</param>
+    /// <returns>JSON string conforming to the KdsTicket schema.</returns>
+    private static string GenerateStructuredContent(
+        PrintingDestination destination,
+        List<OrderItem> items,
+        Order order)
+    {
+        var kdsItems = items
+            .Select(i => new KdsItem(
+                Quantity: i.Quantity,
+                Name: i.ProductName,
+                Size: string.IsNullOrWhiteSpace(i.SizeName) ? null : i.SizeName,
+                Extras: ParseExtrasNames(i.ExtrasJson),
+                Notes: string.IsNullOrWhiteSpace(i.Notes) ? null : i.Notes))
+            .ToList();
+
+        var ticket = new KdsTicket(
+            OrderNumber: order.OrderNumber,
+            TableLabel: order.TableName ?? "Para llevar",
+            Destination: destination.ToString(),
+            Items: kdsItems,
+            Priority: "normal",
+            CreatedAt: DateTime.UtcNow.ToString("O"));
+
+        return JsonSerializer.Serialize(ticket, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+    }
+
     #endregion
+
+    // ── Private DTOs for KDS structured ticket ──
+
+    private sealed record KdsTicket(
+        int OrderNumber,
+        string TableLabel,
+        string Destination,
+        IReadOnlyList<KdsItem> Items,
+        string Priority,
+        string CreatedAt);
+
+    private sealed record KdsItem(
+        int Quantity,
+        string Name,
+        string? Size,
+        IReadOnlyList<string> Extras,
+        string? Notes);
 }

@@ -7,7 +7,7 @@ namespace POS.Domain.Models;
 /// Represents a single print job generated when an order is confirmed.
 /// Each job targets one physical area (<see cref="PrintingDestination"/>)
 /// and contains only the items routed to that area.
-/// Lifecycle: Pending → Printed (acknowledged by peripheral) | Failed (max attempts exceeded).
+/// Lifecycle: Pending → InProgress → Printed | Pending → Failed (max attempts exceeded).
 /// </summary>
 public partial class PrintJob
 {
@@ -42,20 +42,28 @@ public partial class PrintJob
 
     /// <summary>
     /// Pre-rendered plain-text ticket content in ESC/POS-ready format.
-    /// The server does not interpret the format; it stores the string as-is
-    /// for the client peripheral to dispatch directly to the printer.
-    /// Using <c>nvarchar(max)</c> to accommodate any future richer formats (JSON, ZPL, etc.)
-    /// without schema changes.
+    /// Used by physical thermal printers. The server stores the string as-is
+    /// for the peripheral to dispatch directly to the printer.
+    /// Uses <c>nvarchar(max)</c> to accommodate future formats (ZPL, etc.) without schema changes.
     /// </summary>
     [Required]
     public string RawContent { get; set; } = null!;
+
+    /// <summary>
+    /// Structured JSON payload for KDS tablet rendering.
+    /// Populated alongside <see cref="RawContent"/> by the Sync Engine.
+    /// Null for jobs created before Phase 20 (backward compatible).
+    /// Schema: <c>{ orderNumber, tableLabel, items[], priority, createdAt }</c>.
+    /// </summary>
+    public string? StructuredContent { get; set; }
 
     /// <summary>UTC timestamp when the print job was created by the Sync Engine.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
     /// UTC timestamp set by the peripheral when it confirms a successful print.
-    /// Null while the job is in <see cref="PrintJobStatus.Pending"/> or <see cref="PrintJobStatus.Failed"/> state.
+    /// Null while the job is in <see cref="PrintJobStatus.Pending"/>, <see cref="PrintJobStatus.InProgress"/>,
+    /// or <see cref="PrintJobStatus.Failed"/> state.
     /// </summary>
     public DateTime? PrintedAt { get; set; }
 
