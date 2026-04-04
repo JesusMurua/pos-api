@@ -35,6 +35,7 @@ public class ReservationService : IReservationService
         reservation.BranchId = branchId;
         reservation.CreatedByUserId = userId;
         reservation.Status = ReservationStatus.Pending;
+        // CustomerId is passed through from the controller (nullable — backward compatible)
 
         if (reservation.TableId.HasValue)
         {
@@ -66,6 +67,7 @@ public class ReservationService : IReservationService
         reservation.ReservationTime = updated.ReservationTime;
         reservation.DurationMinutes = updated.DurationMinutes;
         reservation.Notes = updated.Notes;
+        reservation.CustomerId = updated.CustomerId;
 
         if (reservation.TableId.HasValue)
         {

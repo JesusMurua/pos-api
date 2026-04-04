@@ -100,8 +100,8 @@ public class StripeService : IStripeService
         if (existingSubscription != null)
             return existingSubscription.StripeCustomerId;
 
-        var customerService = new CustomerService(_stripeClient);
-        var customer = await customerService.CreateAsync(new CustomerCreateOptions
+        var stripeCustomerService = new Stripe.CustomerService(_stripeClient);
+        var customer = await stripeCustomerService.CreateAsync(new CustomerCreateOptions
         {
             Name = business.Name,
             Metadata = new Dictionary<string, string>

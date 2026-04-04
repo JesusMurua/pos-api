@@ -38,6 +38,9 @@ public class SyncOrderRequest
 
     public int? CashRegisterSessionId { get; set; }
 
+    /// <summary>FK to Customer for CRM tracking. Required when payments use StoreCredit or LoyaltyPoints.</summary>
+    public int? CustomerId { get; set; }
+
     public List<SyncOrderItemRequest> Items { get; set; } = new();
 
     public List<SyncPaymentRequest> Payments { get; set; } = new();

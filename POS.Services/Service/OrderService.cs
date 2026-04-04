@@ -88,6 +88,7 @@ public class OrderService : IOrderService
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
                     existingOrder.CashRegisterSessionId = request.CashRegisterSessionId;
+                    existingOrder.CustomerId = request.CustomerId;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
                     existingOrder.Items?.Clear();
@@ -154,6 +155,59 @@ public class OrderService : IOrderService
 
                 table.Status = "occupied";
                 _unitOfWork.RestaurantTables.Update(table);
+            }
+        }
+
+        // ── Phase 2c: Validate StoreCredit / LoyaltyPoints payments ──
+        // Collect all orders (inserts + updates) that use customer-backed payment methods.
+        // These require a valid CustomerId and sufficient balance.
+        var allSyncedOrders = ordersToInsert.Concat(
+            existingOrders.Values.Where(o => requests.Any(r => r.Id == o.Id))).ToList();
+
+        var customerPayments = allSyncedOrders
+            .Where(o => o.Payments.Any(p =>
+                p.Method == PaymentMethod.StoreCredit || p.Method == PaymentMethod.LoyaltyPoints))
+            .ToList();
+
+        // Cache loaded customers to avoid re-fetching within same batch
+        var customerCache = new Dictionary<int, Customer>();
+
+        foreach (var order in customerPayments)
+        {
+            if (!order.CustomerId.HasValue)
+                throw new ValidationException(
+                    $"CUSTOMER_REQUIRED: Order #{order.OrderNumber} uses StoreCredit or LoyaltyPoints but has no CustomerId.");
+
+            if (!customerCache.TryGetValue(order.CustomerId.Value, out var customer))
+            {
+                customer = await _unitOfWork.Customers.GetByIdAsync(order.CustomerId.Value);
+                if (customer == null || !customer.IsActive)
+                    throw new ValidationException(
+                        $"CUSTOMER_NOT_FOUND: Customer {order.CustomerId.Value} not found or inactive.");
+                customerCache[customer.Id] = customer;
+            }
+
+            // Validate StoreCredit balance
+            var creditPayments = order.Payments.Where(p => p.Method == PaymentMethod.StoreCredit).ToList();
+            if (creditPayments.Count > 0)
+            {
+                var totalCreditUsed = creditPayments.Sum(p => p.AmountCents);
+                // Credit limit check: if limit > 0, ensure debt won't exceed it
+                var projectedBalance = customer.CreditBalanceCents - totalCreditUsed;
+                if (customer.CreditLimitCents > 0 && Math.Abs(projectedBalance) > customer.CreditLimitCents)
+                    throw new ValidationException(
+                        $"INSUFFICIENT_CREDIT: Customer '{customer.FirstName}' would exceed credit limit.");
+            }
+
+            // Validate LoyaltyPoints balance
+            var pointsPayments = order.Payments.Where(p => p.Method == PaymentMethod.LoyaltyPoints).ToList();
+            if (pointsPayments.Count > 0)
+            {
+                // Each cent paid with points = 1 point (simplest model; configurable later)
+                var totalPointsNeeded = pointsPayments.Sum(p => p.AmountCents);
+                if (customer.PointsBalance < totalPointsNeeded)
+                    throw new ValidationException(
+                        $"INSUFFICIENT_POINTS: Customer '{customer.FirstName}' has {customer.PointsBalance} points, needs {totalPointsNeeded}.");
             }
         }
 
@@ -298,6 +352,65 @@ public class OrderService : IOrderService
 
                 await _unitOfWork.SaveChangesAsync();
             }
+        }
+
+        // ── Phase 5c: Process StoreCredit / LoyaltyPoints ledger entries ──
+        // Deduct balances and create immutable ledger entries for customer-backed payments.
+        // This runs AFTER Phase 3 persist to ensure orders exist in DB before referencing them.
+        if (customerPayments.Count > 0)
+        {
+            foreach (var order in customerPayments)
+            {
+                var customer = customerCache[order.CustomerId!.Value];
+
+                // Process StoreCredit payments → deduct from CreditBalanceCents
+                foreach (var payment in order.Payments.Where(p => p.Method == PaymentMethod.StoreCredit))
+                {
+                    customer.CreditBalanceCents -= payment.AmountCents;
+                    customer.UpdatedAt = DateTime.UtcNow;
+
+                    await _unitOfWork.CustomerTransactions.AddAsync(new CustomerTransaction
+                    {
+                        CustomerId = customer.Id,
+                        BranchId = order.BranchId,
+                        TransactionType = CustomerTransactionType.UseCredit,
+                        AmountCents = -payment.AmountCents,
+                        PointsAmount = 0,
+                        BalanceAfterCents = customer.CreditBalanceCents,
+                        PointsBalanceAfter = customer.PointsBalance,
+                        ReferenceOrderId = order.Id,
+                        Description = $"Fiado - Orden #{order.OrderNumber}",
+                        CreatedBy = "SyncEngine"
+                    });
+                }
+
+                // Process LoyaltyPoints payments → deduct from PointsBalance
+                foreach (var payment in order.Payments.Where(p => p.Method == PaymentMethod.LoyaltyPoints))
+                {
+                    var pointsUsed = payment.AmountCents; // 1 cent = 1 point (simplest model)
+                    customer.PointsBalance -= pointsUsed;
+                    if (customer.PointsBalance < 0) customer.PointsBalance = 0;
+                    customer.UpdatedAt = DateTime.UtcNow;
+
+                    await _unitOfWork.CustomerTransactions.AddAsync(new CustomerTransaction
+                    {
+                        CustomerId = customer.Id,
+                        BranchId = order.BranchId,
+                        TransactionType = CustomerTransactionType.RedeemPoints,
+                        AmountCents = 0,
+                        PointsAmount = -pointsUsed,
+                        BalanceAfterCents = customer.CreditBalanceCents,
+                        PointsBalanceAfter = customer.PointsBalance,
+                        ReferenceOrderId = order.Id,
+                        Description = $"Puntos canjeados - Orden #{order.OrderNumber}",
+                        CreatedBy = "SyncEngine"
+                    });
+                }
+
+                _unitOfWork.Customers.Update(customer);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
         }
 
         // ── Phase 6: Batch inventory deduction ──
@@ -960,6 +1073,7 @@ public class OrderService : IOrderService
             TableId = request.TableId,
             TableName = request.TableName,
             CashRegisterSessionId = request.CashRegisterSessionId,
+            CustomerId = request.CustomerId,
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
             Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
         };
