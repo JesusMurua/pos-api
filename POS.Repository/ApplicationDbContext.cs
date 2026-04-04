@@ -97,6 +97,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Customer> Customers { get; set; } = null!;
     public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
+    public DbSet<PrintJob> PrintJobs { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -1017,6 +1018,46 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(t => t.CustomerId);
             entity.HasIndex(t => new { t.CustomerId, t.CreatedAt });
+        });
+
+        #endregion
+
+        #region PrintJob Configuration
+
+        modelBuilder.Entity<PrintJob>(entity =>
+        {
+            // Store enums as integers for compact storage and fast index scans.
+            entity.Property(j => j.Destination)
+                .HasConversion<int>();
+
+            entity.Property(j => j.Status)
+                .HasConversion<int>()
+                .HasDefaultValue(PrintJobStatus.Pending);
+
+            entity.Property(j => j.AttemptCount).HasDefaultValue(0);
+            entity.Property(j => j.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+
+            // RawContent is nvarchar(max) — no MaxLength constraint here; model level.
+            entity.Property(j => j.RawContent).IsRequired();
+
+            // RestrictDelete: deleting an Order must not silently remove print audit trail.
+            entity.HasOne(j => j.Order)
+                .WithMany()
+                .HasForeignKey(j => j.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(j => j.Branch)
+                .WithMany()
+                .HasForeignKey(j => j.BranchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Polling index: printers query Pending jobs for a specific branch/destination.
+            entity.HasIndex(j => new { j.BranchId, j.Status })
+                .HasDatabaseName("IX_PrintJobs_BranchId_Status");
+
+            // Order-scoped lookup index for front-end detail view.
+            entity.HasIndex(j => j.OrderId)
+                .HasDatabaseName("IX_PrintJobs_OrderId");
         });
 
         #endregion

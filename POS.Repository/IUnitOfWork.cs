@@ -34,6 +34,7 @@ public interface IUnitOfWork : IDisposable
     IFiscalCustomerRepository FiscalCustomers { get; }
     ICustomerRepository Customers { get; }
     ICustomerTransactionRepository CustomerTransactions { get; }
+    IPrintJobRepository PrintJobs { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

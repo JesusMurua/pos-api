@@ -488,7 +488,19 @@ public class OrderService : IOrderService
             catch { /* best-effort */ }
         }
 
-        // ── Phase 8: Push notifications (fire-and-forget, no DB) ──
+        // ── Phase 8: Generate PrintJobs per destination (best-effort) ──
+        // Only new orders are processed; updates to existing orders do not re-print.
+        // Products are fetched in a single batch query to resolve PrintingDestination.
+        if (ordersToInsert.Count > 0)
+        {
+            try
+            {
+                await GeneratePrintJobsAsync(ordersToInsert);
+            }
+            catch { /* best-effort: printing must never block order persistence */ }
+        }
+
+        // ── Phase 9: Push notifications (fire-and-forget, no DB) ──
         foreach (var order in ordersToInsert)
         {
             _ = Task.Run(async () =>
@@ -1266,6 +1278,117 @@ public class OrderService : IOrderService
             await _unitOfWork.SaveChangesAsync();
         }
         catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// For each new order, groups its items by <see cref="PrintingDestination"/> and creates
+    /// one <see cref="PrintJob"/> per destination group. Idempotent: skips destinations
+    /// that already have an existing Pending or Printed job for the same order.
+    /// Products are fetched in a single batch query to avoid N+1 problems.
+    /// </summary>
+    /// <param name="orders">Newly inserted orders (not yet printed).</param>
+    private async Task GeneratePrintJobsAsync(IEnumerable<Order> orders)
+    {
+        var orderList = orders.ToList();
+
+        // Collect all distinct ProductIds referenced by the new orders.
+        var allProductIds = orderList
+            .Where(o => o.Items != null)
+            .SelectMany(o => o.Items!)
+            .Select(i => i.ProductId)
+            .Distinct()
+            .ToList();
+
+        if (allProductIds.Count == 0) return;
+
+        // Single batch query: only fetch Id + PrintingDestination to keep it lightweight.
+        var productDestinations = (await _unitOfWork.Products.GetAsync(
+                p => allProductIds.Contains(p.Id)))
+            .ToDictionary(p => p.Id, p => p.PrintingDestination);
+
+        var printJobs = new List<PrintJob>();
+
+        foreach (var order in orderList)
+        {
+            if (order.Items == null || order.Items.Count == 0) continue;
+
+            // Idempotency guard: load existing jobs for this order.
+            var existingJobs = (await _unitOfWork.PrintJobs.GetByOrderAsync(order.Id))
+                .Select(j => j.Destination)
+                .ToHashSet();
+
+            // Group items by destination; items with an unknown ProductId fall back to Kitchen.
+            var groups = order.Items
+                .GroupBy(i => productDestinations.TryGetValue(i.ProductId, out var dest)
+                    ? dest
+                    : PrintingDestination.Kitchen);
+
+            foreach (var group in groups)
+            {
+                // Skip if this destination already has a job (idempotency).
+                if (existingJobs.Contains(group.Key)) continue;
+
+                printJobs.Add(new PrintJob
+                {
+                    OrderId    = order.Id,
+                    BranchId   = order.BranchId,
+                    Destination = group.Key,
+                    Status     = PrintJobStatus.Pending,
+                    RawContent = GeneratePrintContent(group.Key, group.ToList(), order),
+                    CreatedAt  = DateTime.UtcNow,
+                    AttemptCount = 0
+                });
+            }
+        }
+
+        if (printJobs.Count == 0) return;
+
+        await _unitOfWork.PrintJobs.AddRangeAsync(printJobs);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Renders a plain-text ticket for a subset of <see cref="OrderItem"/>s
+    /// routed to a specific <see cref="PrintingDestination"/>.
+    /// Format is human-readable ESC/POS-compatible text (Phase 19).
+    /// Future phases may switch to JSON or ZPL without changing the <c>RawContent</c> column.
+    /// </summary>
+    private static string GeneratePrintContent(
+        PrintingDestination destination,
+        List<OrderItem> items,
+        Order order)
+    {
+        var areaLabel = destination switch
+        {
+            PrintingDestination.Kitchen => "COCINA",
+            PrintingDestination.Bar     => "BARRA",
+            PrintingDestination.Waiters => "MESEROS",
+            _                           => destination.ToString().ToUpper()
+        };
+
+        var tableInfo = order.TableName != null ? $"Mesa: {order.TableName}" : "Para llevar";
+        var time      = DateTime.UtcNow.ToString("HH:mm");
+        var separator = new string('─', 32);
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(separator);
+        sb.AppendLine($"ORDEN #{order.OrderNumber,-6} [{areaLabel}]");
+        sb.AppendLine($"{tableInfo,-20} {time}");
+        sb.AppendLine(separator);
+
+        foreach (var item in items)
+        {
+            sb.AppendLine($"{item.Quantity}x  {item.ProductName}");
+
+            if (!string.IsNullOrWhiteSpace(item.SizeName))
+                sb.AppendLine($"      + Tamaño: {item.SizeName}");
+
+            if (!string.IsNullOrWhiteSpace(item.Notes))
+                sb.AppendLine($"      * Nota: {item.Notes}");
+        }
+
+        sb.AppendLine(separator);
+        return sb.ToString();
     }
 
     #endregion

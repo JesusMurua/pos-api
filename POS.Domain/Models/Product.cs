@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Enums;
 
 namespace POS.Domain.Models;
 
@@ -50,6 +51,17 @@ public partial class Product
 
     /// <summary>IVA tax rate for this product. 0.16 (16%), 0.08 (border zone), 0 (exempt). Null = default 16%.</summary>
     public decimal? TaxRate { get; set; }
+
+    #endregion
+
+    #region Printing
+
+    /// <summary>
+    /// Determines which physical area receives the ticket when this product appears in an order.
+    /// Defaults to <see cref="PrintingDestination.Kitchen"/> so all existing products retain
+    /// their current behavior without requiring a data migration.
+    /// </summary>
+    public PrintingDestination PrintingDestination { get; set; } = PrintingDestination.Kitchen;
 
     #endregion
 
