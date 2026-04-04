@@ -40,6 +40,10 @@ public partial class Branch
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Fiscal postal code for the branch location (lugar de expedicion CFDI). 5 digits.</summary>
+    [MaxLength(5)]
+    public string? FiscalZipCode { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Business? Business { get; set; }

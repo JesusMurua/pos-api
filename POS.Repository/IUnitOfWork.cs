@@ -31,6 +31,7 @@ public interface IUnitOfWork : IDisposable
     ISupplierRepository Suppliers { get; }
     IStockReceiptRepository StockReceipts { get; }
     IBranchDeliveryConfigRepository BranchDeliveryConfigs { get; }
+    IFiscalCustomerRepository FiscalCustomers { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

@@ -79,6 +79,27 @@ public partial class Order
 
     public int? CashRegisterSessionId { get; set; }
 
+    #region Invoicing Fields
+
+    /// <summary>CFDI invoice status for this order.</summary>
+    public InvoiceStatus InvoiceStatus { get; set; } = InvoiceStatus.None;
+
+    /// <summary>Facturapi invoice ID linked to this order.</summary>
+    [MaxLength(50)]
+    public string? FacturapiId { get; set; }
+
+    /// <summary>URL to download the invoice PDF/XML.</summary>
+    [MaxLength(500)]
+    public string? InvoiceUrl { get; set; }
+
+    /// <summary>Timestamp when the CFDI was issued (timbrado).</summary>
+    public DateTime? InvoicedAt { get; set; }
+
+    /// <summary>FK to FiscalCustomer who requested the invoice. Null for global invoices.</summary>
+    public int? FiscalCustomerId { get; set; }
+
+    #endregion
+
     public virtual Branch? Branch { get; set; }
 
     public virtual User? User { get; set; }
@@ -86,6 +107,8 @@ public partial class Order
     public virtual RestaurantTable? Table { get; set; }
 
     public virtual CashRegisterSession? CashRegisterSession { get; set; }
+
+    public virtual FiscalCustomer? FiscalCustomer { get; set; }
 
     public virtual ICollection<OrderItem>? Items { get; set; }
 

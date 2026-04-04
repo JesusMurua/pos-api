@@ -38,6 +38,21 @@ public partial class Product
 
     public decimal LowStockThreshold { get; set; } = 0;
 
+    #region Fiscal / SAT Fields
+
+    /// <summary>SAT product/service code (clave de producto/servicio). E.g., "90101500" for food.</summary>
+    [MaxLength(10)]
+    public string? SatProductCode { get; set; }
+
+    /// <summary>SAT unit code (clave de unidad). E.g., "H87" = Pieza, "E48" = Servicio.</summary>
+    [MaxLength(5)]
+    public string? SatUnitCode { get; set; }
+
+    /// <summary>IVA tax rate for this product. 0.16 (16%), 0.08 (border zone), 0 (exempt). Null = default 16%.</summary>
+    public decimal? TaxRate { get; set; }
+
+    #endregion
+
     public virtual Category? Category { get; set; }
 
     public virtual Branch? Branch { get; set; }

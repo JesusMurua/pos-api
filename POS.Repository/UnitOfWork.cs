@@ -34,6 +34,7 @@ public class UnitOfWork : IUnitOfWork
     private ISupplierRepository? _suppliers;
     private IStockReceiptRepository? _stockReceipts;
     private IBranchDeliveryConfigRepository? _branchDeliveryConfigs;
+    private IFiscalCustomerRepository? _fiscalCustomers;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -117,6 +118,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IBranchDeliveryConfigRepository BranchDeliveryConfigs =>
         _branchDeliveryConfigs ??= new BranchDeliveryConfigRepository(_context);
+
+    public IFiscalCustomerRepository FiscalCustomers =>
+        _fiscalCustomers ??= new FiscalCustomerRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

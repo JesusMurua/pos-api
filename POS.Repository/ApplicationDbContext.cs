@@ -93,6 +93,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
     public DbSet<BranchDeliveryConfig> BranchDeliveryConfigs { get; set; } = null!;
 
+    public DbSet<FiscalCustomer> FiscalCustomers { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
 
     // System catalogs
@@ -127,6 +128,11 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(20);
 
             entity.Property(b => b.TrialUsed).HasDefaultValue(false);
+            entity.Property(b => b.InvoicingEnabled).HasDefaultValue(false);
+            entity.Property(b => b.Rfc).HasMaxLength(13);
+            entity.Property(b => b.TaxRegime).HasMaxLength(3);
+            entity.Property(b => b.LegalName).HasMaxLength(300);
+            entity.Property(b => b.FacturapiOrganizationId).HasMaxLength(50);
 
             entity.HasMany(b => b.Branches)
                 .WithOne(br => br.Business)
@@ -263,6 +269,9 @@ public class ApplicationDbContext : DbContext
                 .HasFilter("\"Barcode\" IS NOT NULL");
 
             entity.Property(p => p.Barcode).HasMaxLength(100);
+            entity.Property(p => p.SatProductCode).HasMaxLength(10);
+            entity.Property(p => p.SatUnitCode).HasMaxLength(5);
+            entity.Property(p => p.TaxRate).HasPrecision(5, 2);
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
@@ -318,6 +327,20 @@ public class ApplicationDbContext : DbContext
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasOne(o => o.FiscalCustomer)
+                .WithMany()
+                .HasForeignKey(o => o.FiscalCustomerId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.Property(o => o.InvoiceStatus)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(InvoiceStatus.None);
+
+            entity.Property(o => o.FacturapiId).HasMaxLength(50);
+            entity.Property(o => o.InvoiceUrl).HasMaxLength(500);
+
             entity.HasMany(o => o.Items)
                 .WithOne(i => i.Order)
                 .HasForeignKey(i => i.OrderId)
@@ -331,11 +354,33 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
             entity.HasIndex(o => o.SyncStatus);
             entity.HasIndex(o => o.CashRegisterSessionId);
+            entity.HasIndex(o => o.FacturapiId);
 
             entity.Property<uint>("xmin")
                 .HasColumnType("xid")
                 .ValueGeneratedOnAddOrUpdate()
                 .IsConcurrencyToken();
+        });
+
+        #endregion
+
+        #region FiscalCustomer Configuration
+
+        modelBuilder.Entity<FiscalCustomer>(entity =>
+        {
+            entity.Property(c => c.Rfc).HasMaxLength(13);
+            entity.Property(c => c.BusinessName).HasMaxLength(300);
+            entity.Property(c => c.TaxRegime).HasMaxLength(3);
+            entity.Property(c => c.ZipCode).HasMaxLength(5);
+            entity.Property(c => c.Email).HasMaxLength(255);
+            entity.Property(c => c.CfdiUse).HasMaxLength(5);
+            entity.Property(c => c.FacturapiCustomerId).HasMaxLength(50);
+
+            entity.HasOne(c => c.Business)
+                .WithMany()
+                .HasForeignKey(c => c.BusinessId);
+
+            entity.HasIndex(c => new { c.BusinessId, c.Rfc }).IsUnique();
         });
 
         #endregion

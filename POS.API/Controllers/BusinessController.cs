@@ -90,6 +90,62 @@ public class BusinessController : BaseApiController
     }
 
     /// <summary>
+    /// Updates fiscal configuration for electronic invoicing (CFDI).
+    /// </summary>
+    /// <param name="request">The fiscal configuration data.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Fiscal configuration updated.</response>
+    /// <response code="400">If the data is invalid.</response>
+    [HttpPut("fiscal")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateFiscalConfig([FromBody] UpdateFiscalConfigRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var business = await _businessService.GetByIdAsync(BusinessId);
+
+        business.Rfc = request.Rfc?.Trim().ToUpperInvariant();
+        business.TaxRegime = request.TaxRegime;
+        business.LegalName = request.LegalName;
+        business.InvoicingEnabled = request.InvoicingEnabled;
+
+        await _businessService.UpdateAsync(business);
+
+        return Ok(new
+        {
+            message = "Fiscal configuration updated",
+            rfc = business.Rfc,
+            taxRegime = business.TaxRegime,
+            legalName = business.LegalName,
+            invoicingEnabled = business.InvoicingEnabled
+        });
+    }
+
+    /// <summary>
+    /// Gets the fiscal configuration for the current business.
+    /// </summary>
+    /// <returns>Fiscal configuration data.</returns>
+    /// <response code="200">Returns the fiscal configuration.</response>
+    [HttpGet("fiscal")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFiscalConfig()
+    {
+        var business = await _businessService.GetByIdAsync(BusinessId);
+
+        return Ok(new
+        {
+            rfc = business.Rfc,
+            taxRegime = business.TaxRegime,
+            legalName = business.LegalName,
+            invoicingEnabled = business.InvoicingEnabled,
+            facturapiOrganizationId = business.FacturapiOrganizationId
+        });
+    }
+
+    /// <summary>
     /// Marks the business onboarding as completed and returns a fresh JWT.
     /// </summary>
     /// <returns>A new JWT token with updated onboardingCompleted claim.</returns>
@@ -114,4 +170,25 @@ public class BusinessController : BaseApiController
 public class UpdateBusinessTypeRequest
 {
     public string BusinessType { get; set; } = null!;
+}
+
+/// <summary>
+/// Request body for updating fiscal configuration.
+/// </summary>
+public class UpdateFiscalConfigRequest
+{
+    /// <summary>RFC of the business (tax ID). 12 or 13 characters.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(13)]
+    public string? Rfc { get; set; }
+
+    /// <summary>SAT tax regime code (e.g., "601", "612").</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(3)]
+    public string? TaxRegime { get; set; }
+
+    /// <summary>Legal name exactly as registered with SAT.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(300)]
+    public string? LegalName { get; set; }
+
+    /// <summary>Whether electronic invoicing is enabled.</summary>
+    public bool InvoicingEnabled { get; set; }
 }
