@@ -150,6 +150,42 @@ public class ReportService : IReportService
         return document.GeneratePdf();
     }
 
+    /// <summary>
+    /// Generates a fiscal CSV export with invoice status for each order.
+    /// </summary>
+    public async Task<byte[]> GenerateFiscalCsvAsync(int branchId, DateTime from, DateTime to)
+    {
+        var orders = (await _unitOfWork.Orders.GetAsync(
+            o => o.BranchId == branchId
+                && o.CreatedAt.Date >= from.Date
+                && o.CreatedAt.Date <= to.Date,
+            "Payments"))
+            .OrderByDescending(o => o.CreatedAt)
+            .ToList();
+
+        using var stream = new MemoryStream();
+        using var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(true));
+
+        // Header
+        await writer.WriteLineAsync("OrderId,Date,Total,PaymentMethod,InvoiceStatus");
+
+        foreach (var order in orders)
+        {
+            var paymentMethods = string.Join("|",
+                order.Payments.Select(p => p.Method.ToString()).Distinct());
+            var total = (order.TotalCents / 100m).ToString("F2");
+            var date = order.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+            var status = order.InvoiceStatus.ToString();
+
+            // Escape fields that could contain commas
+            await writer.WriteLineAsync(
+                $"{order.Id},{date},{total},{paymentMethods},{status}");
+        }
+
+        await writer.FlushAsync();
+        return stream.ToArray();
+    }
+
     #endregion
 
     #region Excel Sheet Builders

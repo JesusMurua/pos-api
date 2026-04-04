@@ -86,4 +86,29 @@ public class ReportController : BaseApiController
             "application/pdf",
             $"reporte-ventas-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.pdf");
     }
+
+    /// <summary>
+    /// Downloads a fiscal CSV export including invoice status for each order.
+    /// Columns: OrderId, Date, Total, PaymentMethod, InvoiceStatus.
+    /// </summary>
+    /// <param name="from">Start date.</param>
+    /// <param name="to">End date.</param>
+    /// <returns>CSV file download.</returns>
+    /// <response code="200">Returns the CSV file.</response>
+    /// <response code="400">If the request parameters are invalid.</response>
+    [HttpGet("export/fiscal-csv")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExportFiscalCsv(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to)
+    {
+        var bytes = await _reportService.GenerateFiscalCsvAsync(BranchId, from, to);
+
+        return File(
+            bytes,
+            "text/csv",
+            $"reporte-fiscal-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.csv");
+    }
 }

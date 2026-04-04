@@ -37,6 +37,7 @@ public static class ServiceDependencies
         services.AddScoped<IStockReceiptService, StockReceiptService>();
         services.AddScoped<IDeliveryService, DeliveryService>();
         services.AddScoped<IBranchDeliveryConfigService, BranchDeliveryConfigService>();
+        services.AddScoped<IInvoicingService, InvoicingService>();
         services.AddSingleton<DataProtectionHelper>();
 
         return services;

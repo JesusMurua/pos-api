@@ -33,4 +33,14 @@ public interface IReportService
     /// <param name="to">End date.</param>
     /// <returns>PDF file bytes.</returns>
     Task<byte[]> GeneratePdfAsync(int branchId, DateTime from, DateTime to);
+
+    /// <summary>
+    /// Generates a fiscal CSV export with order details including invoice status.
+    /// Columns: OrderId, Date, Total, PaymentMethod, InvoiceStatus.
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <param name="from">Start date.</param>
+    /// <param name="to">End date.</param>
+    /// <returns>CSV file bytes (UTF-8 with BOM).</returns>
+    Task<byte[]> GenerateFiscalCsvAsync(int branchId, DateTime from, DateTime to);
 }
