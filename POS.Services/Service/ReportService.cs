@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Repository;
@@ -12,13 +13,15 @@ namespace POS.Services.Service;
 public class ReportService : IReportService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ApplicationDbContext _context;
 
     private const string BrandColor = "#16A34A";
     private const string CancelledRowColor = "#FEF2F2";
 
-    public ReportService(IUnitOfWork unitOfWork)
+    public ReportService(IUnitOfWork unitOfWork, ApplicationDbContext context)
     {
         _unitOfWork = unitOfWork;
+        _context = context;
     }
 
     #region Public API Methods
@@ -184,6 +187,223 @@ public class ReportService : IReportService
 
         await writer.FlushAsync();
         return stream.ToArray();
+    }
+
+    #endregion
+
+    #region BDD-006: Advanced BI Methods
+
+    /// <summary>
+    /// Returns aggregated chart data (sales over time, top products, payment breakdown)
+    /// for the BI dashboard. Uses AsNoTracking + Select for read-only performance.
+    /// Only paid, non-cancelled orders are included.
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <param name="from">Start date (inclusive).</param>
+    /// <param name="to">End date (inclusive).</param>
+    /// <param name="granularity">Bucket size: "hour", "day" (default), or "month".</param>
+    public async Task<DashboardChartsDto> GetDashboardChartsAsync(
+        int branchId, DateTime from, DateTime to, string granularity)
+    {
+        var fromDate = from.Date;
+        var toDate = to.Date;
+
+        // ── Sales Over Time ──────────────────────────────────────────────────
+        var baseOrderQuery = _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                     && o.IsPaid
+                     && o.CancellationReason == null
+                     && o.CreatedAt >= fromDate
+                     && o.CreatedAt < toDate.AddDays(1));
+
+        List<SalesPointDto> salesOverTime;
+
+        switch (granularity?.ToLowerInvariant())
+        {
+            case "hour":
+                var hourData = await baseOrderQuery
+                    .GroupBy(o => new
+                    {
+                        o.CreatedAt.Year,
+                        o.CreatedAt.Month,
+                        o.CreatedAt.Day,
+                        o.CreatedAt.Hour
+                    })
+                    .Select(g => new
+                    {
+                        g.Key.Year,
+                        g.Key.Month,
+                        g.Key.Day,
+                        g.Key.Hour,
+                        TotalCents = g.Sum(o => o.TotalCents),
+                        OrderCount = g.Count()
+                    })
+                    .OrderBy(x => x.Year).ThenBy(x => x.Month)
+                        .ThenBy(x => x.Day).ThenBy(x => x.Hour)
+                    .ToListAsync();
+
+                salesOverTime = hourData.Select(x => new SalesPointDto
+                {
+                    Date = new DateTime(x.Year, x.Month, x.Day, x.Hour, 0, 0),
+                    TotalCents = x.TotalCents,
+                    OrderCount = x.OrderCount
+                }).ToList();
+                break;
+
+            case "month":
+                var monthData = await baseOrderQuery
+                    .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month })
+                    .Select(g => new
+                    {
+                        g.Key.Year,
+                        g.Key.Month,
+                        TotalCents = g.Sum(o => o.TotalCents),
+                        OrderCount = g.Count()
+                    })
+                    .OrderBy(x => x.Year).ThenBy(x => x.Month)
+                    .ToListAsync();
+
+                salesOverTime = monthData.Select(x => new SalesPointDto
+                {
+                    Date = new DateTime(x.Year, x.Month, 1),
+                    TotalCents = x.TotalCents,
+                    OrderCount = x.OrderCount
+                }).ToList();
+                break;
+
+            default: // "day"
+                var dayData = await baseOrderQuery
+                    .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month, o.CreatedAt.Day })
+                    .Select(g => new
+                    {
+                        g.Key.Year,
+                        g.Key.Month,
+                        g.Key.Day,
+                        TotalCents = g.Sum(o => o.TotalCents),
+                        OrderCount = g.Count()
+                    })
+                    .OrderBy(x => x.Year).ThenBy(x => x.Month).ThenBy(x => x.Day)
+                    .ToListAsync();
+
+                salesOverTime = dayData.Select(x => new SalesPointDto
+                {
+                    Date = new DateTime(x.Year, x.Month, x.Day),
+                    TotalCents = x.TotalCents,
+                    OrderCount = x.OrderCount
+                }).ToList();
+                break;
+        }
+
+        // ── Top Products ─────────────────────────────────────────────────────
+        var topProducts = await _context.OrderItems
+            .AsNoTracking()
+            .Where(i => i.Order!.BranchId == branchId
+                     && i.Order.IsPaid
+                     && i.Order.CancellationReason == null
+                     && i.Order.CreatedAt >= fromDate
+                     && i.Order.CreatedAt < toDate.AddDays(1))
+            .GroupBy(i => i.ProductName)
+            .Select(g => new TopProductDto
+            {
+                ProductName = g.Key,
+                QuantitySold = g.Sum(i => i.Quantity),
+                TotalRevenueCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
+            })
+            .OrderByDescending(p => p.QuantitySold)
+            .Take(10)
+            .ToListAsync();
+
+        // ── Sales By Payment Method ──────────────────────────────────────────
+        // Group by enum value + provider first (SQL-safe), then map string in memory.
+        var rawPayments = await _context.OrderPayments
+            .AsNoTracking()
+            .Where(p => p.Order.BranchId == branchId
+                     && p.Order.IsPaid
+                     && p.Order.CancellationReason == null
+                     && p.Order.CreatedAt >= fromDate
+                     && p.Order.CreatedAt < toDate.AddDays(1))
+            .GroupBy(p => new { p.Method, p.PaymentProvider })
+            .Select(g => new
+            {
+                Method = g.Key.Method,
+                Provider = g.Key.PaymentProvider,
+                TotalCents = g.Sum(p => p.AmountCents),
+                TransactionCount = g.Count()
+            })
+            .OrderByDescending(x => x.TotalCents)
+            .ToListAsync();
+
+        var salesByPaymentMethod = rawPayments.Select(r => new PaymentMethodSalesDto
+        {
+            PaymentMethod = r.Method.ToString(),
+            Provider = r.Provider,
+            TotalCents = r.TotalCents,
+            TransactionCount = r.TransactionCount
+        }).ToList();
+
+        return new DashboardChartsDto
+        {
+            SalesOverTime = salesOverTime,
+            TopProducts = topProducts,
+            SalesByPaymentMethod = salesByPaymentMethod
+        };
+    }
+
+    /// <summary>
+    /// Generates a detailed sales CSV for accounting or auditing.
+    /// Columns: OrderId, Date, Total, PaymentMethods, CustomerName, Facturado.
+    /// Uses AsNoTracking + Select for read-only performance.
+    /// Only paid, non-cancelled orders are included.
+    /// </summary>
+    /// <param name="branchId">The branch identifier.</param>
+    /// <param name="from">Start date (inclusive).</param>
+    /// <param name="to">End date (inclusive).</param>
+    /// <returns>CSV string prefixed with the UTF-8 BOM character (\uFEFF).</returns>
+    public async Task<string> GetDetailedSalesCsvAsync(int branchId, DateTime from, DateTime to)
+    {
+        var fromDate = from.Date;
+        var toDate = to.Date;
+
+        var rows = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                     && o.IsPaid
+                     && o.CancellationReason == null
+                     && o.CreatedAt >= fromDate
+                     && o.CreatedAt < toDate.AddDays(1))
+            .Select(o => new
+            {
+                o.Id,
+                o.CreatedAt,
+                o.TotalCents,
+                PaymentMethods = o.Payments.Select(p => p.Method),
+                CustomerFirstName = o.Customer != null ? o.Customer.FirstName : string.Empty,
+                CustomerLastName = o.Customer != null ? o.Customer.LastName : null,
+                o.InvoiceStatus
+            })
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync();
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append('\uFEFF'); // BOM — ensures Excel opens the file with correct encoding
+        sb.AppendLine("OrderId,Date,Total,PaymentMethods,CustomerName,Facturado");
+
+        foreach (var row in rows)
+        {
+            var date = row.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+            var total = (row.TotalCents / 100m).ToString("F2");
+            var methods = string.Join("|", row.PaymentMethods.Select(m => m.ToString()).Distinct());
+            var fullName = string.IsNullOrEmpty(row.CustomerLastName)
+                ? row.CustomerFirstName
+                : $"{row.CustomerFirstName} {row.CustomerLastName}";
+            var customerName = fullName.Replace(",", " "); // prevent CSV injection
+            var facturado = row.InvoiceStatus.ToString();
+
+            sb.AppendLine($"{row.Id},{date},{total},{methods},{customerName},{facturado}");
+        }
+
+        return sb.ToString();
     }
 
     #endregion

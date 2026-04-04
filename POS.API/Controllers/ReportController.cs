@@ -111,4 +111,73 @@ public class ReportController : BaseApiController
             "text/csv",
             $"reporte-fiscal-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.csv");
     }
+
+    // ──────────────────────────────────────────
+    // BDD-006: Advanced BI & Reporting
+    // ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns aggregated chart data for the BI dashboard.
+    /// Includes time-series sales, top products, and payment-method breakdown.
+    /// Only paid, non-cancelled orders are included.
+    /// </summary>
+    /// <param name="from">Start date (inclusive).</param>
+    /// <param name="to">End date (inclusive).</param>
+    /// <param name="granularity">Time bucket: "hour", "day" (default), or "month".</param>
+    /// <returns>Dashboard chart data.</returns>
+    /// <response code="200">Returns the chart data.</response>
+    /// <response code="400">If the request parameters are invalid.</response>
+    [HttpGet("dashboard-charts")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(DashboardChartsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetDashboardCharts(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] string granularity = "day")
+    {
+        try
+        {
+            var charts = await _reportService.GetDashboardChartsAsync(BranchId, from, to, granularity);
+            return Ok(charts);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Downloads a detailed sales CSV for accounting or auditing.
+    /// Columns: OrderId, Date, Total, PaymentMethods, CustomerName, Facturado.
+    /// Only paid, non-cancelled orders are included.
+    /// </summary>
+    /// <param name="from">Start date (inclusive).</param>
+    /// <param name="to">End date (inclusive).</param>
+    /// <returns>CSV file download (UTF-8 with BOM).</returns>
+    /// <response code="200">Returns the CSV file.</response>
+    /// <response code="400">If the request parameters are invalid.</response>
+    [HttpGet("export/detailed-sales-csv")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExportDetailedSalesCsv(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to)
+    {
+        try
+        {
+            var csvContent = await _reportService.GetDetailedSalesCsvAsync(BranchId, from, to);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
+
+            return File(
+                bytes,
+                "text/csv",
+                $"ventas-detallado-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.csv");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }
