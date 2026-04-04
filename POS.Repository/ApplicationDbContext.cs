@@ -1035,7 +1035,7 @@ public class ApplicationDbContext : DbContext
                 .HasDefaultValue(PrintJobStatus.Pending);
 
             entity.Property(j => j.AttemptCount).HasDefaultValue(0);
-            entity.Property(j => j.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            entity.Property(j => j.CreatedAt).HasDefaultValueSql("now()");
 
             // RawContent is nvarchar(max) — no MaxLength constraint here; model level.
             entity.Property(j => j.RawContent).IsRequired();
