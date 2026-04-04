@@ -32,6 +32,9 @@ public class Reservation
     [MaxLength(500)]
     public string? Notes { get; set; }
 
+    /// <summary>FK to Customer for CRM tracking. Null for walk-in reservations.</summary>
+    public int? CustomerId { get; set; }
+
     public int CreatedByUserId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -43,4 +46,6 @@ public class Reservation
     public virtual RestaurantTable? Table { get; set; }
 
     public virtual User? CreatedByUser { get; set; }
+
+    public virtual Customer? Customer { get; set; }
 }

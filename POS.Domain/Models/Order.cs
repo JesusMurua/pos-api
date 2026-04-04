@@ -79,6 +79,9 @@ public partial class Order
 
     public int? CashRegisterSessionId { get; set; }
 
+    /// <summary>FK to Customer for CRM tracking. Null for anonymous sales.</summary>
+    public int? CustomerId { get; set; }
+
     #region Invoicing Fields
 
     /// <summary>CFDI invoice status for this order.</summary>
@@ -109,6 +112,8 @@ public partial class Order
     public virtual CashRegisterSession? CashRegisterSession { get; set; }
 
     public virtual FiscalCustomer? FiscalCustomer { get; set; }
+
+    public virtual Customer? Customer { get; set; }
 
     public virtual ICollection<OrderItem>? Items { get; set; }
 

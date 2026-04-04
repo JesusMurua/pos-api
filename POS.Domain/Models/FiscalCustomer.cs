@@ -46,9 +46,14 @@ public class FiscalCustomer
     [MaxLength(50)]
     public string? FacturapiCustomerId { get; set; }
 
+    /// <summary>FK to Customer for CRM linking. Null if not linked to a CRM profile.</summary>
+    public int? CustomerId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAt { get; set; }
 
     public virtual Business? Business { get; set; }
+
+    public virtual Customer? Customer { get; set; }
 }

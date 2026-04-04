@@ -94,6 +94,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<BranchDeliveryConfig> BranchDeliveryConfigs { get; set; } = null!;
 
     public DbSet<FiscalCustomer> FiscalCustomers { get; set; } = null!;
+    public DbSet<Customer> Customers { get; set; } = null!;
+    public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
 
     // System catalogs
@@ -333,6 +335,12 @@ public class ApplicationDbContext : DbContext
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasOne(o => o.Customer)
+                .WithMany(c => c.Orders)
+                .HasForeignKey(o => o.CustomerId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.Property(o => o.InvoiceStatus)
                 .HasConversion<string>()
                 .HasMaxLength(20)
@@ -354,6 +362,7 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
             entity.HasIndex(o => o.SyncStatus);
             entity.HasIndex(o => o.CashRegisterSessionId);
+            entity.HasIndex(o => o.CustomerId);
             entity.HasIndex(o => o.FacturapiId);
 
             entity.Property<uint>("xmin")
@@ -380,7 +389,14 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(c => c.BusinessId);
 
+            entity.HasOne(c => c.Customer)
+                .WithMany()
+                .HasForeignKey(c => c.CustomerId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasIndex(c => new { c.BusinessId, c.Rfc }).IsUnique();
+            entity.HasIndex(c => c.CustomerId);
         });
 
         #endregion
@@ -913,8 +929,74 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(r => r.CreatedByUserId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            entity.HasOne(r => r.Customer)
+                .WithMany(c => c.Reservations)
+                .HasForeignKey(r => r.CustomerId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasIndex(r => new { r.BranchId, r.ReservationDate });
             entity.HasIndex(r => new { r.TableId, r.ReservationDate, r.Status });
+        });
+
+        #endregion
+
+        #region Customer Configuration
+
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            entity.Property(c => c.FirstName).HasMaxLength(100);
+            entity.Property(c => c.LastName).HasMaxLength(100);
+            entity.Property(c => c.Phone).HasMaxLength(20);
+            entity.Property(c => c.Email).HasMaxLength(255);
+            entity.Property(c => c.Notes).HasMaxLength(500);
+            entity.Property(c => c.CreditBalanceCents).HasDefaultValue(0);
+            entity.Property(c => c.CreditLimitCents).HasDefaultValue(0);
+            entity.Property(c => c.PointsBalance).HasDefaultValue(0);
+            entity.Property(c => c.IsActive).HasDefaultValue(true);
+
+            entity.HasOne(c => c.Business)
+                .WithMany()
+                .HasForeignKey(c => c.BusinessId);
+
+            entity.HasIndex(c => new { c.BusinessId, c.Phone })
+                .IsUnique()
+                .HasFilter("\"Phone\" IS NOT NULL");
+
+            entity.HasIndex(c => new { c.BusinessId, c.LastName, c.FirstName });
+        });
+
+        #endregion
+
+        #region CustomerTransaction Configuration
+
+        modelBuilder.Entity<CustomerTransaction>(entity =>
+        {
+            entity.Property(t => t.TransactionType)
+                .HasConversion<string>()
+                .HasMaxLength(30);
+
+            entity.Property(t => t.Description).HasMaxLength(200);
+            entity.Property(t => t.CreatedBy).HasMaxLength(100);
+            entity.Property(t => t.ReferenceOrderId).HasMaxLength(36);
+
+            entity.HasOne(t => t.Customer)
+                .WithMany(c => c.Transactions)
+                .HasForeignKey(t => t.CustomerId);
+
+            entity.HasOne(t => t.Branch)
+                .WithMany()
+                .HasForeignKey(t => t.BranchId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(t => t.ReferenceOrder)
+                .WithMany()
+                .HasForeignKey(t => t.ReferenceOrderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(t => t.CustomerId);
+            entity.HasIndex(t => new { t.CustomerId, t.CreatedAt });
         });
 
         #endregion

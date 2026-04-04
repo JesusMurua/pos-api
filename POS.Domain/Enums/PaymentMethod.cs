@@ -11,5 +11,9 @@ public enum PaymentMethod
     /// <summary>Payment processed via MercadoPago QR or checkout.</summary>
     MercadoPago,
     /// <summary>Payment processed via a generic bank terminal (non-Clip).</summary>
-    BankTerminal
+    BankTerminal,
+    /// <summary>Payment using store credit (fiado / saldo a favor).</summary>
+    StoreCredit,
+    /// <summary>Payment using loyalty points redeemed as currency.</summary>
+    LoyaltyPoints
 }
