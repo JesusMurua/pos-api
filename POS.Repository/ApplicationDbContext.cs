@@ -518,14 +518,20 @@ public class ApplicationDbContext : DbContext
             entity.Property(i => i.CurrentStock).HasPrecision(18, 4);
             entity.Property(i => i.LowStockThreshold).HasPrecision(18, 4);
 
+            // UnitOfMeasure stored as int. Default value (Pcs) is set at the model level
+            // via the C# property initializer — no DB-level DEFAULT needed.
+
             entity.HasOne(i => i.Branch)
                 .WithMany()
                 .HasForeignKey(i => i.BranchId);
 
+            // Restrict (not Cascade) — inventory movements are an immutable ledger
+            // and must not be silently deleted when the parent ingredient is removed.
             entity.HasMany(i => i.Movements)
                 .WithOne(m => m.InventoryItem)
                 .HasForeignKey(m => m.InventoryItemId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasMany(i => i.ProductConsumptions)
                 .WithOne(pc => pc.InventoryItem)
@@ -544,7 +550,21 @@ public class ApplicationDbContext : DbContext
         {
             entity.Property(m => m.Quantity).HasPrecision(18, 4);
 
+            // StockAfterTransaction — snapshot after each ledger entry
+            entity.Property(m => m.StockAfterTransaction)
+                .HasPrecision(18, 4)
+                .HasDefaultValue(0m);
+
+            // TransactionType stored as int. Default value (ConsumeFromSale) is set at the
+            // model level via the C# property initializer — no DB-level DEFAULT needed.
+
+            entity.Property(m => m.CreatedBy).HasMaxLength(100);
+
+            // Composite index: item + date (for item-level history)
             entity.HasIndex(m => new { m.InventoryItemId, m.CreatedAt });
+
+            // Composite index: type + date (for type-filtered branch-wide history)
+            entity.HasIndex(m => new { m.TransactionType, m.CreatedAt });
         });
 
         modelBuilder.Entity<ProductConsumption>(entity =>

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -7,14 +8,15 @@ using POS.Services.IService;
 namespace POS.Services.Service;
 
 /// <summary>
-/// Implements inventory management operations.
+/// Implements inventory management operations including CRUD for ingredients,
+/// recipe (ProductConsumption) management, and the typed ledger of movements.
 /// </summary>
 public class InventoryService : IInventoryService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<InventoryService> _logger;
 
-    private static readonly string[] ValidMovementTypes = { "in", "out", "adjustment" };
+    private static readonly string[] ValidLegacyMovementTypes = { "in", "out", "adjustment" };
 
     public InventoryService(IUnitOfWork unitOfWork, ILogger<InventoryService> logger)
     {
@@ -22,19 +24,15 @@ public class InventoryService : IInventoryService
         _logger = logger;
     }
 
-    #region Public API Methods
+    #region Inventory Item CRUD
 
-    /// <summary>
-    /// Gets all active inventory items for a branch.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<IEnumerable<InventoryItem>> GetAllAsync(int branchId)
     {
         return await _unitOfWork.Inventory.GetAllByBranchAsync(branchId);
     }
 
-    /// <summary>
-    /// Gets an inventory item by its identifier.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<InventoryItem> GetByIdAsync(int id)
     {
         var item = await _unitOfWork.Inventory.GetByIdAsync(id);
@@ -45,21 +43,20 @@ public class InventoryService : IInventoryService
         return item;
     }
 
-    /// <summary>
-    /// Gets inventory items with stock at or below threshold.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<IEnumerable<InventoryItem>> GetLowStockAsync(int branchId)
     {
         return await _unitOfWork.Inventory.GetLowStockAsync(branchId);
     }
 
-    /// <summary>
-    /// Creates a new inventory item.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<InventoryItem> CreateAsync(InventoryItem item)
     {
         item.CreatedAt = DateTime.UtcNow;
         item.UpdatedAt = DateTime.UtcNow;
+
+        // Mirror UnitOfMeasure into the legacy Unit string for backwards compatibility
+        item.Unit = item.UnitOfMeasure.ToString();
 
         await _unitOfWork.Inventory.AddAsync(item);
         await _unitOfWork.SaveChangesAsync();
@@ -67,9 +64,7 @@ public class InventoryService : IInventoryService
         return item;
     }
 
-    /// <summary>
-    /// Updates an existing inventory item.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<InventoryItem> UpdateAsync(int id, InventoryItem item)
     {
         var existing = await _unitOfWork.Inventory.GetByIdAsync(id);
@@ -78,7 +73,8 @@ public class InventoryService : IInventoryService
             throw new NotFoundException($"Inventory item with id {id} not found");
 
         existing.Name = item.Name;
-        existing.Unit = item.Unit;
+        existing.UnitOfMeasure = item.UnitOfMeasure;
+        existing.Unit = item.UnitOfMeasure.ToString(); // keep legacy in sync
         existing.LowStockThreshold = item.LowStockThreshold;
         existing.CostCents = item.CostCents;
         existing.IsActive = item.IsActive;
@@ -90,9 +86,7 @@ public class InventoryService : IInventoryService
         return existing;
     }
 
-    /// <summary>
-    /// Soft deletes an inventory item by setting IsActive to false.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<bool> DeleteAsync(int id)
     {
         var item = await _unitOfWork.Inventory.GetByIdAsync(id);
@@ -109,15 +103,17 @@ public class InventoryService : IInventoryService
         return true;
     }
 
-    /// <summary>
-    /// Adds a movement and recalculates current stock.
-    /// </summary>
+    #endregion
+
+    #region Legacy Movement
+
+    /// <inheritdoc/>
     public async Task<InventoryMovement> AddMovementAsync(
         int itemId, string type, decimal quantity, string? reason, string? orderId)
     {
         var normalizedType = type.ToLowerInvariant();
 
-        if (!ValidMovementTypes.Contains(normalizedType))
+        if (!ValidLegacyMovementTypes.Contains(normalizedType))
             throw new ValidationException("Movement type must be 'in', 'out', or 'adjustment'");
 
         var item = await _unitOfWork.Inventory.GetByIdAsync(itemId);
@@ -125,17 +121,6 @@ public class InventoryService : IInventoryService
         if (item == null)
             throw new NotFoundException($"Inventory item with id {itemId} not found");
 
-        var movement = new InventoryMovement
-        {
-            InventoryItemId = itemId,
-            Type = normalizedType,
-            Quantity = quantity,
-            Reason = reason,
-            OrderId = orderId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        // Recalculate stock
         switch (normalizedType)
         {
             case "in":
@@ -145,11 +130,25 @@ public class InventoryService : IInventoryService
                 item.CurrentStock -= quantity;
                 break;
             case "adjustment":
+                // Legacy "adjustment" overwrites — preserved as-is for backwards compatibility
                 item.CurrentStock = quantity;
                 break;
         }
 
         item.UpdatedAt = DateTime.UtcNow;
+
+        var movement = new InventoryMovement
+        {
+            InventoryItemId = itemId,
+            TransactionType = MapLegacyTypeToTransactionType(normalizedType),
+            Type = normalizedType,
+            Quantity = normalizedType == "adjustment" ? Math.Abs(quantity) : Math.Abs(quantity),
+            StockAfterTransaction = item.CurrentStock,
+            Reason = reason,
+            OrderId = orderId,
+            CreatedBy = "legacy-api",
+            CreatedAt = DateTime.UtcNow
+        };
 
         await _unitOfWork.InventoryMovements.AddAsync(movement);
         _unitOfWork.Inventory.Update(item);
@@ -158,9 +157,7 @@ public class InventoryService : IInventoryService
         return movement;
     }
 
-    /// <summary>
-    /// Gets all movements for an inventory item.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<IEnumerable<InventoryMovement>> GetMovementsAsync(int itemId)
     {
         var item = await _unitOfWork.Inventory.GetWithMovementsAsync(itemId);
@@ -171,18 +168,157 @@ public class InventoryService : IInventoryService
         return item.Movements ?? Enumerable.Empty<InventoryMovement>();
     }
 
-    /// <summary>
-    /// Gets all consumption rules for a product, including inventory item details.
-    /// </summary>
+    #endregion
+
+    #region Typed Ledger Operations (Phase 18)
+
+    /// <inheritdoc/>
+    public async Task<InventoryMovement> RegisterPurchaseAsync(
+        int inventoryItemId,
+        decimal quantity,
+        int? costCentsPerUnit,
+        string? note,
+        string createdBy)
+    {
+        if (quantity <= 0)
+            throw new ValidationException("Purchase quantity must be greater than zero.");
+
+        var item = await _unitOfWork.Inventory.GetByIdAsync(inventoryItemId);
+
+        if (item == null)
+            throw new NotFoundException($"Inventory item with id {inventoryItemId} not found");
+
+        item.CurrentStock += quantity;
+
+        if (costCentsPerUnit.HasValue && costCentsPerUnit.Value > 0)
+            item.CostCents = costCentsPerUnit.Value;
+
+        item.UpdatedAt = DateTime.UtcNow;
+
+        var movement = new InventoryMovement
+        {
+            InventoryItemId = inventoryItemId,
+            TransactionType = InventoryTransactionType.Purchase,
+            Type = "in",
+            Quantity = quantity,
+            StockAfterTransaction = item.CurrentStock,
+            Reason = note,
+            CreatedBy = createdBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _unitOfWork.Inventory.Update(item);
+        await _unitOfWork.InventoryMovements.AddAsync(movement);
+        await _unitOfWork.SaveChangesAsync();
+
+        return movement;
+    }
+
+    /// <inheritdoc/>
+    public async Task<InventoryMovement> RegisterWasteAsync(
+        int inventoryItemId,
+        decimal quantity,
+        string reason,
+        string createdBy)
+    {
+        if (quantity <= 0)
+            throw new ValidationException("Waste quantity must be greater than zero.");
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ValidationException("A reason is required when registering waste.");
+
+        var item = await _unitOfWork.Inventory.GetByIdAsync(inventoryItemId);
+
+        if (item == null)
+            throw new NotFoundException($"Inventory item with id {inventoryItemId} not found");
+
+        item.CurrentStock -= quantity;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        var movement = new InventoryMovement
+        {
+            InventoryItemId = inventoryItemId,
+            TransactionType = InventoryTransactionType.Waste,
+            Type = "out",
+            Quantity = quantity,
+            StockAfterTransaction = item.CurrentStock,
+            Reason = reason,
+            CreatedBy = createdBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _unitOfWork.Inventory.Update(item);
+        await _unitOfWork.InventoryMovements.AddAsync(movement);
+        await _unitOfWork.SaveChangesAsync();
+
+        return movement;
+    }
+
+    /// <inheritdoc/>
+    public async Task<InventoryMovement> RegisterManualAdjustmentAsync(
+        int inventoryItemId,
+        decimal delta,
+        string reason,
+        string createdBy)
+    {
+        if (delta == 0)
+            throw new ValidationException("Adjustment delta cannot be zero.");
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ValidationException("A reason is required for a manual adjustment.");
+
+        var item = await _unitOfWork.Inventory.GetByIdAsync(inventoryItemId);
+
+        if (item == null)
+            throw new NotFoundException($"Inventory item with id {inventoryItemId} not found");
+
+        item.CurrentStock += delta;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        var movement = new InventoryMovement
+        {
+            InventoryItemId = inventoryItemId,
+            TransactionType = InventoryTransactionType.ManualAdjustment,
+            Type = delta >= 0 ? "in" : "out",
+            Quantity = Math.Abs(delta),
+            StockAfterTransaction = item.CurrentStock,
+            Reason = reason,
+            CreatedBy = createdBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _unitOfWork.Inventory.Update(item);
+        await _unitOfWork.InventoryMovements.AddAsync(movement);
+        await _unitOfWork.SaveChangesAsync();
+
+        return movement;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IEnumerable<InventoryMovement>> GetMovementHistoryAsync(
+        int branchId,
+        int? inventoryItemId,
+        InventoryTransactionType? type,
+        DateTime? from,
+        DateTime? to)
+    {
+        return await _unitOfWork.InventoryMovements.GetHistoryAsync(
+            branchId, inventoryItemId, type, from, to);
+    }
+
+    #endregion
+
+    #region Recipe (ProductConsumption)
+
+    /// <inheritdoc/>
     public async Task<IEnumerable<ProductConsumption>> GetConsumptionByProductAsync(int productId)
     {
         return await _unitOfWork.ProductConsumptions.GetByProductAsync(productId);
     }
 
-    /// <summary>
-    /// Creates or updates a product consumption rule.
-    /// </summary>
-    public async Task<ProductConsumption> CreateConsumptionAsync(int productId, int inventoryItemId, decimal quantityPerSale)
+    /// <inheritdoc/>
+    public async Task<ProductConsumption> CreateConsumptionAsync(
+        int productId, int inventoryItemId, decimal quantityPerSale)
     {
         var existing = await _unitOfWork.ProductConsumptions
             .GetByProductAndItemAsync(productId, inventoryItemId);
@@ -207,9 +343,7 @@ public class InventoryService : IInventoryService
         return consumption;
     }
 
-    /// <summary>
-    /// Deletes a product consumption rule.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<bool> DeleteConsumptionAsync(int id)
     {
         var consumption = await _unitOfWork.ProductConsumptions.GetByIdAsync(id);
@@ -222,10 +356,11 @@ public class InventoryService : IInventoryService
         return true;
     }
 
-    /// <summary>
-    /// Deducts inventory based on products sold. Best-effort — never throws.
-    /// All DB lookups are batched — zero queries inside loops.
-    /// </summary>
+    #endregion
+
+    #region Sync Engine Integration
+
+    /// <inheritdoc/>
     public async Task DeductFromSaleAsync(string orderId, List<SaleItem> items)
     {
         try
@@ -242,10 +377,7 @@ public class InventoryService : IInventoryService
         }
     }
 
-    /// <summary>
-    /// Batch deducts inventory for multiple orders. Best-effort — never throws.
-    /// All DB lookups are batched (no N+1), movements are bulk-inserted.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task DeductFromOrdersBatchAsync(List<Order> orders)
     {
         try
@@ -262,14 +394,16 @@ public class InventoryService : IInventoryService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to batch deduct inventory for {Count} orders", orders.Count);
+            _logger.LogWarning(ex,
+                "Failed to batch deduct inventory for {Count} orders", orders.Count);
         }
     }
 
-    /// <summary>
-    /// Gets product IDs whose inventory items have zero or negative stock.
-    /// Batch query — no N+1.
-    /// </summary>
+    #endregion
+
+    #region Utilities
+
+    /// <inheritdoc/>
     public async Task<IEnumerable<int>> GetOutOfStockProductIdsAsync(int branchId)
     {
         var allItems = await _unitOfWork.Inventory.GetAllByBranchAsync(branchId);
@@ -287,9 +421,7 @@ public class InventoryService : IInventoryService
         return consumptions.Select(pc => pc.ProductId).Distinct();
     }
 
-    /// <summary>
-    /// Gets inventory movements for a product with TrackStock enabled, ordered by CreatedAt descending.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task<IEnumerable<InventoryMovement>> GetProductMovementsAsync(int productId)
     {
         var movements = await _unitOfWork.InventoryMovements.GetAsync(
@@ -304,19 +436,23 @@ public class InventoryService : IInventoryService
 
     /// <summary>
     /// Core batch deduction logic. Zero DB queries inside loops.
-    /// 1) Batch fetch products → separate TrackStock vs recipe
-    /// 2) Batch fetch consumptions + inventory items
-    /// 3) Calculate all deductions in memory
-    /// 4) AddRangeAsync movements + single SaveChangesAsync
+    /// <list type="number">
+    ///   <item>Batch-fetches all products referenced in the sale.</item>
+    ///   <item>Separates TrackStock (direct) from recipe-based products.</item>
+    ///   <item>Batch-fetches ProductConsumptions and InventoryItems.</item>
+    ///   <item>Calculates all deductions in memory.</item>
+    ///   <item>Bulk-inserts movements with typed ledger fields + single SaveChangesAsync.</item>
+    /// </list>
     /// </summary>
-    private async Task DeductBatchCoreAsync(List<(string OrderId, int ProductId, decimal Quantity)> orderItems)
+    private async Task DeductBatchCoreAsync(
+        List<(string OrderId, int ProductId, decimal Quantity)> orderItems)
     {
         // 1. Batch fetch all products referenced in the sale
         var productIds = orderItems.Select(i => i.ProductId).Distinct().ToList();
         var products = (await _unitOfWork.Products.GetAsync(p => productIds.Contains(p.Id)))
             .ToDictionary(p => p.Id);
 
-        // 2. Separate TrackStock (direct deduction) vs recipe-based products
+        // 2. Separate TrackStock (direct deduction) vs. recipe-based products
         var trackStockProductIds = products.Values
             .Where(p => p.TrackStock)
             .Select(p => p.Id)
@@ -344,12 +480,12 @@ public class InventoryService : IInventoryService
                 .ToDictionary(i => i.Id)
             : new Dictionary<int, InventoryItem>();
 
-        // Group consumptions by ProductId for fast lookup
+        // Group consumptions by ProductId for fast O(1) lookup
         var consumptionsByProduct = consumptions
             .GroupBy(c => c.ProductId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        // 5. Calculate all deductions in memory — no DB calls
+        // 5. Calculate all deductions in memory — zero additional DB queries
         var movements = new List<InventoryMovement>();
 
         foreach (var (orderId, productId, quantity) in orderItems)
@@ -359,7 +495,7 @@ public class InventoryService : IInventoryService
 
             if (product.TrackStock)
             {
-                // Path A: Direct stock deduction (abarrotes/papelería)
+                // ── Path A: Direct stock deduction (TrackStock = true) ──
                 product.CurrentStock -= quantity;
 
                 if (product.CurrentStock <= product.LowStockThreshold)
@@ -370,16 +506,19 @@ public class InventoryService : IInventoryService
                 movements.Add(new InventoryMovement
                 {
                     ProductId = productId,
+                    TransactionType = InventoryTransactionType.ConsumeFromSale,
                     Type = "out",
                     Quantity = quantity,
+                    StockAfterTransaction = product.CurrentStock,
                     Reason = $"Venta orden {orderId}",
                     OrderId = orderId,
+                    CreatedBy = "SyncEngine",
                     CreatedAt = DateTime.UtcNow
                 });
             }
             else
             {
-                // Path B: Recipe-based consumption (restaurante/fonda)
+                // ── Path B: Recipe-based consumption ──
                 if (!consumptionsByProduct.TryGetValue(productId, out var productConsumptions))
                     continue; // No recipe mapped — skip gracefully
 
@@ -401,21 +540,39 @@ public class InventoryService : IInventoryService
                     movements.Add(new InventoryMovement
                     {
                         InventoryItemId = consumption.InventoryItemId,
+                        TransactionType = InventoryTransactionType.ConsumeFromSale,
                         Type = "out",
                         Quantity = quantityToDeduct,
+                        StockAfterTransaction = invItem.CurrentStock,
                         Reason = $"Venta orden {orderId}",
                         OrderId = orderId,
+                        CreatedBy = "SyncEngine",
                         CreatedAt = DateTime.UtcNow
                     });
                 }
             }
         }
 
-        // 6. Bulk insert all movements + single save
+        // 6. Bulk insert all movements + single SaveChangesAsync
         if (movements.Count > 0)
             await _unitOfWork.InventoryMovements.AddRangeAsync(movements);
 
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Maps a legacy type string to the closest <see cref="InventoryTransactionType"/>.
+    /// "in" → Purchase, "out" → ConsumeFromSale, "adjustment" → ManualAdjustment.
+    /// </summary>
+    private static InventoryTransactionType MapLegacyTypeToTransactionType(string type)
+    {
+        return type switch
+        {
+            "in" => InventoryTransactionType.Purchase,
+            "out" => InventoryTransactionType.ConsumeFromSale,
+            "adjustment" => InventoryTransactionType.ManualAdjustment,
+            _ => InventoryTransactionType.ManualAdjustment
+        };
     }
 
     #endregion
