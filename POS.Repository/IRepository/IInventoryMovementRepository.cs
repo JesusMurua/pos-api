@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 
 namespace POS.Repository.IRepository;
 
@@ -25,4 +26,14 @@ public interface IInventoryMovementRepository : IGenericRepository<InventoryMove
         InventoryTransactionType? type,
         DateTime? from,
         DateTime? to);
+
+    /// <summary>
+    /// Returns a paginated, projected ledger of inventory movements for a branch.
+    /// Joins <see cref="InventoryMovement"/> with <see cref="InventoryItem"/> at the database level
+    /// using a <c>.Select()</c> projection to avoid full entity tracking and N+1 queries.
+    /// Only ingredient-path movements (<c>InventoryItemId != null</c>) are included.
+    /// </summary>
+    /// <param name="branchId">Branch to scope the query to.</param>
+    /// <param name="filter">Pagination parameters.</param>
+    Task<PageData<InventoryLedgerDto>> GetLedgerPagedAsync(int branchId, PageFilter filter);
 }

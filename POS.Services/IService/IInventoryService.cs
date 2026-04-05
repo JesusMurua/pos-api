@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 
 namespace POS.Services.IService;
 
@@ -125,6 +126,14 @@ public interface IInventoryService
         InventoryTransactionType? type,
         DateTime? from,
         DateTime? to);
+
+    /// <summary>
+    /// Returns a paginated, projected global ledger of all ingredient-path movements for a branch.
+    /// The join with <see cref="InventoryItem"/> is performed at the database level.
+    /// </summary>
+    /// <param name="branchId">Branch to scope the query to.</param>
+    /// <param name="filter">Pagination parameters (page, pageSize).</param>
+    Task<PageData<InventoryLedgerDto>> GetLedgerAsync(int branchId, PageFilter filter);
 
     #endregion
 

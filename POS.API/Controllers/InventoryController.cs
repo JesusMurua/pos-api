@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -331,6 +332,23 @@ public class InventoryController : BaseApiController
         {
             return NotFound(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Returns a paginated global ledger of all inventory movements for the current branch.
+    /// Each entry includes the ingredient name (joined at DB level) to eliminate
+    /// the need for client-side joins. Ordered by <c>CreatedAt</c> descending.
+    /// </summary>
+    /// <param name="filter">Pagination parameters (page, pageSize).</param>
+    /// <returns>A paginated result of <see cref="InventoryLedgerDto"/>.</returns>
+    /// <response code="200">Returns the paginated ledger.</response>
+    [HttpGet("ledger")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(PageData<InventoryLedgerDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLedger([FromQuery] PageFilter filter)
+    {
+        var ledger = await _inventoryService.GetLedgerAsync(BranchId, filter);
+        return Ok(ledger);
     }
 
     /// <summary>

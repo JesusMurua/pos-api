@@ -3,6 +3,7 @@ using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Repository.Utils;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
@@ -304,6 +305,12 @@ public class InventoryService : IInventoryService
     {
         return await _unitOfWork.InventoryMovements.GetHistoryAsync(
             branchId, inventoryItemId, type, from, to);
+    }
+
+    /// <inheritdoc/>
+    public async Task<PageData<InventoryLedgerDto>> GetLedgerAsync(int branchId, PageFilter filter)
+    {
+        return await _unitOfWork.InventoryMovements.GetLedgerPagedAsync(branchId, filter);
     }
 
     #endregion

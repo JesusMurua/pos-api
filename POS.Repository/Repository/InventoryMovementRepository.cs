@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
+using POS.Repository.Utils;
 
 namespace POS.Repository.Repository;
 
@@ -42,5 +43,44 @@ public class InventoryMovementRepository : GenericRepository<InventoryMovement>,
         return await query
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
+    }
+
+    /// <inheritdoc/>
+    public async Task<PageData<InventoryLedgerDto>> GetLedgerPagedAsync(int branchId, PageFilter filter)
+    {
+        var query = _context.InventoryMovements
+            .AsNoTracking()
+            .Where(m => m.InventoryItemId != null
+                        && m.InventoryItem!.BranchId == branchId);
+
+        var totalRows = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRows / (double)filter.PageSize);
+
+        var data = await query
+            .OrderByDescending(m => m.CreatedAt)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .Select(m => new InventoryLedgerDto
+            {
+                Id = m.Id,
+                InventoryItemId = m.InventoryItemId,
+                ItemName = m.InventoryItem!.Name,
+                TransactionType = m.TransactionType,
+                Quantity = m.Quantity,
+                StockAfterTransaction = m.StockAfterTransaction,
+                Reason = m.Reason,
+                OrderId = m.OrderId,
+                CreatedBy = m.CreatedBy,
+                CreatedAt = m.CreatedAt
+            })
+            .ToListAsync();
+
+        return new PageData<InventoryLedgerDto>
+        {
+            Data = data,
+            RowsCount = totalRows,
+            TotalPages = totalPages,
+            CurrentPage = filter.Page
+        };
     }
 }
