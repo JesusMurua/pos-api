@@ -1244,35 +1244,51 @@ public class OrderService : IOrderService
     {
         try
         {
+            // Collect all unique promotion IDs referenced by this order
+            var promoIds = new HashSet<int>();
+
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(i => i.PromotionId.HasValue))
+                    promoIds.Add(item.PromotionId!.Value);
+            }
+
+            if (order.OrderPromotionId.HasValue)
+                promoIds.Add(order.OrderPromotionId.Value);
+
+            if (promoIds.Count == 0) return;
+
+            // Single batch query for all promotions
+            var promotions = (await _unitOfWork.Promotions.GetAsync(
+                p => promoIds.Contains(p.Id)))
+                .ToDictionary(p => p.Id);
+
             var recordedIds = new HashSet<int>();
 
+            // Validate item-level promotions and record usages
             if (order.Items != null)
             {
                 foreach (var item in order.Items.Where(i => i.PromotionId.HasValue))
                 {
                     var promoId = item.PromotionId!.Value;
-                    var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
-                    if (promo == null || promo.BranchId != order.BranchId)
+                    if (!promotions.TryGetValue(promoId, out var promo) || promo.BranchId != order.BranchId)
                     {
                         item.PromotionId = null;
                         continue;
                     }
 
-                    if (!recordedIds.Contains(promoId))
-                    {
+                    if (recordedIds.Add(promoId))
                         await _promotionService.RecordUsageAsync(promoId, order.BranchId, order.Id);
-                        recordedIds.Add(promoId);
-                    }
                 }
             }
 
+            // Validate order-level promotion
             if (order.OrderPromotionId.HasValue)
             {
                 var promoId = order.OrderPromotionId.Value;
-                var promo = await _unitOfWork.Promotions.GetByIdAsync(promoId);
-                if (promo == null || promo.BranchId != order.BranchId)
+                if (!promotions.TryGetValue(promoId, out var promo) || promo.BranchId != order.BranchId)
                     order.OrderPromotionId = null;
-                else if (!recordedIds.Contains(promoId))
+                else if (recordedIds.Add(promoId))
                     await _promotionService.RecordUsageAsync(promoId, order.BranchId, order.Id);
             }
 

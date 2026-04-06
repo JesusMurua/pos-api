@@ -175,6 +175,7 @@ public class ProductImportService : IProductImportService
 
     /// <summary>
     /// Executes the import, saving validated products to database.
+    /// Batch-creates categories first (1 SaveChanges), then batch-creates products (1 SaveChanges).
     /// </summary>
     public async Task<ProductImportResult> ImportAsync(List<ProductImportRow> rows, int branchId)
     {
@@ -188,34 +189,53 @@ public class ProductImportService : IProductImportService
         foreach (var cat in existingCategories)
             categoryCache[cat.Name] = cat.Id;
 
-        foreach (var row in rows)
+        // Phase 1: Batch-create all missing categories in a single SaveChanges
+        var newCategoryNames = rows
+            .Select(r => r.CategoryName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => !categoryCache.ContainsKey(name))
+            .ToList();
+
+        if (newCategoryNames.Count > 0)
         {
-            // Resolve or create category
-            if (!categoryCache.TryGetValue(row.CategoryName, out var categoryId))
+            var sortStart = categoryCache.Count + 1;
+            var newCategories = new List<Category>();
+
+            foreach (var name in newCategoryNames)
             {
-                var maxSort = categoryCache.Count > 0 ? categoryCache.Count + 1 : 1;
                 var newCategory = new Category
                 {
                     BranchId = branchId,
-                    Name = row.CategoryName,
+                    Name = name,
                     Icon = "pi-tag",
-                    SortOrder = maxSort,
+                    SortOrder = sortStart++,
                     IsActive = true
                 };
-
-                await _unitOfWork.Categories.AddAsync(newCategory);
-                await _unitOfWork.SaveChangesAsync();
-
-                categoryCache[row.CategoryName] = newCategory.Id;
-                categoryId = newCategory.Id;
-                result.Warnings.Add($"Categoría '{row.CategoryName}' creada automáticamente");
+                newCategories.Add(newCategory);
+                result.Warnings.Add($"Categoría '{name}' creada automáticamente");
             }
 
-            // Check for duplicate product in same category
-            var existing = await _unitOfWork.Products.GetAsync(
-                p => p.Name.ToLower() == row.Name.ToLower() && p.CategoryId == categoryId);
+            await _unitOfWork.Categories.AddRangeAsync(newCategories);
+            await _unitOfWork.SaveChangesAsync(); // 1 round-trip — EF populates all Ids
 
-            if (existing.Any())
+            foreach (var cat in newCategories)
+                categoryCache[cat.Name] = cat.Id;
+        }
+
+        // Phase 2: Pre-fetch existing products for duplicate check (single query)
+        var categoryIds = categoryCache.Values.ToList();
+        var existingProducts = await _unitOfWork.Products.GetAsync(
+            p => categoryIds.Contains(p.CategoryId));
+
+        var existingProductKeys = new HashSet<string>(
+            existingProducts.Select(p => $"{p.CategoryId}|{p.Name.ToLower()}"));
+
+        // Phase 3: Batch-create products
+        foreach (var row in rows)
+        {
+            var categoryId = categoryCache[row.CategoryName];
+
+            if (existingProductKeys.Contains($"{categoryId}|{row.Name.ToLower()}"))
             {
                 result.SkippedCount++;
                 result.Warnings.Add($"Producto '{row.Name}' ya existe, se omitió");
@@ -233,10 +253,11 @@ public class ProductImportService : IProductImportService
             };
 
             await _unitOfWork.Products.AddAsync(product);
+            existingProductKeys.Add($"{categoryId}|{row.Name.ToLower()}");
             result.ImportedCount++;
         }
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(); // 1 round-trip for all products
         return result;
     }
 

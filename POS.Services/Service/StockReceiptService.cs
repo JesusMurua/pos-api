@@ -77,6 +77,23 @@ public class StockReceiptService : IStockReceiptService
 
             var totalCents = 0;
 
+            // Batch-fetch all referenced inventory items and products (1 query each)
+            var inventoryItemIds = request.Items
+                .Where(i => i.InventoryItemId.HasValue)
+                .Select(i => i.InventoryItemId!.Value)
+                .Distinct().ToList();
+            var productIds = request.Items
+                .Where(i => i.ProductId.HasValue)
+                .Select(i => i.ProductId!.Value)
+                .Distinct().ToList();
+
+            var inventoryItems = (await _unitOfWork.Inventory.GetAsync(
+                i => inventoryItemIds.Contains(i.Id))).ToDictionary(i => i.Id);
+            var products = (await _unitOfWork.Products.GetAsync(
+                p => productIds.Contains(p.Id))).ToDictionary(p => p.Id);
+
+            var movements = new List<InventoryMovement>();
+
             foreach (var itemReq in request.Items)
             {
                 var itemTotal = (int)(itemReq.Quantity * itemReq.CostCents);
@@ -95,16 +112,50 @@ public class StockReceiptService : IStockReceiptService
                 receipt.Items.Add(receiptItem);
                 totalCents += itemTotal;
 
-                // Process inventory movement
-                if (itemReq.InventoryItemId.HasValue)
+                // Process inventory movement using pre-fetched entities
+                if (itemReq.InventoryItemId.HasValue
+                    && inventoryItems.TryGetValue(itemReq.InventoryItemId.Value, out var invItem))
                 {
-                    await ProcessInventoryItemReceiptAsync(itemReq.InventoryItemId.Value, itemReq.Quantity, itemReq.CostCents);
+                    invItem.CurrentStock += itemReq.Quantity;
+                    invItem.CostCents = itemReq.CostCents;
+                    invItem.UpdatedAt = DateTime.UtcNow;
+                    _unitOfWork.Inventory.Update(invItem);
+
+                    movements.Add(new InventoryMovement
+                    {
+                        InventoryItemId = itemReq.InventoryItemId.Value,
+                        Type = "in",
+                        Quantity = itemReq.Quantity,
+                        Reason = "Recepción de mercancía",
+                        CreatedAt = DateTime.UtcNow
+                    });
                 }
-                else if (itemReq.ProductId.HasValue)
+                else if (itemReq.ProductId.HasValue
+                    && products.TryGetValue(itemReq.ProductId.Value, out var product))
                 {
-                    await ProcessProductReceiptAsync(itemReq.ProductId.Value, itemReq.Quantity);
+                    product.CurrentStock += itemReq.Quantity;
+                    if (product.CurrentStock > product.LowStockThreshold)
+                        product.IsAvailable = true;
+                    _unitOfWork.Products.Update(product);
+
+                    movements.Add(new InventoryMovement
+                    {
+                        ProductId = itemReq.ProductId.Value,
+                        Type = "in",
+                        Quantity = itemReq.Quantity,
+                        Reason = "Recepción de mercancía",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    var targetId = itemReq.InventoryItemId ?? itemReq.ProductId;
+                    _logger.LogWarning("Entity {Id} not found during stock receipt", targetId);
                 }
             }
+
+            // Batch-insert all movements in a single operation
+            await _unitOfWork.InventoryMovements.AddRangeAsync(movements);
 
             receipt.TotalCents = totalCents;
             _unitOfWork.StockReceipts.Update(receipt);
@@ -120,64 +171,6 @@ public class StockReceiptService : IStockReceiptService
             await transaction.RollbackAsync();
             throw;
         }
-    }
-
-    #endregion
-
-    #region Private Helper Methods
-
-    private async Task ProcessInventoryItemReceiptAsync(int inventoryItemId, decimal quantity, int costCents)
-    {
-        var item = await _unitOfWork.Inventory.GetByIdAsync(inventoryItemId);
-
-        if (item == null)
-        {
-            _logger.LogWarning("InventoryItem {Id} not found during stock receipt", inventoryItemId);
-            return;
-        }
-
-        item.CurrentStock += quantity;
-        item.CostCents = costCents;
-        item.UpdatedAt = DateTime.UtcNow;
-        _unitOfWork.Inventory.Update(item);
-
-        var movement = new InventoryMovement
-        {
-            InventoryItemId = inventoryItemId,
-            Type = "in",
-            Quantity = quantity,
-            Reason = "Recepción de mercancía",
-            CreatedAt = DateTime.UtcNow
-        };
-        await _unitOfWork.InventoryMovements.AddAsync(movement);
-    }
-
-    private async Task ProcessProductReceiptAsync(int productId, decimal quantity)
-    {
-        var product = await _unitOfWork.Products.GetByIdAsync(productId);
-
-        if (product == null)
-        {
-            _logger.LogWarning("Product {Id} not found during stock receipt", productId);
-            return;
-        }
-
-        product.CurrentStock += quantity;
-
-        if (product.CurrentStock > product.LowStockThreshold)
-            product.IsAvailable = true;
-
-        _unitOfWork.Products.Update(product);
-
-        var movement = new InventoryMovement
-        {
-            ProductId = productId,
-            Type = "in",
-            Quantity = quantity,
-            Reason = "Recepción de mercancía",
-            CreatedAt = DateTime.UtcNow
-        };
-        await _unitOfWork.InventoryMovements.AddAsync(movement);
     }
 
     #endregion
