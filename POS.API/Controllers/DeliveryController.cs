@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
-using POS.Repository;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -15,12 +14,10 @@ namespace POS.API.Controllers;
 public class DeliveryController : BaseApiController
 {
     private readonly IDeliveryService _deliveryService;
-    private readonly IUnitOfWork _unitOfWork;
 
-    public DeliveryController(IDeliveryService deliveryService, IUnitOfWork unitOfWork)
+    public DeliveryController(IDeliveryService deliveryService)
     {
         _deliveryService = deliveryService;
-        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -183,26 +180,22 @@ public class DeliveryController : BaseApiController
         if (!Enum.TryParse<OrderSource>(source, true, out var orderSource) || orderSource == OrderSource.Direct)
             return BadRequest(new { message = $"Invalid delivery source: {source}" });
 
-        var config = await _unitOfWork.BranchDeliveryConfigs
-            .GetByBranchAndPlatformAsync(branchId, orderSource);
-
-        if (config == null)
-            return NotFound(new { message = $"Platform {source} not configured for this branch." });
-
-        if (!config.IsActive)
-            return BadRequest(new { message = $"Platform {source} integration is not active." });
-
-        var providedSecret = Request.Headers["X-Webhook-Secret"].FirstOrDefault();
-        if (string.IsNullOrEmpty(config.WebhookSecret) || providedSecret != config.WebhookSecret)
-            return Unauthorized(new { message = "Invalid webhook secret." });
-
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         try
         {
-            request.Source = orderSource;
-            var order = await _deliveryService.IngestWebhookOrderAsync(request, branchId, config.IsPrepaidByPlatform);
+            var providedSecret = Request.Headers["X-Webhook-Secret"].FirstOrDefault();
+            var order = await _deliveryService.ValidateAndIngestWebhookAsync(
+                orderSource, branchId, providedSecret, request);
             return Ok(order);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
         }
         catch (ValidationException ex)
         {

@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Enums;
 using POS.Domain.Models;
-using POS.Repository;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -15,14 +14,10 @@ namespace POS.API.Controllers;
 [Route("api/print-jobs")]
 public class PrintJobController : BaseApiController
 {
-    private const int MaxAttempts = 3;
-
-    private readonly IUnitOfWork _unitOfWork;
     private readonly IPrintJobService _printJobService;
 
-    public PrintJobController(IUnitOfWork unitOfWork, IPrintJobService printJobService)
+    public PrintJobController(IPrintJobService printJobService)
     {
-        _unitOfWork = unitOfWork;
         _printJobService = printJobService;
     }
 
@@ -43,7 +38,7 @@ public class PrintJobController : BaseApiController
     [ProducesResponseType(typeof(IEnumerable<PrintJob>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPending([FromQuery] PrintingDestination? destination)
     {
-        var jobs = await _unitOfWork.PrintJobs.GetPendingByBranchAsync(BranchId, destination);
+        var jobs = await _printJobService.GetPendingAsync(BranchId, destination);
         return Ok(jobs);
     }
 
@@ -59,7 +54,7 @@ public class PrintJobController : BaseApiController
     [ProducesResponseType(typeof(IEnumerable<PrintJob>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByOrder(string orderId)
     {
-        var jobs = await _unitOfWork.PrintJobs.GetByOrderAsync(orderId);
+        var jobs = await _printJobService.GetByOrderAsync(orderId);
         return Ok(jobs);
     }
 
@@ -109,18 +104,15 @@ public class PrintJobController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MarkPrinted(int id)
     {
-        var job = await _unitOfWork.PrintJobs.GetByIdAsync(id);
-        if (job == null || job.BranchId != BranchId) return NotFound();
-
-        if (job.Status != PrintJobStatus.Pending && job.Status != PrintJobStatus.InProgress)
-            return BadRequest($"Print job {id} is already in terminal status '{job.Status}'.");
-
-        job.Status    = PrintJobStatus.Printed;
-        job.PrintedAt = DateTime.UtcNow;
-        _unitOfWork.PrintJobs.Update(job);
-        await _unitOfWork.SaveChangesAsync();
-
-        return Ok(job);
+        try
+        {
+            var job = await _printJobService.MarkPrintedAsync(id, BranchId);
+            return job != null ? Ok(job) : NotFound();
+        }
+        catch (POS.Domain.Exceptions.ValidationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     /// <summary>
@@ -140,20 +132,14 @@ public class PrintJobController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> MarkFailed(int id)
     {
-        var job = await _unitOfWork.PrintJobs.GetByIdAsync(id);
-        if (job == null || job.BranchId != BranchId) return NotFound();
-
-        if (job.Status != PrintJobStatus.Pending)
-            return BadRequest($"Print job {id} is already in status '{job.Status}'.");
-
-        job.AttemptCount++;
-
-        if (job.AttemptCount >= MaxAttempts)
-            job.Status = PrintJobStatus.Failed;
-
-        _unitOfWork.PrintJobs.Update(job);
-        await _unitOfWork.SaveChangesAsync();
-
-        return Ok(job);
+        try
+        {
+            var job = await _printJobService.MarkFailedAsync(id, BranchId);
+            return job != null ? Ok(job) : NotFound();
+        }
+        catch (POS.Domain.Exceptions.ValidationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }

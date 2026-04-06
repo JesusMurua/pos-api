@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
@@ -15,11 +18,13 @@ public class StripeService : IStripeService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IStripeClient _stripeClient;
+    private readonly ILogger<StripeService> _logger;
 
-    public StripeService(IUnitOfWork unitOfWork, IStripeClient stripeClient)
+    public StripeService(IUnitOfWork unitOfWork, IStripeClient stripeClient, ILogger<StripeService> logger)
     {
         _unitOfWork = unitOfWork;
         _stripeClient = stripeClient;
+        _logger = logger;
     }
 
     #region Public API Methods
@@ -88,6 +93,33 @@ public class StripeService : IStripeService
         subscription.CanceledAt = DateTime.UtcNow;
         _unitOfWork.Subscriptions.Update(subscription);
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task QueueWebhookEventAsync(string stripeEventId, string eventType, string rawJson)
+    {
+        try
+        {
+            var inboxEvent = new StripeEventInbox
+            {
+                StripeEventId = stripeEventId,
+                Type = eventType,
+                RawJson = rawJson,
+                Status = StripeEventStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.StripeEventInbox.AddAsync(inboxEvent);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Stripe event {EventId} ({Type}) queued for processing",
+                stripeEventId, eventType);
+        }
+        catch (DbUpdateException)
+        {
+            // Unique constraint violation on StripeEventId — duplicate event, silently ignore
+            _logger.LogInformation("Duplicate Stripe event ignored: {EventId}", stripeEventId);
+        }
     }
 
     #endregion

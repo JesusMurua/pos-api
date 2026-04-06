@@ -1,11 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using POS.Domain.Enums;
-using POS.Domain.Models;
 using POS.Domain.Settings;
-using POS.Repository;
+using POS.Services.IService;
 using Stripe;
 
 namespace POS.API.Controllers;
@@ -19,16 +16,16 @@ namespace POS.API.Controllers;
 [AllowAnonymous]
 public class StripeWebhookController : ControllerBase
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IStripeService _stripeService;
     private readonly string _webhookSecret;
     private readonly ILogger<StripeWebhookController> _logger;
 
     public StripeWebhookController(
-        IUnitOfWork unitOfWork,
+        IStripeService stripeService,
         IOptions<StripeSettings> stripeSettings,
         ILogger<StripeWebhookController> logger)
     {
-        _unitOfWork = unitOfWork;
+        _stripeService = stripeService;
         _webhookSecret = stripeSettings.Value.WebhookSecret;
         _logger = logger;
     }
@@ -57,28 +54,7 @@ public class StripeWebhookController : ControllerBase
             return BadRequest("Invalid signature");
         }
 
-        try
-        {
-            var inboxEvent = new StripeEventInbox
-            {
-                StripeEventId = stripeEvent.Id,
-                Type = stripeEvent.Type,
-                RawJson = json,
-                Status = StripeEventStatus.Pending,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _unitOfWork.StripeEventInbox.AddAsync(inboxEvent);
-            await _unitOfWork.SaveChangesAsync();
-
-            _logger.LogInformation("Stripe event {EventId} ({Type}) queued for processing",
-                stripeEvent.Id, stripeEvent.Type);
-        }
-        catch (DbUpdateException)
-        {
-            // Unique constraint violation on StripeEventId — duplicate event, silently ignore
-            _logger.LogInformation("Duplicate Stripe event ignored: {EventId}", stripeEvent.Id);
-        }
+        await _stripeService.QueueWebhookEventAsync(stripeEvent.Id, stripeEvent.Type, json);
 
         return Ok();
     }

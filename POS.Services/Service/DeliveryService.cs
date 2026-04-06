@@ -163,6 +163,26 @@ public class DeliveryService : IDeliveryService
         return order;
     }
 
+    /// <inheritdoc />
+    public async Task<Order> ValidateAndIngestWebhookAsync(
+        OrderSource orderSource, int branchId, string? webhookSecret, IngestDeliveryOrderRequest request)
+    {
+        var config = await _unitOfWork.BranchDeliveryConfigs
+            .GetByBranchAndPlatformAsync(branchId, orderSource);
+
+        if (config == null)
+            throw new NotFoundException($"Platform {orderSource} not configured for this branch.");
+
+        if (!config.IsActive)
+            throw new ValidationException($"Platform {orderSource} integration is not active.");
+
+        if (string.IsNullOrEmpty(config.WebhookSecret) || webhookSecret != config.WebhookSecret)
+            throw new UnauthorizedAccessException("Invalid webhook secret.");
+
+        request.Source = orderSource;
+        return await IngestWebhookOrderAsync(request, branchId, config.IsPrepaidByPlatform);
+    }
+
     #endregion
 
     #region Private Helper Methods

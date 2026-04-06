@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using POS.Repository;
+using POS.Services.IService;
 
 namespace POS.API.Controllers;
 
@@ -12,38 +12,38 @@ namespace POS.API.Controllers;
 [AllowAnonymous]
 public class CatalogController : ControllerBase
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly ICatalogService _catalogService;
 
-    public CatalogController(IUnitOfWork unitOfWork)
+    public CatalogController(ICatalogService catalogService)
     {
-        _unitOfWork = unitOfWork;
+        _catalogService = catalogService;
     }
 
     [HttpGet("kitchen-statuses")]
     public async Task<IActionResult> GetKitchenStatuses() =>
-        Ok(await _unitOfWork.Catalog.GetKitchenStatusesAsync());
+        Ok(await _catalogService.GetKitchenStatusesAsync());
 
     [HttpGet("display-statuses")]
     public async Task<IActionResult> GetDisplayStatuses() =>
-        Ok(await _unitOfWork.Catalog.GetDisplayStatusesAsync());
+        Ok(await _catalogService.GetDisplayStatusesAsync());
 
     [HttpGet("payment-methods")]
     public async Task<IActionResult> GetPaymentMethods() =>
-        Ok(await _unitOfWork.Catalog.GetPaymentMethodsAsync());
+        Ok(await _catalogService.GetPaymentMethodsAsync());
 
     [HttpGet("device-modes")]
     public async Task<IActionResult> GetDeviceModes() =>
-        Ok(await _unitOfWork.Catalog.GetDeviceModesAsync());
+        Ok(await _catalogService.GetDeviceModesAsync());
 
     [HttpGet("business-types")]
     public async Task<IActionResult> GetBusinessTypes() =>
-        Ok(await _unitOfWork.Catalog.GetBusinessTypesAsync());
+        Ok(await _catalogService.GetBusinessTypesAsync());
 
     [HttpGet("zone-types")]
     public async Task<IActionResult> GetZoneTypes() =>
-        Ok(await _unitOfWork.Catalog.GetZoneTypesAsync());
+        Ok(await _catalogService.GetZoneTypesAsync());
 
     [HttpGet("plan-types")]
     public async Task<IActionResult> GetPlanTypes() =>
-        Ok(await _unitOfWork.Catalog.GetPlanTypesAsync());
+        Ok(await _catalogService.GetPlanTypesAsync());
 }
