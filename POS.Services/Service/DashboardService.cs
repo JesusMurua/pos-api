@@ -16,30 +16,40 @@ public class DashboardService : IDashboardService
 
     /// <summary>
     /// Returns dashboard summary for a specific date.
+    /// Uses SQL-level aggregation via repository projections — no .Include() or entity tracking.
     /// </summary>
     public async Task<DashboardSummaryDto> GetSummaryAsync(int branchId, DateTime date)
     {
-        var orders = (await _unitOfWork.Orders.GetAsync(
-            o => o.BranchId == branchId
-                && o.CreatedAt.Date == date.Date,
-            "Items,Payments")).ToList();
+        var from = date.Date;
+        var to = date.Date;
 
-        var completed = orders.Where(o => o.CancelledAt == null).ToList();
-        var cancelled = orders.Where(o => o.CancelledAt != null).ToList();
+        var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, from, to);
+        var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, from, to);
+        var topProducts = await _unitOfWork.Orders.GetTopProductsAsync(branchId, from, to, top: 5);
+        var cancellationReasons = await _unitOfWork.Orders.GetCancellationsByReasonAsync(branchId, date);
+        var recentOrders = await _unitOfWork.Orders.GetRecentOrdersAsync(branchId, date);
 
-        var allPayments = completed.SelectMany(o => o.Payments).ToList();
+        var completedMetrics = dailyMetrics.Where(m => !m.IsCancelled).ToList();
+        var cancelledMetrics = dailyMetrics.Where(m => m.IsCancelled).ToList();
 
-        var cashCents = allPayments.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.AmountCents);
-        var cardCents = allPayments.Where(p => p.Method == PaymentMethod.Card).Sum(p => p.AmountCents);
-        var transferCents = allPayments.Where(p => p.Method == PaymentMethod.Transfer).Sum(p => p.AmountCents);
-        var otherCents = allPayments.Where(p => p.Method == PaymentMethod.Other).Sum(p => p.AmountCents);
+        var completedCount = completedMetrics.Sum(m => m.OrderCount);
+        var totalCents = completedMetrics.Sum(m => m.TotalCents);
 
-        var totalCents = completed.Sum(o => o.TotalCents);
+        var cashCents = paymentTotals
+            .Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.TotalCents);
+        var cardCents = paymentTotals
+            .Where(p => p.Method == PaymentMethod.Card).Sum(p => p.TotalCents);
+        var transferCents = paymentTotals
+            .Where(p => p.Method == PaymentMethod.Transfer).Sum(p => p.TotalCents);
+        var otherCents = paymentTotals
+            .Where(p => p.Method != PaymentMethod.Cash
+                     && p.Method != PaymentMethod.Card
+                     && p.Method != PaymentMethod.Transfer)
+            .Sum(p => p.TotalCents);
 
-        var topMethod = allPayments
-            .GroupBy(p => p.Method)
-            .OrderByDescending(g => g.Sum(p => p.AmountCents))
-            .FirstOrDefault()?.Key.ToString() ?? "Cash";
+        var topMethod = paymentTotals
+            .OrderByDescending(p => p.TotalCents)
+            .FirstOrDefault()?.Method.ToString() ?? "Cash";
 
         return new DashboardSummaryDto
         {
@@ -47,8 +57,8 @@ public class DashboardService : IDashboardService
             Sales = new DashboardSales
             {
                 TotalCents = totalCents,
-                CompletedOrders = completed.Count,
-                AverageTicketCents = completed.Count > 0 ? totalCents / completed.Count : 0,
+                CompletedOrders = completedCount,
+                AverageTicketCents = completedCount > 0 ? totalCents / completedCount : 0,
                 CashCents = cashCents,
                 CardCents = cardCents,
                 TransferCents = transferCents,
@@ -57,51 +67,22 @@ public class DashboardService : IDashboardService
             },
             Orders = new DashboardCancellations
             {
-                CancelledCount = cancelled.Count,
-                CancelledTotalCents = cancelled.Sum(o => o.TotalCents),
-                CancellationReasons = cancelled
-                    .GroupBy(o => o.CancellationReason ?? "Sin razón")
-                    .Select(g => new CancellationReasonDto
-                    {
-                        Reason = g.Key,
-                        Count = g.Count(),
-                        TotalCents = g.Sum(o => o.TotalCents)
-                    })
-                    .OrderByDescending(r => r.Count)
-                    .ToList()
+                CancelledCount = cancelledMetrics.Sum(m => m.OrderCount),
+                CancelledTotalCents = cancelledMetrics.Sum(m => m.TotalCents),
+                CancellationReasons = cancellationReasons.Select(r => new CancellationReasonDto
+                {
+                    Reason = r.Reason,
+                    Count = r.Count,
+                    TotalCents = r.TotalCents
+                }).ToList()
             },
-            TopProducts = completed
-                .Where(o => o.Items != null)
-                .SelectMany(o => o.Items!)
-                .GroupBy(i => i.ProductName)
-                .Select(g => new DashboardTopProduct
-                {
-                    Name = g.Key,
-                    Quantity = g.Sum(i => i.Quantity),
-                    TotalCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
-                })
-                .OrderByDescending(p => p.Quantity)
-                .Take(5)
-                .ToList(),
-            RecentOrders = orders
-                .OrderByDescending(o => o.CreatedAt)
-                .Take(20)
-                .Select(o => new DashboardRecentOrder
-                {
-                    OrderNumber = o.OrderNumber,
-                    ItemCount = o.Items?.Sum(i => i.Quantity) ?? 0,
-                    TotalCents = o.TotalCents,
-                    KitchenStatus = o.KitchenStatus.ToString(),
-                    CancelledAt = o.CancelledAt,
-                    CancellationReason = o.CancellationReason,
-                    CreatedAt = o.CreatedAt,
-                    Payments = o.Payments.Select(p => new DashboardPayment
-                    {
-                        Method = p.Method.ToString(),
-                        AmountCents = p.AmountCents
-                    }).ToList()
-                })
-                .ToList()
+            TopProducts = topProducts.Select(p => new DashboardTopProduct
+            {
+                Name = p.Name,
+                Quantity = p.Quantity,
+                TotalCents = p.TotalCents
+            }).ToList(),
+            RecentOrders = recentOrders
         };
     }
 }

@@ -59,3 +59,13 @@ public class DashboardPayment
     public string Method { get; set; } = null!;
     public int AmountCents { get; set; }
 }
+
+/// <summary>
+/// SQL-level projection row for cancellation metrics grouped by reason.
+/// </summary>
+public class CancellationReasonRow
+{
+    public string Reason { get; set; } = null!;
+    public int Count { get; set; }
+    public int TotalCents { get; set; }
+}

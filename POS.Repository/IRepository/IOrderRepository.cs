@@ -83,4 +83,20 @@ public interface IOrderRepository : IGenericRepository<Order>
     /// Uses AsNoTracking + Select for SQL-level projection with Customer join.
     /// </summary>
     Task<List<DetailedSalesCsvRow>> GetDetailedSalesCsvRowsAsync(int branchId, DateTime from, DateTime to);
+
+    // ──────────────────────────────────────────
+    // AUDIT-001 P0: Dashboard projections
+    // ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns cancellation metrics grouped by reason for a single day.
+    /// Uses AsNoTracking + GroupBy/Select for SQL-level aggregation.
+    /// </summary>
+    Task<List<CancellationReasonRow>> GetCancellationsByReasonAsync(int branchId, DateTime date);
+
+    /// <summary>
+    /// Returns the N most recent orders as flat projections with item count and payments.
+    /// Uses AsNoTracking + Select for SQL-level projection — no .Include().
+    /// </summary>
+    Task<List<DashboardRecentOrder>> GetRecentOrdersAsync(int branchId, DateTime date, int limit = 20);
 }

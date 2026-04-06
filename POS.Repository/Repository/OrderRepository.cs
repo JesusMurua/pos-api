@@ -370,4 +370,66 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             InvoiceStatus = r.InvoiceStatus
         }).ToList();
     }
+
+    // ──────────────────────────────────────────
+    // AUDIT-001 P0: Dashboard projections
+    // ──────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<List<CancellationReasonRow>> GetCancellationsByReasonAsync(int branchId, DateTime date)
+    {
+        return await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                     && o.CreatedAt.Date == date.Date
+                     && o.CancellationReason != null)
+            .GroupBy(o => o.CancellationReason!)
+            .Select(g => new CancellationReasonRow
+            {
+                Reason = g.Key,
+                Count = g.Count(),
+                TotalCents = g.Sum(o => o.TotalCents)
+            })
+            .OrderByDescending(r => r.Count)
+            .ToListAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<List<DashboardRecentOrder>> GetRecentOrdersAsync(int branchId, DateTime date, int limit = 20)
+    {
+        var rows = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                     && o.CreatedAt.Date == date.Date)
+            .OrderByDescending(o => o.CreatedAt)
+            .Take(limit)
+            .Select(o => new
+            {
+                o.OrderNumber,
+                ItemCount = o.Items!.Sum(i => i.Quantity),
+                o.TotalCents,
+                o.KitchenStatus,
+                o.CancelledAt,
+                o.CancellationReason,
+                o.CreatedAt,
+                Payments = o.Payments.Select(p => new { p.Method, p.AmountCents })
+            })
+            .ToListAsync();
+
+        return rows.Select(o => new DashboardRecentOrder
+        {
+            OrderNumber = o.OrderNumber,
+            ItemCount = o.ItemCount,
+            TotalCents = o.TotalCents,
+            KitchenStatus = o.KitchenStatus.ToString(),
+            CancelledAt = o.CancelledAt,
+            CancellationReason = o.CancellationReason,
+            CreatedAt = o.CreatedAt,
+            Payments = o.Payments.Select(p => new DashboardPayment
+            {
+                Method = p.Method.ToString(),
+                AmountCents = p.AmountCents
+            }).ToList()
+        }).ToList();
+    }
 }
