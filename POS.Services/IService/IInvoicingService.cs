@@ -42,6 +42,43 @@ public interface IInvoicingService
     /// <param name="request">Order ID, receipt proof, and fiscal customer data.</param>
     /// <returns>Summary of the individual invoice created.</returns>
     Task<IndividualInvoiceResult> RequestPublicInvoiceAsync(PublicInvoiceRequest request);
+
+    // ──────────────────────────────────────────
+    // Invoice lifecycle: cancellation, webhooks, queries
+    // ──────────────────────────────────────────
+
+    /// <summary>
+    /// Cancels an issued invoice via Facturapi and SAT.
+    /// Unlinks all associated orders so they can be re-invoiced.
+    /// </summary>
+    /// <param name="invoiceId">The internal Invoice entity ID.</param>
+    /// <param name="motive">SAT cancellation motive code (e.g., "02" = errors).</param>
+    Task CancelInvoiceAsync(int invoiceId, string motive);
+
+    /// <summary>
+    /// Processes a Facturapi webhook event payload.
+    /// Updates Invoice status, PDF/XML URLs, and linked Order statuses.
+    /// </summary>
+    /// <param name="eventType">The Facturapi event type (e.g., "invoice.status_updated").</param>
+    /// <param name="rawJson">The full JSON payload from the webhook.</param>
+    Task ProcessWebhookAsync(string eventType, string rawJson);
+
+    /// <summary>
+    /// Gets an invoice by its internal ID.
+    /// </summary>
+    Task<InvoiceDetailResult> GetInvoiceByIdAsync(int invoiceId);
+
+    /// <summary>
+    /// Gets all invoices linked to a specific order.
+    /// </summary>
+    Task<IEnumerable<InvoiceDetailResult>> GetInvoicesByOrderAsync(string orderId);
+
+    /// <summary>
+    /// Returns the download URL for an invoice document.
+    /// </summary>
+    /// <param name="invoiceId">The internal Invoice entity ID.</param>
+    /// <param name="format">"pdf" or "xml".</param>
+    Task<string> GetInvoiceDownloadUrlAsync(int invoiceId, string format);
 }
 
 /// <summary>
@@ -145,4 +182,27 @@ public class PublicInvoiceRequest
 
     /// <summary>CFDI usage code (e.g., "G03"). Defaults to "G03" if not provided.</summary>
     public string? CfdiUse { get; set; }
+}
+
+/// <summary>
+/// Detailed invoice result for query endpoints.
+/// </summary>
+public class InvoiceDetailResult
+{
+    public int Id { get; set; }
+    public string Type { get; set; } = null!;
+    public string Status { get; set; } = null!;
+    public string? FacturapiId { get; set; }
+    public string? Series { get; set; }
+    public string? FolioNumber { get; set; }
+    public int TotalCents { get; set; }
+    public int SubtotalCents { get; set; }
+    public int TaxCents { get; set; }
+    public string? PaymentForm { get; set; }
+    public string? PdfUrl { get; set; }
+    public string? XmlUrl { get; set; }
+    public string? CancellationReason { get; set; }
+    public DateTime? IssuedAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

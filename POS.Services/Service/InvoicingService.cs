@@ -308,9 +308,191 @@ public class InvoicingService : IInvoicingService
         return await RequestIndividualInvoiceAsync(order.Id, customer.Id, order.BranchId);
     }
 
+    /// <summary>
+    /// Cancels an issued invoice via Facturapi. Unlinks all orders so they can be re-invoiced.
+    /// </summary>
+    public async Task CancelInvoiceAsync(int invoiceId, string motive)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(invoiceId)
+            ?? throw new NotFoundException($"Invoice with id {invoiceId} not found.");
+
+        if (invoice.Status == InvoiceStatus.Cancelled)
+            throw new ValidationException("Invoice is already cancelled.");
+
+        if (string.IsNullOrEmpty(invoice.FacturapiId))
+            throw new ValidationException("Invoice has no Facturapi ID — cannot cancel at SAT.");
+
+        // Call Facturapi to cancel at SAT
+        await _facturapiClient.CancelInvoiceAsync(invoice.FacturapiId, motive);
+
+        // Update invoice status
+        invoice.Status = InvoiceStatus.Cancelled;
+        invoice.CancellationReason = motive;
+        invoice.CancelledAt = DateTime.UtcNow;
+        invoice.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.Invoices.Update(invoice);
+
+        // Unlink all orders so they can be re-invoiced
+        var linkedOrders = (await _unitOfWork.Orders.GetAsync(
+            o => o.InvoiceId == invoiceId)).ToList();
+
+        foreach (var order in linkedOrders)
+        {
+            order.InvoiceId = null;
+            order.InvoiceStatus = InvoiceStatus.None;
+            order.FacturapiId = null;
+            order.InvoiceUrl = null;
+            order.InvoicedAt = null;
+            _unitOfWork.Orders.Update(order);
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Processes a Facturapi webhook event. Updates Invoice status and PDF/XML URLs.
+    /// </summary>
+    public async Task ProcessWebhookAsync(string eventType, string rawJson)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
+        var root = doc.RootElement;
+
+        // Extract the invoice ID from the data payload
+        if (!root.TryGetProperty("data", out var data)) return;
+        if (!data.TryGetProperty("id", out var idProp)) return;
+        var facturapiId = idProp.GetString();
+        if (string.IsNullOrEmpty(facturapiId)) return;
+
+        // Find the invoice in our DB by FacturapiId
+        var invoices = await _unitOfWork.Invoices.GetAsync(i => i.FacturapiId == facturapiId);
+        var invoice = invoices.FirstOrDefault();
+        if (invoice == null) return;
+
+        var status = data.TryGetProperty("status", out var s) ? s.GetString() : null;
+
+        switch (eventType)
+        {
+            case "invoice.status_updated" when status == "valid":
+                invoice.Status = InvoiceStatus.Issued;
+                invoice.IssuedAt ??= DateTime.UtcNow;
+
+                if (data.TryGetProperty("pdf_custom_section", out var pdf))
+                    invoice.PdfUrl = pdf.GetString();
+                if (data.TryGetProperty("xml", out var xml))
+                    invoice.XmlUrl = xml.GetString();
+
+                invoice.UpdatedAt = DateTime.UtcNow;
+                _unitOfWork.Invoices.Update(invoice);
+
+                // Also update linked orders
+                var issuedOrders = (await _unitOfWork.Orders.GetAsync(
+                    o => o.InvoiceId == invoice.Id)).ToList();
+                foreach (var order in issuedOrders)
+                {
+                    order.InvoiceStatus = InvoiceStatus.Issued;
+                    order.InvoiceUrl = invoice.PdfUrl;
+                    order.InvoicedAt = invoice.IssuedAt;
+                    _unitOfWork.Orders.Update(order);
+                }
+                break;
+
+            case "invoice.status_updated" when status == "canceled":
+            case "invoice.canceled":
+                invoice.Status = InvoiceStatus.Cancelled;
+                invoice.CancelledAt ??= DateTime.UtcNow;
+                invoice.UpdatedAt = DateTime.UtcNow;
+                _unitOfWork.Invoices.Update(invoice);
+
+                var cancelledOrders = (await _unitOfWork.Orders.GetAsync(
+                    o => o.InvoiceId == invoice.Id)).ToList();
+                foreach (var order in cancelledOrders)
+                {
+                    order.InvoiceId = null;
+                    order.InvoiceStatus = InvoiceStatus.None;
+                    order.FacturapiId = null;
+                    order.InvoiceUrl = null;
+                    order.InvoicedAt = null;
+                    _unitOfWork.Orders.Update(order);
+                }
+                break;
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Gets an invoice by its internal ID.
+    /// </summary>
+    public async Task<InvoiceDetailResult> GetInvoiceByIdAsync(int invoiceId)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(invoiceId)
+            ?? throw new NotFoundException($"Invoice with id {invoiceId} not found.");
+
+        return MapToDetailResult(invoice);
+    }
+
+    /// <summary>
+    /// Gets all invoices linked to a specific order.
+    /// </summary>
+    public async Task<IEnumerable<InvoiceDetailResult>> GetInvoicesByOrderAsync(string orderId)
+    {
+        var order = (await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Invoice"))
+            .FirstOrDefault()
+            ?? throw new NotFoundException($"Order {orderId} not found.");
+
+        if (order.Invoice == null)
+            return Enumerable.Empty<InvoiceDetailResult>();
+
+        return new[] { MapToDetailResult(order.Invoice) };
+    }
+
+    /// <summary>
+    /// Returns the download URL for a specific format (pdf/xml).
+    /// </summary>
+    public async Task<string> GetInvoiceDownloadUrlAsync(int invoiceId, string format)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(invoiceId)
+            ?? throw new NotFoundException($"Invoice with id {invoiceId} not found.");
+
+        var url = format.ToLowerInvariant() switch
+        {
+            "pdf" => invoice.PdfUrl,
+            "xml" => invoice.XmlUrl,
+            _ => throw new ValidationException($"Invalid format '{format}'. Use 'pdf' or 'xml'.")
+        };
+
+        if (string.IsNullOrEmpty(url))
+            throw new ValidationException($"No {format.ToUpperInvariant()} available for this invoice.");
+
+        return url;
+    }
+
     #endregion
 
     #region Private Helpers
+
+    private static InvoiceDetailResult MapToDetailResult(Invoice invoice)
+    {
+        return new InvoiceDetailResult
+        {
+            Id = invoice.Id,
+            Type = invoice.Type.ToString(),
+            Status = invoice.Status.ToString(),
+            FacturapiId = invoice.FacturapiId,
+            Series = invoice.Series,
+            FolioNumber = invoice.FolioNumber,
+            TotalCents = invoice.TotalCents,
+            SubtotalCents = invoice.SubtotalCents,
+            TaxCents = invoice.TaxCents,
+            PaymentForm = invoice.PaymentForm,
+            PdfUrl = invoice.PdfUrl,
+            XmlUrl = invoice.XmlUrl,
+            CancellationReason = invoice.CancellationReason,
+            IssuedAt = invoice.IssuedAt,
+            CancelledAt = invoice.CancelledAt,
+            CreatedAt = invoice.CreatedAt
+        };
+    }
 
     /// <summary>
     /// Builds Facturapi invoice line items from order items, using frozen SAT fields.
