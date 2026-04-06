@@ -59,4 +59,40 @@ public interface ICustomerService
     /// Gets transaction history for a customer with optional date filter.
     /// </summary>
     Task<IEnumerable<CustomerTransaction>> GetTransactionsAsync(int customerId, DateTime? from = null, DateTime? to = null);
+
+    // ──────────────────────────────────────────
+    // Phase 16 — Transactional operations
+    // ──────────────────────────────────────────
+
+    /// <summary>
+    /// Consumes store credit (fiado) for an order payment.
+    /// Creates a ledger entry of type UseCredit.
+    /// Validates credit limit is not exceeded.
+    /// </summary>
+    Task<CustomerTransaction> UseCreditAsync(int customerId, int amountCents, string orderId, int branchId, string createdBy);
+
+    /// <summary>
+    /// Awards loyalty points based on order total and business config.
+    /// Creates a ledger entry of type EarnPoints.
+    /// Returns null if Business.LoyaltyEnabled is false (no-op).
+    /// </summary>
+    Task<CustomerTransaction?> EarnPointsAsync(int customerId, int orderTotalCents, string orderId, int branchId, string createdBy);
+
+    /// <summary>
+    /// Redeems loyalty points as payment. Returns the cent value of redeemed points.
+    /// Creates a ledger entry of type RedeemPoints.
+    /// Validates sufficient points balance and Business.LoyaltyEnabled.
+    /// </summary>
+    Task<(CustomerTransaction Transaction, int RedeemedValueCents)> RedeemPointsAsync(int customerId, int points, string orderId, int branchId, string createdBy);
+
+    /// <summary>
+    /// Recalculates denormalized balances from the transaction ledger (reconciliation).
+    /// </summary>
+    Task RecalculateBalancesAsync(int customerId);
+
+    /// <summary>
+    /// Links a CRM Customer to an existing FiscalCustomer.
+    /// Validates both entities belong to the same business.
+    /// </summary>
+    Task LinkFiscalCustomerAsync(int customerId, int fiscalCustomerId);
 }

@@ -15,17 +15,20 @@ public class OrderService : IOrderService
     private readonly IPushNotificationService _pushService;
     private readonly IPromotionService _promotionService;
     private readonly IInventoryService _inventoryService;
+    private readonly ICustomerService _customerService;
 
     public OrderService(
         IUnitOfWork unitOfWork,
         IPushNotificationService pushService,
         IPromotionService promotionService,
-        IInventoryService inventoryService)
+        IInventoryService inventoryService,
+        ICustomerService customerService)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
         _promotionService = promotionService;
         _inventoryService = inventoryService;
+        _customerService = customerService;
     }
 
     #region Public API Methods
@@ -204,8 +207,16 @@ public class OrderService : IOrderService
             var pointsPayments = order.Payments.Where(p => p.Method == PaymentMethod.LoyaltyPoints).ToList();
             if (pointsPayments.Count > 0)
             {
-                // Each cent paid with points = 1 point (simplest model; configurable later)
-                var totalPointsNeeded = pointsPayments.Sum(p => p.AmountCents);
+                var business = await _unitOfWork.Business.GetByIdAsync(customer.BusinessId);
+                if (business == null || !business.LoyaltyEnabled)
+                    throw new ValidationException(
+                        $"LOYALTY_DISABLED: Loyalty program is not enabled for this business.");
+
+                // Convert cents to points: AmountCents / PointRedemptionValueCents = points needed
+                var totalPointsNeeded = business.PointRedemptionValueCents > 0
+                    ? pointsPayments.Sum(p => p.AmountCents) / business.PointRedemptionValueCents
+                    : pointsPayments.Sum(p => p.AmountCents);
+
                 if (customer.PointsBalance < totalPointsNeeded)
                     throw new ValidationException(
                         $"INSUFFICIENT_POINTS: Customer '{customer.FirstName}' has {customer.PointsBalance} points, needs {totalPointsNeeded}.");
@@ -355,63 +366,47 @@ public class OrderService : IOrderService
             }
         }
 
-        // ── Phase 5c: Process StoreCredit / LoyaltyPoints ledger entries ──
-        // Deduct balances and create immutable ledger entries for customer-backed payments.
+        // ── Phase 5c: Process StoreCredit / LoyaltyPoints via CustomerService ──
+        // Delegates balance mutations to CustomerService which creates immutable ledger entries.
         // This runs AFTER Phase 3 persist to ensure orders exist in DB before referencing them.
         if (customerPayments.Count > 0)
         {
             foreach (var order in customerPayments)
             {
-                var customer = customerCache[order.CustomerId!.Value];
+                var customerId = order.CustomerId!.Value;
 
                 // Process StoreCredit payments → deduct from CreditBalanceCents
                 foreach (var payment in order.Payments.Where(p => p.Method == PaymentMethod.StoreCredit))
                 {
-                    customer.CreditBalanceCents -= payment.AmountCents;
-                    customer.UpdatedAt = DateTime.UtcNow;
-
-                    await _unitOfWork.CustomerTransactions.AddAsync(new CustomerTransaction
-                    {
-                        CustomerId = customer.Id,
-                        BranchId = order.BranchId,
-                        TransactionType = CustomerTransactionType.UseCredit,
-                        AmountCents = -payment.AmountCents,
-                        PointsAmount = 0,
-                        BalanceAfterCents = customer.CreditBalanceCents,
-                        PointsBalanceAfter = customer.PointsBalance,
-                        ReferenceOrderId = order.Id,
-                        Description = $"Fiado - Orden #{order.OrderNumber}",
-                        CreatedBy = "SyncEngine"
-                    });
+                    await _customerService.UseCreditAsync(
+                        customerId, payment.AmountCents, order.Id, order.BranchId, "SyncEngine");
                 }
 
                 // Process LoyaltyPoints payments → deduct from PointsBalance
                 foreach (var payment in order.Payments.Where(p => p.Method == PaymentMethod.LoyaltyPoints))
                 {
-                    var pointsUsed = payment.AmountCents; // 1 cent = 1 point (simplest model)
-                    customer.PointsBalance -= pointsUsed;
-                    if (customer.PointsBalance < 0) customer.PointsBalance = 0;
-                    customer.UpdatedAt = DateTime.UtcNow;
+                    var business = await _unitOfWork.Business.GetByIdAsync(
+                        customerCache[customerId].BusinessId);
+                    var pointsToRedeem = business != null && business.PointRedemptionValueCents > 0
+                        ? payment.AmountCents / business.PointRedemptionValueCents
+                        : payment.AmountCents;
 
-                    await _unitOfWork.CustomerTransactions.AddAsync(new CustomerTransaction
-                    {
-                        CustomerId = customer.Id,
-                        BranchId = order.BranchId,
-                        TransactionType = CustomerTransactionType.RedeemPoints,
-                        AmountCents = 0,
-                        PointsAmount = -pointsUsed,
-                        BalanceAfterCents = customer.CreditBalanceCents,
-                        PointsBalanceAfter = customer.PointsBalance,
-                        ReferenceOrderId = order.Id,
-                        Description = $"Puntos canjeados - Orden #{order.OrderNumber}",
-                        CreatedBy = "SyncEngine"
-                    });
+                    await _customerService.RedeemPointsAsync(
+                        customerId, pointsToRedeem, order.Id, order.BranchId, "SyncEngine");
                 }
-
-                _unitOfWork.Customers.Update(customer);
             }
+        }
 
-            await _unitOfWork.SaveChangesAsync();
+        // ── Phase 5d: Earn loyalty points for orders with a customer ──
+        // Awards points for any paid order linked to a customer, based on Business loyalty config.
+        var ordersWithCustomer = ordersToInsert
+            .Where(o => o.CustomerId.HasValue && o.IsPaid && o.CancellationReason == null)
+            .ToList();
+
+        foreach (var order in ordersWithCustomer)
+        {
+            await _customerService.EarnPointsAsync(
+                order.CustomerId!.Value, order.TotalCents, order.Id, order.BranchId, "SyncEngine");
         }
 
         // ── Phase 6: Batch inventory deduction ──

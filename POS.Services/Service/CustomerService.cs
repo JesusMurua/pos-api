@@ -188,4 +188,180 @@ public class CustomerService : ICustomerService
     }
 
     #endregion
+
+    #region Transactional Operations (Phase 16)
+
+    /// <summary>
+    /// Consumes store credit (fiado) for an order payment.
+    /// AmountCents is positive — decreases the balance (customer owes more).
+    /// </summary>
+    public async Task<CustomerTransaction> UseCreditAsync(
+        int customerId, int amountCents, string orderId, int branchId, string createdBy)
+    {
+        if (amountCents <= 0)
+            throw new ValidationException("Amount must be greater than zero.");
+
+        var customer = await GetByIdAsync(customerId);
+
+        if (!customer.IsActive)
+            throw new ValidationException("Customer is inactive.");
+
+        // Credit limit check: if limit > 0, ensure debt won't exceed it
+        var projectedBalance = customer.CreditBalanceCents - amountCents;
+        if (customer.CreditLimitCents > 0 && Math.Abs(projectedBalance) > customer.CreditLimitCents)
+            throw new ValidationException(
+                $"INSUFFICIENT_CREDIT: Customer '{customer.FirstName}' would exceed credit limit of {customer.CreditLimitCents} cents.");
+
+        customer.CreditBalanceCents = projectedBalance;
+        customer.UpdatedAt = DateTime.UtcNow;
+
+        var transaction = new CustomerTransaction
+        {
+            CustomerId = customerId,
+            BranchId = branchId,
+            TransactionType = CustomerTransactionType.UseCredit,
+            AmountCents = -amountCents,
+            PointsAmount = 0,
+            BalanceAfterCents = customer.CreditBalanceCents,
+            PointsBalanceAfter = customer.PointsBalance,
+            ReferenceOrderId = orderId,
+            Description = $"Fiado - Orden #{orderId}",
+            CreatedBy = createdBy
+        };
+
+        _unitOfWork.Customers.Update(customer);
+        await _unitOfWork.CustomerTransactions.AddAsync(transaction);
+        await _unitOfWork.SaveChangesAsync();
+
+        return transaction;
+    }
+
+    /// <summary>
+    /// Awards loyalty points based on order total and business loyalty config.
+    /// Returns null if loyalty is disabled for the business.
+    /// </summary>
+    public async Task<CustomerTransaction?> EarnPointsAsync(
+        int customerId, int orderTotalCents, string orderId, int branchId, string createdBy)
+    {
+        var customer = await GetByIdAsync(customerId);
+
+        var business = await _unitOfWork.Business.GetByIdAsync(customer.BusinessId)
+            ?? throw new NotFoundException($"Business {customer.BusinessId} not found.");
+
+        if (!business.LoyaltyEnabled || business.CurrencyUnitsPerPoint <= 0)
+            return null;
+
+        var earnedPoints = orderTotalCents / business.CurrencyUnitsPerPoint * business.PointsPerCurrencyUnit;
+        if (earnedPoints <= 0) return null;
+
+        customer.PointsBalance += earnedPoints;
+        customer.UpdatedAt = DateTime.UtcNow;
+
+        var transaction = new CustomerTransaction
+        {
+            CustomerId = customerId,
+            BranchId = branchId,
+            TransactionType = CustomerTransactionType.EarnPoints,
+            AmountCents = 0,
+            PointsAmount = earnedPoints,
+            BalanceAfterCents = customer.CreditBalanceCents,
+            PointsBalanceAfter = customer.PointsBalance,
+            ReferenceOrderId = orderId,
+            Description = $"Puntos ganados - Orden #{orderId}",
+            CreatedBy = createdBy
+        };
+
+        _unitOfWork.Customers.Update(customer);
+        await _unitOfWork.CustomerTransactions.AddAsync(transaction);
+        await _unitOfWork.SaveChangesAsync();
+
+        return transaction;
+    }
+
+    /// <summary>
+    /// Redeems loyalty points as payment. Returns the transaction and the cent value.
+    /// </summary>
+    public async Task<(CustomerTransaction Transaction, int RedeemedValueCents)> RedeemPointsAsync(
+        int customerId, int points, string orderId, int branchId, string createdBy)
+    {
+        if (points <= 0)
+            throw new ValidationException("Points must be greater than zero.");
+
+        var customer = await GetByIdAsync(customerId);
+
+        var business = await _unitOfWork.Business.GetByIdAsync(customer.BusinessId)
+            ?? throw new NotFoundException($"Business {customer.BusinessId} not found.");
+
+        if (!business.LoyaltyEnabled)
+            throw new ValidationException("Loyalty program is not enabled for this business.");
+
+        if (customer.PointsBalance < points)
+            throw new ValidationException(
+                $"INSUFFICIENT_POINTS: Customer has {customer.PointsBalance} points, needs {points}.");
+
+        var redeemedValueCents = points * business.PointRedemptionValueCents;
+
+        customer.PointsBalance -= points;
+        customer.UpdatedAt = DateTime.UtcNow;
+
+        var transaction = new CustomerTransaction
+        {
+            CustomerId = customerId,
+            BranchId = branchId,
+            TransactionType = CustomerTransactionType.RedeemPoints,
+            AmountCents = 0,
+            PointsAmount = -points,
+            BalanceAfterCents = customer.CreditBalanceCents,
+            PointsBalanceAfter = customer.PointsBalance,
+            ReferenceOrderId = orderId,
+            Description = $"Puntos canjeados - Orden #{orderId}",
+            CreatedBy = createdBy
+        };
+
+        _unitOfWork.Customers.Update(customer);
+        await _unitOfWork.CustomerTransactions.AddAsync(transaction);
+        await _unitOfWork.SaveChangesAsync();
+
+        return (transaction, redeemedValueCents);
+    }
+
+    /// <summary>
+    /// Recalculates denormalized balances from the ledger (reconciliation).
+    /// </summary>
+    public async Task RecalculateBalancesAsync(int customerId)
+    {
+        var customer = await GetByIdAsync(customerId);
+        var transactions = (await _unitOfWork.CustomerTransactions
+            .GetByCustomerAsync(customerId)).ToList();
+
+        customer.CreditBalanceCents = transactions.Sum(t => t.AmountCents);
+        customer.PointsBalance = transactions.Sum(t => t.PointsAmount);
+        if (customer.PointsBalance < 0) customer.PointsBalance = 0;
+        customer.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Customers.Update(customer);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Links a CRM Customer to an existing FiscalCustomer.
+    /// Validates both belong to the same business.
+    /// </summary>
+    public async Task LinkFiscalCustomerAsync(int customerId, int fiscalCustomerId)
+    {
+        var customer = await GetByIdAsync(customerId);
+
+        var fiscalCustomer = await _unitOfWork.FiscalCustomers.GetByIdAsync(fiscalCustomerId)
+            ?? throw new NotFoundException($"FiscalCustomer {fiscalCustomerId} not found.");
+
+        if (fiscalCustomer.BusinessId != customer.BusinessId)
+            throw new ValidationException("Customer and FiscalCustomer must belong to the same business.");
+
+        fiscalCustomer.CustomerId = customerId;
+        fiscalCustomer.UpdatedAt = DateTime.UtcNow;
+        _unitOfWork.FiscalCustomers.Update(fiscalCustomer);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    #endregion
 }

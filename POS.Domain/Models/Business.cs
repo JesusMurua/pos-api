@@ -48,6 +48,22 @@ public partial class Business
 
     #endregion
 
+    #region Loyalty Program Config
+
+    /// <summary>Whether the loyalty points program is enabled for this business.</summary>
+    public bool LoyaltyEnabled { get; set; } = false;
+
+    /// <summary>Points awarded per CurrencyUnitsPerPoint cents spent. Default: 1.</summary>
+    public int PointsPerCurrencyUnit { get; set; } = 1;
+
+    /// <summary>Cents the customer must spend to earn PointsPerCurrencyUnit points. Default: 1000 ($10 MXN).</summary>
+    public int CurrencyUnitsPerPoint { get; set; } = 1000;
+
+    /// <summary>Value in cents of each point when redeemed. Default: 10 ($0.10 MXN).</summary>
+    public int PointRedemptionValueCents { get; set; } = 10;
+
+    #endregion
+
     public virtual ICollection<Branch>? Branches { get; set; }
 
     public virtual ICollection<User>? Users { get; set; }

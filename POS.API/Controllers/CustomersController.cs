@@ -220,6 +220,44 @@ public class CustomersController : BaseApiController
         var transactions = await _customerService.GetTransactionsAsync(id, from, to);
         return Ok(transactions);
     }
+
+    /// <summary>
+    /// Links a CRM customer to an existing fiscal customer for invoicing.
+    /// Both must belong to the same business.
+    /// </summary>
+    /// <param name="id">The customer identifier.</param>
+    /// <param name="request">The fiscal customer to link.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Link created successfully.</response>
+    /// <response code="400">If entities belong to different businesses.</response>
+    /// <response code="404">If customer or fiscal customer is not found.</response>
+    [HttpPost("{id}/link-fiscal")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> LinkFiscalCustomer(int id, [FromBody] LinkFiscalCustomerRequest request)
+    {
+        await _customerService.LinkFiscalCustomerAsync(id, request.FiscalCustomerId);
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
+    /// Recalculates customer balances from the transaction ledger (reconciliation).
+    /// </summary>
+    /// <param name="id">The customer identifier.</param>
+    /// <returns>Success acknowledgement.</returns>
+    /// <response code="200">Balances recalculated.</response>
+    /// <response code="404">If the customer is not found.</response>
+    [HttpPost("{id}/recalculate")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RecalculateBalances(int id)
+    {
+        await _customerService.RecalculateBalancesAsync(id);
+        return Ok(new { success = true });
+    }
 }
 
 /// <summary>
@@ -297,4 +335,14 @@ public class PointsRequest
     [Required]
     [MaxLength(200)]
     public string Description { get; set; } = null!;
+}
+
+/// <summary>
+/// Request body for linking a CRM customer to a fiscal customer.
+/// </summary>
+public class LinkFiscalCustomerRequest
+{
+    /// <summary>The fiscal customer ID to link.</summary>
+    [Required]
+    public int FiscalCustomerId { get; set; }
 }
