@@ -91,7 +91,7 @@ public class OrderService : IOrderService
                     existingOrder.KitchenStatus = ParseKitchenStatus(request.KitchenStatus);
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
-                    existingOrder.CashRegisterSessionId = request.CashRegisterSessionId;
+                    existingOrder.CashRegisterSessionId ??= request.CashRegisterSessionId;
                     existingOrder.CustomerId = request.CustomerId;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
@@ -687,6 +687,14 @@ public class OrderService : IOrderService
         if (order.BranchId != branchId)
             throw new UnauthorizedException("Order does not belong to this branch");
 
+        if (order.CashRegisterSessionId.HasValue)
+        {
+            var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(order.CashRegisterSessionId.Value);
+            if (session == null || session.Status != CashRegisterStatus.Open)
+                throw new ValidationException(
+                    "CASH_SESSION_CLOSED: Cannot process payment: the associated cash register session is closed.");
+        }
+
         payment.OrderId = orderId;
         payment.CreatedAt = DateTime.UtcNow;
         order.Payments.Add(payment);
@@ -809,6 +817,9 @@ public class OrderService : IOrderService
         if (target.CancelledAt.HasValue)
             throw new ValidationException("Target order is cancelled");
 
+        if (source.CashRegisterSessionId != target.CashRegisterSessionId)
+            throw new ValidationException("Cannot move items between orders from different cash register sessions.");
+
         var itemsToMove = source.Items?
             .Where(i => itemIds.Contains(i.Id))
             .ToList() ?? [];
@@ -908,6 +919,9 @@ public class OrderService : IOrderService
             throw new UnauthorizedException("Target order does not belong to this branch");
         if (target.CancelledAt.HasValue)
             throw new ValidationException("Target order is cancelled");
+
+        if (source.CashRegisterSessionId != target.CashRegisterSessionId)
+            throw new ValidationException("Cannot merge orders from different cash register sessions.");
 
         // Move all items from source to target
         var itemsToMove = source.Items?.ToList() ?? [];
@@ -1021,6 +1035,7 @@ public class OrderService : IOrderService
                 TableId = source.TableId,
                 TableName = source.TableName,
                 KitchenStatus = source.KitchenStatus,
+                CashRegisterSessionId = source.CashRegisterSessionId,
                 FolioNumber = folioNumber,
                 CreatedAt = DateTime.UtcNow,
                 SyncStatus = OrderSyncStatus.Synced,
