@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Stripe;
 using POS.Repository;
 using POS.Repository.Dependencies;
+using POS.Services.Adapter;
 using POS.Services.Dependencies;
 using Serilog;
 
@@ -94,6 +95,20 @@ builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("S
 
 // Email Configuration (Resend)
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
+// Facturapi Configuration
+builder.Services.Configure<FacturapiSettings>(builder.Configuration.GetSection("Facturapi"));
+builder.Services.AddHttpClient<IFacturapiClient, FacturapiClient>((sp, client) =>
+{
+    var settings = builder.Configuration.GetSection("Facturapi").Get<FacturapiSettings>();
+    var baseUrl = settings?.IsSandbox == false
+        ? "https://www.facturapi.io/"
+        : "https://www.facturapi.io/";
+    client.BaseAddress = new Uri(baseUrl);
+    if (!string.IsNullOrEmpty(settings?.ApiKey))
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", settings.ApiKey);
+});
 
 // Stripe Configuration
 builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));

@@ -1,22 +1,28 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
+using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.Adapter;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
 
 /// <summary>
 /// Handles CFDI electronic invoice creation via Facturapi.
-/// NOTE: Actual HTTP calls to Facturapi are mocked — this phase focuses on
-/// updating Order.InvoiceStatus and persisting state in the database.
+/// Creates Invoice entities and links them to Orders.
 /// </summary>
 public class InvoicingService : IInvoicingService
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private const decimal DefaultTaxRate = 0.16m;
 
-    public InvoicingService(IUnitOfWork unitOfWork)
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IFacturapiClient _facturapiClient;
+
+    public InvoicingService(IUnitOfWork unitOfWork, IFacturapiClient facturapiClient)
     {
         _unitOfWork = unitOfWork;
+        _facturapiClient = facturapiClient;
     }
 
     #region Public API Methods
@@ -28,30 +34,68 @@ public class InvoicingService : IInvoicingService
     public async Task<GlobalInvoiceResult> CreateGlobalInvoiceAsync(
         DateTime startDate, DateTime endDate, int branchId)
     {
-        // Fetch uninvoiced, paid, non-cancelled orders in the date range
         var orders = (await _unitOfWork.Orders.GetAsync(
             o => o.BranchId == branchId
                 && o.CreatedAt >= startDate
                 && o.CreatedAt <= endDate
                 && o.InvoiceStatus == InvoiceStatus.None
+                && o.InvoiceId == null
                 && o.IsPaid
-                && o.CancellationReason == null))
-            .ToList();
+                && o.CancellationReason == null,
+            "Items,Payments")).ToList();
 
         if (orders.Count == 0)
             throw new ValidationException("No uninvoiced orders found for the specified period.");
 
-        // TODO: Call Facturapi API to create global invoice
-        // For now, generate a mock Facturapi ID
-        var mockFacturapiId = $"fpi_global_{Guid.NewGuid():N}"[..30];
+        // Build line items from all order items across all orders
+        var facItems = BuildInvoiceItems(orders);
 
+        // Call Facturapi API
+        var apiResponse = await _facturapiClient.CreateGlobalInvoiceAsync(new FacturapiGlobalInvoiceRequest
+        {
+            Month = startDate.Month,
+            Year = startDate.Year,
+            Periodicity = "month",
+            Items = facItems
+        });
+
+        // Calculate totals
         var totalCents = orders.Sum(o => o.TotalCents);
+        var taxCents = orders
+            .Where(o => o.Items != null)
+            .SelectMany(o => o.Items!)
+            .Sum(i => i.TaxAmountCents);
+        var subtotalCents = totalCents - taxCents;
 
-        // Update all orders with the invoice reference
+        // Create Invoice entity
+        var invoice = new Invoice
+        {
+            BusinessId = (await _unitOfWork.Branches.GetByIdAsync(branchId))!.BusinessId,
+            BranchId = branchId,
+            Type = InvoiceType.Global,
+            Status = InvoiceStatus.Issued,
+            FacturapiId = apiResponse.Id,
+            Series = apiResponse.Series,
+            FolioNumber = apiResponse.FolioNumber,
+            TotalCents = totalCents,
+            SubtotalCents = subtotalCents,
+            TaxCents = taxCents,
+            PaymentForm = "01",
+            PdfUrl = apiResponse.PdfUrl,
+            XmlUrl = apiResponse.XmlUrl,
+            IssuedAt = DateTime.UtcNow
+        };
+
+        await _unitOfWork.Invoices.AddAsync(invoice);
+        await _unitOfWork.SaveChangesAsync(); // Flush to get invoice.Id
+
+        // Link all orders to the invoice
         foreach (var order in orders)
         {
-            order.InvoiceStatus = InvoiceStatus.Pending;
-            order.FacturapiId = mockFacturapiId;
+            order.InvoiceId = invoice.Id;
+            order.InvoiceStatus = InvoiceStatus.Issued;
+            order.FacturapiId = apiResponse.Id;
+            order.InvoicedAt = DateTime.UtcNow;
             _unitOfWork.Orders.Update(order);
         }
 
@@ -61,8 +105,8 @@ public class InvoicingService : IInvoicingService
         {
             OrderCount = orders.Count,
             TotalCents = totalCents,
-            FacturapiId = mockFacturapiId,
-            Status = InvoiceStatus.Pending.ToString()
+            FacturapiId = apiResponse.Id,
+            Status = InvoiceStatus.Issued.ToString()
         };
     }
 
@@ -72,7 +116,7 @@ public class InvoicingService : IInvoicingService
     public async Task<IndividualInvoiceResult> RequestIndividualInvoiceAsync(
         string orderId, int fiscalCustomerId, int branchId)
     {
-        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Items,Payments");
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException($"Order with id {orderId} not found");
 
@@ -88,14 +132,71 @@ public class InvoicingService : IInvoicingService
         var customer = await _unitOfWork.FiscalCustomers.GetByIdAsync(fiscalCustomerId)
             ?? throw new NotFoundException($"Fiscal customer with id {fiscalCustomerId} not found");
 
-        // TODO: Call Facturapi API to create individual invoice
-        // For now, generate a mock Facturapi ID
-        var mockFacturapiId = $"fpi_ind_{Guid.NewGuid():N}"[..30];
+        // Ensure fiscal customer exists in Facturapi
+        if (string.IsNullOrEmpty(customer.FacturapiCustomerId))
+        {
+            var custResponse = await _facturapiClient.CreateCustomerAsync(new FacturapiCustomerRequest
+            {
+                LegalName = customer.BusinessName,
+                Rfc = customer.Rfc,
+                TaxSystem = customer.TaxRegime,
+                Zip = customer.ZipCode,
+                Email = customer.Email
+            });
+            customer.FacturapiCustomerId = custResponse.Id;
+            customer.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.FiscalCustomers.Update(customer);
+        }
 
-        order.InvoiceStatus = InvoiceStatus.Pending;
-        order.FacturapiId = mockFacturapiId;
+        // Build invoice items
+        var facItems = BuildInvoiceItems(new[] { order });
+
+        // Determine dominant payment form
+        var paymentForm = SatPaymentForm.FromDominantMethod(
+            order.Payments.Select(p => (p.Method, p.AmountCents)));
+
+        // Call Facturapi API
+        var apiResponse = await _facturapiClient.CreateInvoiceAsync(new FacturapiInvoiceRequest
+        {
+            CustomerId = customer.FacturapiCustomerId,
+            PaymentForm = paymentForm,
+            Use = customer.CfdiUse ?? "G03",
+            Items = facItems
+        });
+
+        // Calculate tax breakdown
+        var taxCents = order.Items?.Sum(i => i.TaxAmountCents) ?? 0;
+        var subtotalCents = order.TotalCents - taxCents;
+
+        // Create Invoice entity
+        var invoice = new Invoice
+        {
+            BusinessId = customer.BusinessId,
+            BranchId = branchId,
+            Type = InvoiceType.Individual,
+            Status = InvoiceStatus.Issued,
+            FacturapiId = apiResponse.Id,
+            FiscalCustomerId = fiscalCustomerId,
+            Series = apiResponse.Series,
+            FolioNumber = apiResponse.FolioNumber,
+            TotalCents = order.TotalCents,
+            SubtotalCents = subtotalCents,
+            TaxCents = taxCents,
+            PaymentForm = paymentForm,
+            PdfUrl = apiResponse.PdfUrl,
+            XmlUrl = apiResponse.XmlUrl,
+            IssuedAt = DateTime.UtcNow
+        };
+
+        await _unitOfWork.Invoices.AddAsync(invoice);
+        await _unitOfWork.SaveChangesAsync();
+
+        // Link order to invoice
+        order.InvoiceId = invoice.Id;
+        order.InvoiceStatus = InvoiceStatus.Issued;
+        order.FacturapiId = apiResponse.Id;
         order.FiscalCustomerId = fiscalCustomerId;
-
+        order.InvoicedAt = DateTime.UtcNow;
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
 
@@ -104,8 +205,8 @@ public class InvoicingService : IInvoicingService
             OrderId = order.Id,
             CustomerRfc = customer.Rfc,
             TotalCents = order.TotalCents,
-            FacturapiId = mockFacturapiId,
-            Status = InvoiceStatus.Pending.ToString()
+            FacturapiId = apiResponse.Id,
+            Status = InvoiceStatus.Issued.ToString()
         };
     }
 
@@ -116,11 +217,10 @@ public class InvoicingService : IInvoicingService
     public async Task<PublicOrderInvoiceInfo> GetPublicOrderDetailsAsync(string orderId, int totalCents)
     {
         var results = await _unitOfWork.Orders.GetAsync(
-            o => o.Id == orderId, "Branch,Branch.Business");
+            o => o.Id == orderId, "Branch,Branch.Business,Invoice");
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException("Order not found");
 
-        // Receipt proof: generic message to prevent oracle attacks
         if (order.TotalCents != totalCents)
             throw new UnauthorizedException("The provided order data does not match our records.");
 
@@ -132,6 +232,9 @@ public class InvoicingService : IInvoicingService
             && order.CancellationReason == null
             && order.CreatedAt > DateTime.UtcNow.AddDays(-40);
 
+        // Pull URL from Invoice entity if available
+        var invoiceUrl = order.Invoice?.PdfUrl ?? order.InvoiceUrl;
+
         return new PublicOrderInvoiceInfo
         {
             OrderId = order.Id,
@@ -142,7 +245,7 @@ public class InvoicingService : IInvoicingService
             InvoiceStatus = order.InvoiceStatus.ToString(),
             InvoicingEnabled = invoicingEnabled,
             CanInvoice = canInvoice,
-            InvoiceUrl = order.InvoiceStatus == InvoiceStatus.Issued ? order.InvoiceUrl : null
+            InvoiceUrl = order.InvoiceStatus == InvoiceStatus.Issued ? invoiceUrl : null
         };
     }
 
@@ -157,7 +260,6 @@ public class InvoicingService : IInvoicingService
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException("Order not found");
 
-        // Receipt proof
         if (order.TotalCents != request.TotalCents)
             throw new UnauthorizedException("The provided order data does not match our records.");
 
@@ -182,7 +284,7 @@ public class InvoicingService : IInvoicingService
 
         if (customer == null)
         {
-            customer = new Domain.Models.FiscalCustomer
+            customer = new FiscalCustomer
             {
                 BusinessId = business.Id,
                 Rfc = rfc,
@@ -195,20 +297,39 @@ public class InvoicingService : IInvoicingService
             await _unitOfWork.FiscalCustomers.AddAsync(customer);
             await _unitOfWork.SaveChangesAsync();
         }
-        else
+        else if (!string.IsNullOrEmpty(request.Email) && customer.Email != request.Email)
         {
-            // Update email if provided and different
-            if (!string.IsNullOrEmpty(request.Email) && customer.Email != request.Email)
-            {
-                customer.Email = request.Email;
-                customer.UpdatedAt = DateTime.UtcNow;
-                _unitOfWork.FiscalCustomers.Update(customer);
-                await _unitOfWork.SaveChangesAsync();
-            }
+            customer.Email = request.Email;
+            customer.UpdatedAt = DateTime.UtcNow;
+            _unitOfWork.FiscalCustomers.Update(customer);
+            await _unitOfWork.SaveChangesAsync();
         }
 
-        // Issue the invoice (reuse internal logic)
         return await RequestIndividualInvoiceAsync(order.Id, customer.Id, order.BranchId);
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    /// <summary>
+    /// Builds Facturapi invoice line items from order items, using frozen SAT fields.
+    /// </summary>
+    private static List<FacturapiInvoiceItem> BuildInvoiceItems(IEnumerable<Order> orders)
+    {
+        return orders
+            .Where(o => o.Items != null)
+            .SelectMany(o => o.Items!)
+            .Select(item => new FacturapiInvoiceItem
+            {
+                ProductCode = item.SatProductCode ?? "01010101", // Fallback: "No identificado"
+                UnitCode = item.SatUnitCode ?? "H87",           // Fallback: "Pieza"
+                Description = item.ProductName,
+                Quantity = item.Quantity,
+                UnitPrice = item.UnitPriceCents / 100m,
+                TaxRate = item.TaxRatePercent ?? DefaultTaxRate
+            })
+            .ToList();
     }
 
     #endregion

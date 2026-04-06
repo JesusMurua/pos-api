@@ -38,6 +38,7 @@ public class UnitOfWork : IUnitOfWork
     private ICustomerRepository? _customers;
     private ICustomerTransactionRepository? _customerTransactions;
     private IPrintJobRepository? _printJobs;
+    private IInvoiceRepository? _invoices;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -133,6 +134,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IPrintJobRepository PrintJobs =>
         _printJobs ??= new PrintJobRepository(_context);
+
+    public IInvoiceRepository Invoices =>
+        _invoices ??= new InvoiceRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {
