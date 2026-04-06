@@ -4,11 +4,33 @@ namespace POS.Domain.Models;
 
 public class OpenSessionRequest
 {
+    public int? CashRegisterId { get; set; }
+
     public int InitialAmountCents { get; set; }
 
     [Required]
     [MaxLength(100)]
     public string OpenedBy { get; set; } = null!;
+}
+
+public class CreateCashRegisterRequest
+{
+    [Required]
+    [MaxLength(50)]
+    public string Name { get; set; } = null!;
+
+    [MaxLength(100)]
+    public string? DeviceUuid { get; set; }
+}
+
+public class UpdateCashRegisterRequest
+{
+    [Required]
+    [MaxLength(50)]
+    public string Name { get; set; } = null!;
+
+    [MaxLength(100)]
+    public string? DeviceUuid { get; set; }
 }
 
 public class CloseSessionRequest

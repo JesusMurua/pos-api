@@ -3,50 +3,65 @@ using POS.Domain.Models;
 namespace POS.Services.IService;
 
 /// <summary>
-/// Provides operations for managing cash register sessions and movements.
+/// Provides operations for managing cash registers, sessions, and movements.
 /// </summary>
 public interface ICashRegisterService
 {
-    /// <summary>
-    /// Gets the current open session for a branch.
-    /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
-    /// <returns>The open session or null if none exists.</returns>
-    Task<CashRegisterSession?> GetOpenSessionAsync(int branchId);
+    #region Cash Register CRUD
 
     /// <summary>
-    /// Opens a new cash register session.
+    /// Gets all cash registers for a branch.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
-    /// <param name="request">The session opening data.</param>
-    /// <returns>The created session.</returns>
-    /// <exception cref="POS.Domain.Exceptions.ValidationException">Thrown when there is already an open session.</exception>
+    Task<IEnumerable<CashRegister>> GetAllRegistersAsync(int branchId);
+
+    /// <summary>
+    /// Creates a new cash register for a branch.
+    /// </summary>
+    Task<CashRegister> CreateRegisterAsync(int branchId, CreateCashRegisterRequest request);
+
+    /// <summary>
+    /// Updates a cash register's name and/or device UUID.
+    /// </summary>
+    Task<CashRegister> UpdateRegisterAsync(int registerId, int branchId, UpdateCashRegisterRequest request);
+
+    /// <summary>
+    /// Toggles a cash register's active status.
+    /// </summary>
+    Task<CashRegister> ToggleRegisterAsync(int registerId, int branchId);
+
+    /// <summary>
+    /// Gets a cash register by its bound device UUID.
+    /// </summary>
+    Task<CashRegister?> GetRegisterByDeviceUuidAsync(int branchId, string deviceUuid);
+
+    #endregion
+
+    #region Session Operations
+
+    /// <summary>
+    /// Gets the current open session for a specific register, or for the branch (legacy).
+    /// </summary>
+    Task<CashRegisterSession?> GetOpenSessionAsync(int branchId, int? cashRegisterId = null);
+
+    /// <summary>
+    /// Opens a new cash register session, optionally tied to a specific register.
+    /// </summary>
     Task<CashRegisterSession> OpenSessionAsync(int branchId, OpenSessionRequest request);
 
     /// <summary>
-    /// Closes the current open session.
+    /// Closes the current open session for a specific register, or for the branch (legacy).
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
-    /// <param name="request">The session closing data.</param>
-    /// <returns>The closed session.</returns>
-    /// <exception cref="POS.Domain.Exceptions.NotFoundException">Thrown when no open session exists.</exception>
-    Task<CashRegisterSession> CloseSessionAsync(int branchId, CloseSessionRequest request);
+    Task<CashRegisterSession> CloseSessionAsync(int branchId, CloseSessionRequest request, int? cashRegisterId = null);
 
     /// <summary>
-    /// Adds a cash movement to the current open session.
+    /// Adds a cash movement to the open session of a specific register, or for the branch (legacy).
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
-    /// <param name="request">The movement data.</param>
-    /// <returns>The created movement.</returns>
-    /// <exception cref="POS.Domain.Exceptions.NotFoundException">Thrown when no open session exists.</exception>
-    Task<CashMovement> AddMovementAsync(int branchId, AddMovementRequest request);
+    Task<CashMovement> AddMovementAsync(int branchId, AddMovementRequest request, int? cashRegisterId = null);
 
     /// <summary>
-    /// Gets cash register history for a date range.
+    /// Gets cash register session history for a date range.
     /// </summary>
-    /// <param name="branchId">The branch identifier.</param>
-    /// <param name="from">Start date.</param>
-    /// <param name="to">End date.</param>
-    /// <returns>Sessions within the date range.</returns>
     Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to);
+
+    #endregion
 }

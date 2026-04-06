@@ -49,7 +49,11 @@ public class CashRegisterSession
     /// <summary>Bumped on every mutation to trigger xmin concurrency token update.</summary>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    public int? CashRegisterId { get; set; }
+
     public virtual Branch? Branch { get; set; }
+
+    public virtual CashRegister? CashRegister { get; set; }
 
     public virtual ICollection<CashMovement>? Movements { get; set; }
 

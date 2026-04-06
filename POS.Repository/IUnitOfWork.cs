@@ -12,6 +12,7 @@ public interface IUnitOfWork : IDisposable
     IBusinessRepository Business { get; }
     IUserRepository Users { get; }
     IDiscountPresetRepository DiscountPresets { get; }
+    ICashRegisterRepository CashRegisters { get; }
     ICashRegisterSessionRepository CashRegisterSessions { get; }
     ICashMovementRepository CashMovements { get; }
     IRestaurantTableRepository RestaurantTables { get; }

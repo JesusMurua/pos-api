@@ -19,6 +19,14 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
             .FirstOrDefaultAsync();
     }
 
+    public async Task<CashRegisterSession?> GetOpenSessionByRegisterAsync(int registerId)
+    {
+        return await _context.CashRegisterSessions
+            .Where(s => s.CashRegisterId == registerId && s.Status == CashRegisterStatus.Open)
+            .Include(s => s.Movements)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to)
     {
         return await _context.CashRegisterSessions

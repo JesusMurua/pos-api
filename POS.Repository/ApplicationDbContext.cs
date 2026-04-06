@@ -72,6 +72,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderItem> OrderItems { get; set; } = null!;
     public DbSet<AuditLog> AuditLogs { get; set; } = null!;
     public DbSet<DiscountPreset> DiscountPresets { get; set; } = null!;
+    public DbSet<CashRegister> CashRegisters { get; set; } = null!;
     public DbSet<CashRegisterSession> CashRegisterSessions { get; set; } = null!;
     public DbSet<CashMovement> CashMovements { get; set; } = null!;
     public DbSet<RestaurantTable> RestaurantTables { get; set; } = null!;
@@ -456,6 +457,27 @@ public class ApplicationDbContext : DbContext
 
         #region CashRegister Configuration
 
+        modelBuilder.Entity<CashRegister>(entity =>
+        {
+            entity.HasOne(r => r.Branch)
+                .WithMany(b => b.CashRegisters)
+                .HasForeignKey(r => r.BranchId);
+
+            entity.HasMany(r => r.Sessions)
+                .WithOne(s => s.CashRegister)
+                .HasForeignKey(s => s.CashRegisterId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(r => r.Name).HasMaxLength(50).IsRequired();
+            entity.Property(r => r.DeviceUuid).HasMaxLength(100);
+
+            entity.HasIndex(r => new { r.BranchId, r.Name }).IsUnique();
+            entity.HasIndex(r => new { r.BranchId, r.DeviceUuid })
+                .IsUnique()
+                .HasFilter("\"DeviceUuid\" IS NOT NULL");
+        });
+
         modelBuilder.Entity<CashRegisterSession>(entity =>
         {
             entity.HasOne(s => s.Branch)
@@ -469,11 +491,12 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(s => new { s.BranchId, s.Status });
             entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
+            entity.HasIndex(s => s.CashRegisterId);
 
-            // Only one open session per branch at any time
-            entity.HasIndex(s => s.BranchId)
+            // Only one open session per cash register at any time
+            entity.HasIndex(s => s.CashRegisterId)
                 .IsUnique()
-                .HasFilter("\"Status\" = 'open'");
+                .HasFilter("\"Status\" = 'open' AND \"CashRegisterId\" IS NOT NULL");
 
             entity.Property<uint>("xmin")
                 .HasColumnType("xid")

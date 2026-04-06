@@ -15,6 +15,7 @@ public class UnitOfWork : IUnitOfWork
     private IBusinessRepository? _business;
     private IUserRepository? _users;
     private IDiscountPresetRepository? _discountPresets;
+    private ICashRegisterRepository? _cashRegisters;
     private ICashRegisterSessionRepository? _cashRegisterSessions;
     private ICashMovementRepository? _cashMovements;
     private IRestaurantTableRepository? _restaurantTables;
@@ -65,6 +66,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IDiscountPresetRepository DiscountPresets =>
         _discountPresets ??= new DiscountPresetRepository(_context);
+
+    public ICashRegisterRepository CashRegisters =>
+        _cashRegisters ??= new CashRegisterRepository(_context);
 
     public ICashRegisterSessionRepository CashRegisterSessions =>
         _cashRegisterSessions ??= new CashRegisterSessionRepository(_context);
