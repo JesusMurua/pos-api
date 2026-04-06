@@ -101,6 +101,9 @@ public partial class Order
     /// <summary>FK to FiscalCustomer who requested the invoice. Null for global invoices.</summary>
     public int? FiscalCustomerId { get; set; }
 
+    /// <summary>FK to Invoice entity. Null for uninvoiced orders. Set when linked to an Invoice.</summary>
+    public int? InvoiceId { get; set; }
+
     #endregion
 
     public virtual Branch? Branch { get; set; }
@@ -112,6 +115,8 @@ public partial class Order
     public virtual CashRegisterSession? CashRegisterSession { get; set; }
 
     public virtual FiscalCustomer? FiscalCustomer { get; set; }
+
+    public virtual Invoice? Invoice { get; set; }
 
     public virtual Customer? Customer { get; set; }
 

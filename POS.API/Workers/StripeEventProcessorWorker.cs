@@ -254,7 +254,7 @@ public class StripeEventProcessorWorker : BackgroundService
 
     private async Task HandleInvoicePaymentFailedAsync(Event stripeEvent, IUnitOfWork unitOfWork)
     {
-        var invoice = stripeEvent.Data.Object as Invoice;
+        var invoice = stripeEvent.Data.Object as Stripe.Invoice;
         var subscriptionId = invoice?.Parent?.SubscriptionDetails?.SubscriptionId;
         if (invoice == null || string.IsNullOrEmpty(subscriptionId)) return;
 
@@ -280,7 +280,7 @@ public class StripeEventProcessorWorker : BackgroundService
 
     private async Task HandleInvoicePaymentSucceededAsync(Event stripeEvent, IUnitOfWork unitOfWork)
     {
-        var invoice = stripeEvent.Data.Object as Invoice;
+        var invoice = stripeEvent.Data.Object as Stripe.Invoice;
         var subscriptionId = invoice?.Parent?.SubscriptionDetails?.SubscriptionId;
         if (invoice == null || string.IsNullOrEmpty(subscriptionId)) return;
 

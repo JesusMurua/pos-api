@@ -133,6 +133,44 @@ public class OrderService : IOrderService
             }
         }
 
+        // ── Phase 2a-fiscal: Freeze SAT fields from Product onto OrderItem ──
+        // Batch-fetch all products referenced by new orders, then enrich each item
+        // with immutable fiscal data (SatProductCode, SatUnitCode, TaxRatePercent, TaxAmountCents).
+        if (ordersToInsert.Count > 0)
+        {
+            var allProductIds = ordersToInsert
+                .Where(o => o.Items != null)
+                .SelectMany(o => o.Items!)
+                .Select(i => i.ProductId)
+                .Distinct().ToList();
+
+            var productFiscalMap = (await _unitOfWork.Products.GetAsync(
+                p => allProductIds.Contains(p.Id)))
+                .ToDictionary(p => p.Id);
+
+            foreach (var order in ordersToInsert)
+            {
+                if (order.Items == null) continue;
+                foreach (var item in order.Items)
+                {
+                    if (productFiscalMap.TryGetValue(item.ProductId, out var product))
+                    {
+                        item.SatProductCode = product.SatProductCode;
+                        item.SatUnitCode = product.SatUnitCode;
+                        item.TaxRatePercent = product.TaxRate;
+
+                        // Calculate tax amount (prices include IVA in Mexico)
+                        var taxRate = product.TaxRate ?? 0.16m;
+                        if (taxRate > 0)
+                        {
+                            var lineTotal = item.UnitPriceCents * item.Quantity;
+                            item.TaxAmountCents = (int)(lineTotal * taxRate / (1 + taxRate));
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Phase 2b: Validate Counter→Restaurant table assignments ──
         if (updatedOrdersWithNewTables.Count > 0)
         {

@@ -98,6 +98,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
+    public DbSet<Invoice> Invoices { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
