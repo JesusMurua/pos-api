@@ -1,3 +1,5 @@
+using POS.Domain.Enums;
+
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -54,6 +56,57 @@ public class OrderReportRow
     public string Status { get; set; } = string.Empty;
     public string? CancellationReason { get; set; }
     public int ItemCount { get; set; }
+}
+
+// ──────────────────────────────────────────
+// BDD-006b: Repository projection rows
+// ──────────────────────────────────────────
+
+/// <summary>
+/// Projection row for daily order metrics (SQL GROUP BY result).
+/// </summary>
+public class OrderDailyMetricRow
+{
+    public DateTime Date { get; set; }
+    public bool IsCancelled { get; set; }
+    public int OrderCount { get; set; }
+    public int TotalCents { get; set; }
+    public int DiscountCents { get; set; }
+}
+
+/// <summary>
+/// Projection row for payment method totals (SQL GROUP BY result).
+/// </summary>
+public class PaymentMethodTotalRow
+{
+    public PaymentMethod Method { get; set; }
+    public int TotalCents { get; set; }
+}
+
+/// <summary>
+/// Projection row for fiscal CSV export.
+/// </summary>
+public class FiscalCsvRow
+{
+    public string Id { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public int TotalCents { get; set; }
+    public List<PaymentMethod> PaymentMethods { get; set; } = new();
+    public InvoiceStatus InvoiceStatus { get; set; }
+}
+
+/// <summary>
+/// Projection row for detailed sales CSV export with customer info.
+/// </summary>
+public class DetailedSalesCsvRow
+{
+    public string Id { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public int TotalCents { get; set; }
+    public List<PaymentMethod> PaymentMethods { get; set; } = new();
+    public string CustomerFirstName { get; set; } = string.Empty;
+    public string? CustomerLastName { get; set; }
+    public InvoiceStatus InvoiceStatus { get; set; }
 }
 
 // ──────────────────────────────────────────
