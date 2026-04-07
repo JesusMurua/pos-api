@@ -96,4 +96,9 @@ public class SyncPaymentRequest
     /// <summary>Internal tracking ID for the terminal operation.</summary>
     [MaxLength(100)]
     public string? OperationId { get; set; }
+
+    /// <summary>Payment lifecycle status: "completed", "pending", "failed", "refunded". Required.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string Status { get; set; } = null!;
 }

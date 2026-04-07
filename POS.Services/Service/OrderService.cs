@@ -695,8 +695,15 @@ public class OrderService : IOrderService
                     "CASH_SESSION_CLOSED: Cannot process payment: the associated cash register session is closed.");
         }
 
+        if (!PaymentStatus.IsValid(payment.Status))
+            throw new ValidationException(
+                $"Invalid payment status '{payment.Status}'. Must be one of: completed, pending, failed, refunded.");
+
+        payment.Status = payment.Status.ToLowerInvariant();
         payment.OrderId = orderId;
         payment.CreatedAt = DateTime.UtcNow;
+        if (payment.Status == PaymentStatus.Completed && payment.ConfirmedAt == null)
+            payment.ConfirmedAt = DateTime.UtcNow;
         order.Payments.Add(payment);
 
         RecalculatePaymentTotals(order);
@@ -1239,6 +1246,12 @@ public class OrderService : IOrderService
         if (!Enum.TryParse<PaymentMethod>(p.Method, true, out var method))
             method = PaymentMethod.Cash;
 
+        if (!PaymentStatus.IsValid(p.Status))
+            throw new ValidationException(
+                $"Invalid payment status '{p.Status}'. Must be one of: completed, pending, failed, refunded.");
+
+        var status = p.Status.ToLowerInvariant();
+
         return new OrderPayment
         {
             OrderId = orderId,
@@ -1249,6 +1262,8 @@ public class OrderService : IOrderService
             ExternalTransactionId = p.ExternalTransactionId,
             PaymentMetadata = p.PaymentMetadata,
             OperationId = p.OperationId,
+            Status = status,
+            ConfirmedAt = status == PaymentStatus.Completed ? DateTime.UtcNow : null,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -1284,7 +1299,9 @@ public class OrderService : IOrderService
 
     private static void RecalculatePaymentTotals(Order order)
     {
-        order.PaidCents = order.Payments.Sum(p => p.AmountCents);
+        order.PaidCents = order.Payments
+            .Where(p => p.Status == PaymentStatus.Completed)
+            .Sum(p => p.AmountCents);
         order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
     }
 

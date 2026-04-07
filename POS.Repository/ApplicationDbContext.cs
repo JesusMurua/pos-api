@@ -418,9 +418,11 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.PaymentProvider).HasMaxLength(30);
             entity.Property(p => p.ExternalTransactionId).HasMaxLength(100);
             entity.Property(p => p.OperationId).HasMaxLength(100);
+            entity.Property(p => p.Status).IsRequired().HasMaxLength(20);
 
             entity.HasIndex(p => p.OrderId);
             entity.HasIndex(p => p.ExternalTransactionId);
+            entity.HasIndex(p => p.Status);
         });
 
         #endregion

@@ -225,7 +225,8 @@ public class OrdersController : BaseApiController
             PaymentProvider = request.PaymentProvider,
             ExternalTransactionId = request.ExternalTransactionId,
             PaymentMetadata = request.PaymentMetadata,
-            OperationId = request.OperationId
+            OperationId = request.OperationId,
+            Status = request.Status
         };
 
         await _orderService.AddPaymentAsync(id, BranchId, payment);
@@ -385,4 +386,9 @@ public class AddPaymentRequest
     /// <summary>Internal tracking ID for the terminal operation.</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(100)]
     public string? OperationId { get; set; }
+
+    /// <summary>Payment lifecycle status: "completed", "pending", "failed", "refunded". Required.</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MaxLength(20)]
+    public string Status { get; set; } = null!;
 }

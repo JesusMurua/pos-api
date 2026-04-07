@@ -33,6 +33,14 @@ public class OrderPayment
     [MaxLength(100)]
     public string? OperationId { get; set; }
 
+    /// <summary>Payment lifecycle status: "completed", "pending", "failed", "refunded".</summary>
+    [Required]
+    [MaxLength(20)]
+    public string Status { get; set; } = null!;
+
+    /// <summary>Timestamp when the payment was confirmed by the external provider. Null for manual/pending payments.</summary>
+    public DateTime? ConfirmedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Order Order { get; set; } = null!;
