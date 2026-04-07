@@ -99,6 +99,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
     public DbSet<PaymentWebhookInbox> PaymentWebhookInbox { get; set; } = null!;
+    public DbSet<BranchPaymentConfig> BranchPaymentConfigs { get; set; } = null!;
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
 
@@ -784,6 +785,23 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(e => e.StripeEventId).IsUnique();
             entity.HasIndex(e => e.Status);
+        });
+
+        #endregion
+
+        #region BranchPaymentConfig Configuration
+
+        modelBuilder.Entity<BranchPaymentConfig>(entity =>
+        {
+            entity.HasOne(c => c.Branch)
+                .WithMany(b => b.PaymentConfigs)
+                .HasForeignKey(c => c.BranchId);
+
+            entity.Property(c => c.Provider).HasMaxLength(30);
+            entity.Property(c => c.WebhookSecret).HasMaxLength(255);
+            entity.Property(c => c.TerminalId).HasMaxLength(100);
+
+            entity.HasIndex(c => new { c.BranchId, c.Provider }).IsUnique();
         });
 
         #endregion

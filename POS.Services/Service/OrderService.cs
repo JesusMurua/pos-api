@@ -753,6 +753,37 @@ public class OrderService : IOrderService
     }
 
     /// <summary>
+    /// Confirms a pending payment by its ExternalTransactionId.
+    /// Updates status to "completed", sets ConfirmedAt, and recalculates order totals.
+    /// </summary>
+    public async Task<OrderPayment> ConfirmPaymentByExternalIdAsync(string externalTransactionId)
+    {
+        var orders = await _unitOfWork.Orders.GetAsync(
+            o => o.Payments.Any(p => p.ExternalTransactionId == externalTransactionId),
+            "Payments");
+
+        var order = orders.FirstOrDefault()
+            ?? throw new NotFoundException(
+                $"No order found with payment ExternalTransactionId '{externalTransactionId}'");
+
+        var payment = order.Payments.First(p => p.ExternalTransactionId == externalTransactionId);
+
+        if (payment.Status == PaymentStatus.Completed)
+            return payment;
+
+        payment.Status = PaymentStatus.Completed;
+        payment.ConfirmedAt = DateTime.UtcNow;
+
+        RecalculatePaymentTotals(order);
+        order.IsPaid = order.PaidCents >= order.TotalCents;
+
+        _unitOfWork.Orders.Update(order);
+        await _unitOfWork.SaveChangesAsync();
+
+        return payment;
+    }
+
+    /// <summary>
     /// Gets all payments for an order.
     /// </summary>
     public async Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId)

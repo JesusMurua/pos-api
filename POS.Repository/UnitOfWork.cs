@@ -33,6 +33,7 @@ public class UnitOfWork : IUnitOfWork
     private ISubscriptionRepository? _subscriptions;
     private IStripeEventInboxRepository? _stripeEventInbox;
     private IPaymentWebhookInboxRepository? _paymentWebhookInbox;
+    private IBranchPaymentConfigRepository? _branchPaymentConfigs;
     private ISupplierRepository? _suppliers;
     private IStockReceiptRepository? _stockReceipts;
     private IBranchDeliveryConfigRepository? _branchDeliveryConfigs;
@@ -121,6 +122,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IPaymentWebhookInboxRepository PaymentWebhookInbox =>
         _paymentWebhookInbox ??= new PaymentWebhookInboxRepository(_context);
+
+    public IBranchPaymentConfigRepository BranchPaymentConfigs =>
+        _branchPaymentConfigs ??= new BranchPaymentConfigRepository(_context);
 
     public ISupplierRepository Suppliers =>
         _suppliers ??= new SupplierRepository(_context);

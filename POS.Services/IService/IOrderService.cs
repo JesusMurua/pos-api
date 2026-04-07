@@ -61,6 +61,12 @@ public interface IOrderService
     Task<IEnumerable<OrderPayment>> GetPaymentsAsync(string orderId, int branchId);
 
     /// <summary>
+    /// Confirms a pending payment by its ExternalTransactionId.
+    /// Updates the payment status to "completed", sets ConfirmedAt, and recalculates order totals.
+    /// </summary>
+    Task<OrderPayment> ConfirmPaymentByExternalIdAsync(string externalTransactionId);
+
+    /// <summary>
     /// Returns a single order by ID as a DTO, scoped to the given branch.
     /// </summary>
     Task<OrderPullDto?> GetByIdAsDtoAsync(string orderId, int branchId);

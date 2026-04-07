@@ -12,10 +12,12 @@ namespace POS.API.Controllers;
 public class OrdersController : BaseApiController
 {
     private readonly IOrderService _orderService;
+    private readonly IMercadoPagoService _mercadoPagoService;
 
-    public OrdersController(IOrderService orderService)
+    public OrdersController(IOrderService orderService, IMercadoPagoService mercadoPagoService)
     {
         _orderService = orderService;
+        _mercadoPagoService = mercadoPagoService;
     }
 
     /// <summary>
@@ -261,6 +263,29 @@ public class OrdersController : BaseApiController
     }
 
     /// <summary>
+    /// Creates a MercadoPago payment intent for an order.
+    /// Registers a pending payment and returns the checkout URL.
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <param name="request">The payment intent data.</param>
+    /// <returns>External transaction ID and init point URL.</returns>
+    /// <response code="200">Returns the payment intent details.</response>
+    /// <response code="400">If MercadoPago is not configured or inactive.</response>
+    /// <response code="404">If the order is not found.</response>
+    [HttpPost("{id}/payments/mercadopago/intent")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(PaymentIntentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateMercadoPagoIntent(string id, [FromBody] CreatePaymentIntentRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _mercadoPagoService.CreatePaymentIntentAsync(BranchId, id, request.AmountCents);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Moves items from this order to another order.
     /// </summary>
     /// <param name="id">The source order UUID.</param>
@@ -391,4 +416,9 @@ public class AddPaymentRequest
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.MaxLength(20)]
     public string Status { get; set; } = null!;
+}
+
+public class CreatePaymentIntentRequest
+{
+    public int AmountCents { get; set; }
 }

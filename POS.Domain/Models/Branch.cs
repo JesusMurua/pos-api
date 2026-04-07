@@ -66,4 +66,6 @@ public partial class Branch
     public virtual ICollection<BranchDeliveryConfig>? DeliveryConfigs { get; set; }
 
     public virtual ICollection<CashRegister>? CashRegisters { get; set; }
+
+    public virtual ICollection<BranchPaymentConfig>? PaymentConfigs { get; set; }
 }

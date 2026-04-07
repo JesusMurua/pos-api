@@ -1,12 +1,13 @@
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.IService;
 
 namespace POS.API.Workers;
 
 /// <summary>
 /// Background worker that polls the PaymentWebhookInbox for pending events and processes them.
-/// Dispatches to provider-specific handlers. Marks events as Processed or Failed.
+/// Dispatches to provider-specific services. Marks events as Processed or Failed.
 /// </summary>
 public class PaymentWebhookProcessorWorker : BackgroundService
 {
@@ -58,7 +59,7 @@ public class PaymentWebhookProcessorWorker : BackgroundService
 
             try
             {
-                await ProcessEventAsync(inboxEvent, unitOfWork);
+                await ProcessEventAsync(inboxEvent, scope.ServiceProvider);
 
                 inboxEvent.Status = WebhookInboxStatus.Processed;
                 inboxEvent.ProcessedAt = DateTime.UtcNow;
@@ -81,33 +82,23 @@ public class PaymentWebhookProcessorWorker : BackgroundService
     }
 
     /// <summary>
-    /// Dispatches event processing to the appropriate provider handler.
-    /// Provider-specific logic (MercadoPagoService, ClipService) will be injected in Phase 14d/14e.
+    /// Dispatches event processing to the appropriate provider service.
     /// </summary>
-    private Task ProcessEventAsync(PaymentWebhookInbox inboxEvent, IUnitOfWork unitOfWork)
+    private Task ProcessEventAsync(PaymentWebhookInbox inboxEvent, IServiceProvider services)
     {
         return inboxEvent.Provider switch
         {
-            "mercadopago" => ProcessMercadoPagoEventAsync(inboxEvent, unitOfWork),
-            "clip" => ProcessClipEventAsync(inboxEvent, unitOfWork),
+            "mercadopago" => services.GetRequiredService<IMercadoPagoService>()
+                .ProcessWebhookAsync(inboxEvent),
+            "clip" => ProcessClipEventAsync(inboxEvent),
             _ => throw new InvalidOperationException($"Unknown payment provider: {inboxEvent.Provider}")
         };
     }
 
     /// <summary>
-    /// Skeleton for MercadoPago event processing. Will be replaced by MercadoPagoService in Phase 14d.
-    /// </summary>
-    private Task ProcessMercadoPagoEventAsync(PaymentWebhookInbox inboxEvent, IUnitOfWork unitOfWork)
-    {
-        _logger.LogInformation("MercadoPago event {EventType} received — provider handler not yet implemented",
-            inboxEvent.EventType);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
     /// Skeleton for Clip event processing. Will be replaced by ClipService in Phase 14e.
     /// </summary>
-    private Task ProcessClipEventAsync(PaymentWebhookInbox inboxEvent, IUnitOfWork unitOfWork)
+    private Task ProcessClipEventAsync(PaymentWebhookInbox inboxEvent)
     {
         _logger.LogInformation("Clip event {EventType} received — provider handler not yet implemented",
             inboxEvent.EventType);
