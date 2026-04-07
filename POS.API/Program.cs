@@ -183,6 +183,7 @@ builder.Services.AddServiceDependencies();
 
 // Background workers
 builder.Services.AddHostedService<StripeEventProcessorWorker>();
+builder.Services.AddHostedService<PaymentWebhookProcessorWorker>();
 
 var app = builder.Build();
 

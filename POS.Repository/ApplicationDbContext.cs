@@ -98,6 +98,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Customer> Customers { get; set; } = null!;
     public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
+    public DbSet<PaymentWebhookInbox> PaymentWebhookInbox { get; set; } = null!;
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
 
@@ -782,6 +783,22 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(20);
 
             entity.HasIndex(e => e.StripeEventId).IsUnique();
+            entity.HasIndex(e => e.Status);
+        });
+
+        #endregion
+
+        #region PaymentWebhookInbox Configuration
+
+        modelBuilder.Entity<PaymentWebhookInbox>(entity =>
+        {
+            entity.Property(e => e.Provider).HasMaxLength(30);
+            entity.Property(e => e.ExternalEventId).HasMaxLength(255);
+            entity.Property(e => e.EventType).HasMaxLength(100);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(2000);
+
+            entity.HasIndex(e => new { e.Provider, e.ExternalEventId }).IsUnique();
             entity.HasIndex(e => e.Status);
         });
 

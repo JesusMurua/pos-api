@@ -32,6 +32,7 @@ public class UnitOfWork : IUnitOfWork
     private IReservationRepository? _reservations;
     private ISubscriptionRepository? _subscriptions;
     private IStripeEventInboxRepository? _stripeEventInbox;
+    private IPaymentWebhookInboxRepository? _paymentWebhookInbox;
     private ISupplierRepository? _suppliers;
     private IStockReceiptRepository? _stockReceipts;
     private IBranchDeliveryConfigRepository? _branchDeliveryConfigs;
@@ -117,6 +118,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IStripeEventInboxRepository StripeEventInbox =>
         _stripeEventInbox ??= new StripeEventInboxRepository(_context);
+
+    public IPaymentWebhookInboxRepository PaymentWebhookInbox =>
+        _paymentWebhookInbox ??= new PaymentWebhookInboxRepository(_context);
 
     public ISupplierRepository Suppliers =>
         _suppliers ??= new SupplierRepository(_context);

@@ -29,6 +29,7 @@ public interface IUnitOfWork : IDisposable
     IReservationRepository Reservations { get; }
     ISubscriptionRepository Subscriptions { get; }
     IStripeEventInboxRepository StripeEventInbox { get; }
+    IPaymentWebhookInboxRepository PaymentWebhookInbox { get; }
     ISupplierRepository Suppliers { get; }
     IStockReceiptRepository StockReceipts { get; }
     IBranchDeliveryConfigRepository BranchDeliveryConfigs { get; }
