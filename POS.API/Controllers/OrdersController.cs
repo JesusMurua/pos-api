@@ -13,11 +13,16 @@ public class OrdersController : BaseApiController
 {
     private readonly IOrderService _orderService;
     private readonly IMercadoPagoService _mercadoPagoService;
+    private readonly IClipService _clipService;
 
-    public OrdersController(IOrderService orderService, IMercadoPagoService mercadoPagoService)
+    public OrdersController(
+        IOrderService orderService,
+        IMercadoPagoService mercadoPagoService,
+        IClipService clipService)
     {
         _orderService = orderService;
         _mercadoPagoService = mercadoPagoService;
+        _clipService = clipService;
     }
 
     /// <summary>
@@ -282,6 +287,29 @@ public class OrdersController : BaseApiController
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var result = await _mercadoPagoService.CreatePaymentIntentAsync(BranchId, id, request.AmountCents);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Creates a Clip terminal payment intent for an order.
+    /// Pushes the payment to the physical terminal and registers a pending payment.
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <param name="request">The payment intent data.</param>
+    /// <returns>External transaction ID and status.</returns>
+    /// <response code="200">Returns the payment intent details.</response>
+    /// <response code="400">If Clip is not configured or inactive.</response>
+    /// <response code="404">If the order is not found.</response>
+    [HttpPost("{id}/payments/clip/intent")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(PaymentIntentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateClipIntent(string id, [FromBody] CreatePaymentIntentRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _clipService.CreatePaymentIntentAsync(BranchId, id, request.AmountCents);
         return Ok(result);
     }
 

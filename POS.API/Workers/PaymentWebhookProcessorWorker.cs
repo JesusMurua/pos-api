@@ -90,18 +90,9 @@ public class PaymentWebhookProcessorWorker : BackgroundService
         {
             "mercadopago" => services.GetRequiredService<IMercadoPagoService>()
                 .ProcessWebhookAsync(inboxEvent),
-            "clip" => ProcessClipEventAsync(inboxEvent),
+            "clip" => services.GetRequiredService<IClipService>()
+                .ProcessWebhookAsync(inboxEvent),
             _ => throw new InvalidOperationException($"Unknown payment provider: {inboxEvent.Provider}")
         };
-    }
-
-    /// <summary>
-    /// Skeleton for Clip event processing. Will be replaced by ClipService in Phase 14e.
-    /// </summary>
-    private Task ProcessClipEventAsync(PaymentWebhookInbox inboxEvent)
-    {
-        _logger.LogInformation("Clip event {EventType} received — provider handler not yet implemented",
-            inboxEvent.EventType);
-        return Task.CompletedTask;
     }
 }
