@@ -117,6 +117,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
+    public DbSet<OnboardingStatusCatalog> OnboardingStatusCatalogs { get; set; } = null!;
     public DbSet<PromotionTypeCatalog> PromotionTypeCatalogs { get; set; } = null!;
     public DbSet<PromotionScopeCatalog> PromotionScopeCatalogs { get; set; } = null!;
     public DbSet<OrderSyncStatusCatalog> OrderSyncStatusCatalogs { get; set; } = null!;
@@ -163,6 +164,11 @@ public class ApplicationDbContext : DbContext
                 .WithOne(bg => bg.Business)
                 .HasForeignKey(bg => bg.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.OnboardingStatus)
+                .WithMany()
+                .HasForeignKey(b => b.OnboardingStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<BusinessGiro>(entity =>
@@ -928,6 +934,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PromotionTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<PromotionScopeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<OrderSyncStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<OnboardingStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
 
         #endregion
 

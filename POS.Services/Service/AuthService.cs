@@ -207,6 +207,8 @@ public class AuthService : IAuthService
             CountryCode = request.CountryCode ?? "MX",
             TrialEndsAt = trialEndsAt,
             TrialUsed = false,
+            OnboardingStatusId = 1,
+            CurrentOnboardingStep = 1,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };

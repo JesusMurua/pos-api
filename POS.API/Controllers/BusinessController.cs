@@ -157,10 +157,46 @@ public class BusinessController : BaseApiController
     {
         var business = await _businessService.GetByIdAsync(BusinessId);
         business.OnboardingCompleted = true;
+        business.OnboardingStatusId = 3;
         await _businessService.UpdateAsync(business);
 
         var response = await _authService.SwitchBranchAsync(UserId, BranchId);
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Updates the onboarding status and current step for the business.
+    /// </summary>
+    /// <param name="request">The onboarding status and step data.</param>
+    /// <returns>Updated onboarding state.</returns>
+    /// <response code="200">Onboarding status updated.</response>
+    /// <response code="400">If the statusId is invalid.</response>
+    [HttpPut("onboarding-step")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateOnboardingStep([FromBody] UpdateOnboardingStepRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        if (request.StatusId < 1 || request.StatusId > 4)
+            return BadRequest(new { message = "Invalid statusId. Must be 1-4." });
+
+        var business = await _businessService.GetByIdAsync(BusinessId);
+        business.OnboardingStatusId = request.StatusId;
+        business.CurrentOnboardingStep = request.Step;
+
+        if (request.StatusId == 3)
+            business.OnboardingCompleted = true;
+
+        await _businessService.UpdateAsync(business);
+
+        return Ok(new
+        {
+            onboardingStatusId = business.OnboardingStatusId,
+            currentOnboardingStep = business.CurrentOnboardingStep,
+            onboardingCompleted = business.OnboardingCompleted
+        });
     }
 }
 
@@ -191,4 +227,19 @@ public class UpdateFiscalConfigRequest
 
     /// <summary>Whether electronic invoicing is enabled.</summary>
     public bool InvoicingEnabled { get; set; }
+}
+
+/// <summary>
+/// Request body for updating onboarding status and step.
+/// </summary>
+public class UpdateOnboardingStepRequest
+{
+    /// <summary>Onboarding status catalog Id (1=Pending, 2=InProgress, 3=Completed, 4=Skipped).</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public int StatusId { get; set; }
+
+    /// <summary>Current onboarding step (1-based).</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.Range(1, 100)]
+    public int Step { get; set; }
 }

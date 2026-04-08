@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -20,6 +21,12 @@ public partial class Business
     public bool TrialUsed { get; set; }
 
     public bool OnboardingCompleted { get; set; }
+
+    /// <summary>FK to OnboardingStatusCatalog.Id (1=Pending, 2=InProgress, 3=Completed, 4=Skipped).</summary>
+    public int OnboardingStatusId { get; set; } = 1;
+
+    /// <summary>Tracks the current onboarding step the user is on (1-based).</summary>
+    public int CurrentOnboardingStep { get; set; } = 1;
 
     public bool IsActive { get; set; } = true;
 
@@ -67,6 +74,8 @@ public partial class Business
     public int PointRedemptionValueCents { get; set; } = 10;
 
     #endregion
+
+    public OnboardingStatusCatalog? OnboardingStatus { get; set; }
 
     public virtual ICollection<BusinessGiro> BusinessGiros { get; set; } = new List<BusinessGiro>();
 

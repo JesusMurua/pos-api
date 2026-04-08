@@ -140,6 +140,17 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
+        if (!await context.OnboardingStatusCatalogs.AnyAsync())
+        {
+            context.OnboardingStatusCatalogs.AddRange(
+                new OnboardingStatusCatalog { Id = 1, Code = "Pending", Name = "Pendiente" },
+                new OnboardingStatusCatalog { Id = 2, Code = "InProgress", Name = "En progreso" },
+                new OnboardingStatusCatalog { Id = 3, Code = "Completed", Name = "Completado" },
+                new OnboardingStatusCatalog { Id = 4, Code = "Skipped", Name = "Omitido" }
+            );
+            await context.SaveChangesAsync();
+        }
+
         if (!await context.Taxes.AnyAsync())
         {
             context.Taxes.AddRange(
@@ -179,6 +190,7 @@ public static class DbInitializer
             BusinessType = BusinessType.Restaurant,
             PlanType = PlanType.Pro,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -286,6 +298,7 @@ public static class DbInitializer
             BusinessType = BusinessType.Bar,
             PlanType = PlanType.Basic,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -384,6 +397,7 @@ public static class DbInitializer
             BusinessType = BusinessType.Cafe,
             PlanType = PlanType.Basic,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -468,6 +482,7 @@ public static class DbInitializer
             BusinessType = BusinessType.Retail,
             PlanType = PlanType.Basic,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -597,6 +612,7 @@ public static class DbInitializer
             BusinessType = BusinessType.FoodTruck,
             PlanType = PlanType.Free,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -739,6 +755,7 @@ public static class DbInitializer
             BusinessType = BusinessType.General,
             PlanType = PlanType.Free,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
@@ -801,6 +818,7 @@ public static class DbInitializer
             BusinessType = BusinessType.Abarrotes,
             PlanType = PlanType.Free,
             OnboardingCompleted = true,
+            OnboardingStatusId = 3,
             IsActive = true,
             CreatedAt = SeedDate
         };
