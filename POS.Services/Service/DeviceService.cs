@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Device;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -128,6 +129,94 @@ public class DeviceService : IDeviceService
                 .OrderBy(b => b.Id)
                 .Select(b => new BranchSummary { Id = b.Id, Name = b.Name })
                 .ToList()
+        };
+    }
+
+    #endregion
+
+    #region Device Registration Methods
+
+    /// <summary>
+    /// Registers a new device or updates an existing one by DeviceUuid.
+    /// If the device already exists, updates BranchId, Mode, Name, and reactivates it.
+    /// </summary>
+    public async Task<DeviceResponse> RegisterOrUpdateDeviceAsync(DeviceRegistrationRequest request)
+    {
+        var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
+        var normalizedMode = request.Mode.ToLowerInvariant();
+
+        if (!validModes.Contains(normalizedMode))
+            throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
+
+        var existing = await _unitOfWork.Devices.GetByDeviceUuidAsync(request.DeviceUuid);
+
+        if (existing != null)
+        {
+            existing.BranchId = request.BranchId;
+            existing.Mode = normalizedMode;
+            existing.Name = request.Name;
+            existing.IsActive = true;
+            _unitOfWork.Devices.Update(existing);
+            await _unitOfWork.SaveChangesAsync();
+
+            return MapToResponse(existing);
+        }
+
+        var device = new Device
+        {
+            BranchId = request.BranchId,
+            DeviceUuid = request.DeviceUuid,
+            Mode = normalizedMode,
+            Name = request.Name,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _unitOfWork.Devices.AddAsync(device);
+        await _unitOfWork.SaveChangesAsync();
+
+        return MapToResponse(device);
+    }
+
+    /// <summary>
+    /// Updates the LastSeenAt timestamp for a device heartbeat.
+    /// </summary>
+    public async Task UpdateHeartbeatAsync(string uuid)
+    {
+        var device = await _unitOfWork.Devices.GetByDeviceUuidAsync(uuid);
+        if (device == null)
+            throw new NotFoundException($"Device with UUID '{uuid}' not found");
+
+        device.LastSeenAt = DateTime.UtcNow;
+        _unitOfWork.Devices.Update(device);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Returns the current configuration for a device by UUID.
+    /// </summary>
+    public async Task<DeviceResponse?> GetByUuidAsync(string uuid)
+    {
+        var device = await _unitOfWork.Devices.GetByDeviceUuidAsync(uuid);
+        return device == null ? null : MapToResponse(device);
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    private static DeviceResponse MapToResponse(Device device)
+    {
+        return new DeviceResponse
+        {
+            Id = device.Id,
+            DeviceUuid = device.DeviceUuid,
+            Mode = device.Mode,
+            Name = device.Name,
+            IsActive = device.IsActive,
+            BranchId = device.BranchId,
+            LastSeenAt = device.LastSeenAt,
+            CreatedAt = device.CreatedAt
         };
     }
 

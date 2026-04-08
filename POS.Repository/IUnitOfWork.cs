@@ -39,6 +39,7 @@ public interface IUnitOfWork : IDisposable
     ICustomerTransactionRepository CustomerTransactions { get; }
     IPrintJobRepository PrintJobs { get; }
     IInvoiceRepository Invoices { get; }
+    IDeviceRepository Devices { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

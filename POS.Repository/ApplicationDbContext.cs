@@ -102,6 +102,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<BranchPaymentConfig> BranchPaymentConfigs { get; set; } = null!;
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
+    public DbSet<Device> Devices { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -717,6 +718,24 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(p => p.BranchId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        #endregion
+
+        #region Device Configuration
+
+        modelBuilder.Entity<Device>(entity =>
+        {
+            entity.HasOne(d => d.Branch)
+                .WithMany(b => b.Devices)
+                .HasForeignKey(d => d.BranchId);
+
+            entity.Property(d => d.DeviceUuid).HasMaxLength(100).IsRequired();
+            entity.Property(d => d.Mode).HasMaxLength(50).IsRequired();
+            entity.Property(d => d.Name).HasMaxLength(100);
+
+            entity.HasIndex(d => d.DeviceUuid).IsUnique();
+            entity.HasIndex(d => new { d.BranchId, d.Mode });
         });
 
         #endregion

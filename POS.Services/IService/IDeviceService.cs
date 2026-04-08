@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Device;
 using POS.Domain.Models;
 
 namespace POS.Services.IService;
@@ -7,6 +8,9 @@ public interface IDeviceService
     Task<GenerateCodeResponse> GenerateActivationCodeAsync(int businessId, int branchId, string mode, int createdBy);
     Task<ActivateDeviceResponse> ValidateActivationCodeAsync(string code);
     Task<DeviceSetupResponse> SetupWithEmailAsync(string email, string password);
+    Task<DeviceResponse> RegisterOrUpdateDeviceAsync(DeviceRegistrationRequest request);
+    Task UpdateHeartbeatAsync(string uuid);
+    Task<DeviceResponse?> GetByUuidAsync(string uuid);
 }
 
 public class GenerateCodeResponse
