@@ -1,10 +1,11 @@
 namespace POS.Domain.Helpers;
 
 /// <summary>
-/// Constants for cash register session status values.
+/// Integer constants matching CashRegisterStatusCatalog.Id values.
 /// </summary>
 public static class CashRegisterStatus
 {
-    public const string Open = "open";
-    public const string Closed = "closed";
+    public const int Open = 1;
+    public const int Closed = 2;
+    public const int Auditing = 3;
 }

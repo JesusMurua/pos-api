@@ -124,7 +124,7 @@ public class TableController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] TableStatusRequest request)
     {
-        if (request.Status?.ToLowerInvariant() == "available")
+        if (request.Status?.ToLowerInvariant() is "available")
         {
             var activeOrders = await _orderService.GetActiveByTableAsync(id);
             var count = activeOrders.Count();

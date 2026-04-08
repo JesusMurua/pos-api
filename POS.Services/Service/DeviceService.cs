@@ -1,6 +1,7 @@
 using POS.Domain.DTOs.Device;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -108,7 +109,7 @@ public class DeviceService : IDeviceService
         if (user == null || string.IsNullOrEmpty(user.PasswordHash))
             throw new ValidationException("Invalid email or password");
 
-        if (user.Role != UserRole.Owner)
+        if (user.RoleId != UserRoleIds.Owner)
             throw new ValidationException("Only Owner accounts can set up devices");
 
         if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))

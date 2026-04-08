@@ -61,7 +61,7 @@ public class ClipService : IClipService
             PaymentMetadata = config.TerminalId != null
                 ? JsonSerializer.Serialize(new { terminalId = config.TerminalId })
                 : null,
-            Status = PaymentStatus.Pending
+            PaymentStatusId = PaymentStatus.Pending
         };
 
         await _orderService.AddPaymentAsync(orderId, branchId, payment);
@@ -69,7 +69,7 @@ public class ClipService : IClipService
         return new PaymentIntentResult
         {
             ExternalTransactionId = externalTransactionId,
-            Status = PaymentStatus.Pending
+            Status = "pending"
         };
     }
 
@@ -129,9 +129,9 @@ public class ClipService : IClipService
     }
 
     /// <summary>
-    /// Maps Clip webhook status to internal PaymentStatus.
+    /// Maps Clip webhook status to internal PaymentStatus catalog Id.
     /// </summary>
-    private static string ExtractPaymentStatus(JsonElement root)
+    private static int ExtractPaymentStatus(JsonElement root)
     {
         string? clipStatus = null;
 

@@ -24,13 +24,8 @@ public class InventoryMovement
     /// </summary>
     public InventoryTransactionType TransactionType { get; set; } = InventoryTransactionType.ConsumeFromSale;
 
-    /// <summary>
-    /// Legacy free-text type: "in", "out", or "adjustment".
-    /// Kept for backwards compatibility — populate alongside <see cref="TransactionType"/>.
-    /// </summary>
-    [Required]
-    [MaxLength(20)]
-    public string Type { get; set; } = null!;
+    /// <summary>FK to InventoryMovementTypeCatalog.Id (1=In, 2=Out, 3=Adjustment).</summary>
+    public int InventoryMovementTypeId { get; set; }
 
     /// <summary>
     /// Absolute quantity involved in this movement. Always positive.
@@ -72,4 +67,6 @@ public class InventoryMovement
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual InventoryItem? InventoryItem { get; set; }
+
+    public Catalogs.InventoryMovementTypeCatalog? InventoryMovementType { get; set; }
 }

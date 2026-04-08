@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -126,7 +127,7 @@ public class ReservationService : IReservationService
             var table = await _unitOfWork.RestaurantTables.GetByIdAsync(reservation.TableId.Value);
             if (table != null)
             {
-                table.Status = "occupied";
+                table.TableStatusId = TableStatusIds.Occupied;
                 _unitOfWork.RestaurantTables.Update(table);
             }
         }

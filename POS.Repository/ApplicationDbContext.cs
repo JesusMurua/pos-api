@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.Models.Catalogs;
 
@@ -118,6 +119,12 @@ public class ApplicationDbContext : DbContext
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
     public DbSet<OnboardingStatusCatalog> OnboardingStatusCatalogs { get; set; } = null!;
+    public DbSet<PaymentStatusCatalog> PaymentStatusCatalogs { get; set; } = null!;
+    public DbSet<CashRegisterStatusCatalog> CashRegisterStatusCatalogs { get; set; } = null!;
+    public DbSet<CashMovementTypeCatalog> CashMovementTypeCatalogs { get; set; } = null!;
+    public DbSet<OrderStatusCatalog> OrderStatusCatalogs { get; set; } = null!;
+    public DbSet<InventoryMovementTypeCatalog> InventoryMovementTypeCatalogs { get; set; } = null!;
+    public DbSet<TableStatusCatalog> TableStatusCatalogs { get; set; } = null!;
     public DbSet<PromotionTypeCatalog> PromotionTypeCatalogs { get; set; } = null!;
     public DbSet<PromotionScopeCatalog> PromotionScopeCatalogs { get; set; } = null!;
     public DbSet<OrderSyncStatusCatalog> OrderSyncStatusCatalogs { get; set; } = null!;
@@ -132,13 +139,15 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Business>(entity =>
         {
-            entity.Property(b => b.BusinessType)
-                .HasConversion<string>()
-                .HasMaxLength(20);
+            entity.HasOne(b => b.BusinessTypeCatalog)
+                .WithMany()
+                .HasForeignKey(b => b.BusinessTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-            entity.Property(b => b.PlanType)
-                .HasConversion<string>()
-                .HasMaxLength(20);
+            entity.HasOne(b => b.PlanTypeCatalog)
+                .WithMany()
+                .HasForeignKey(b => b.PlanTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.Property(b => b.TrialUsed).HasDefaultValue(false);
             entity.Property(b => b.InvoicingEnabled).HasDefaultValue(false);
@@ -173,15 +182,13 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<BusinessGiro>(entity =>
         {
-            entity.HasIndex(bg => new { bg.BusinessId, bg.CatalogCode }).IsUnique();
+            entity.HasIndex(bg => new { bg.BusinessId, bg.BusinessTypeId }).IsUnique();
 
-            entity.Property(bg => bg.CatalogCode).HasMaxLength(20);
             entity.Property(bg => bg.CustomDescription).HasMaxLength(100);
 
             entity.HasOne(bg => bg.BusinessTypeCatalog)
                 .WithMany()
-                .HasForeignKey(bg => bg.CatalogCode)
-                .HasPrincipalKey(c => c.Code)
+                .HasForeignKey(bg => bg.BusinessTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -194,10 +201,14 @@ public class ApplicationDbContext : DbContext
             entity.Property(s => s.StripeCustomerId).HasMaxLength(255);
             entity.Property(s => s.StripeSubscriptionId).HasMaxLength(255);
             entity.Property(s => s.StripePriceId).HasMaxLength(255);
-            entity.Property(s => s.PlanType).HasMaxLength(20);
             entity.Property(s => s.BillingCycle).HasMaxLength(20);
             entity.Property(s => s.PricingGroup).HasMaxLength(20);
             entity.Property(s => s.Status).HasMaxLength(20);
+
+            entity.HasOne(s => s.PlanTypeCatalog)
+                .WithMany()
+                .HasForeignKey(s => s.PlanTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(s => s.BusinessId).IsUnique();
             entity.HasIndex(s => s.StripeCustomerId);
@@ -223,9 +234,10 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.Property(u => u.Role)
-                .HasConversion<string>()
-                .HasMaxLength(20);
+            entity.HasOne(u => u.RoleCatalog)
+                .WithMany()
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(u => u.Email)
                 .IsUnique()
@@ -375,16 +387,18 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(36)
                 .ValueGeneratedNever();
 
-            entity.Property(o => o.SyncStatus)
-                .HasConversion<string>()
-                .HasMaxLength(20);
-
             entity.Property(o => o.IsPaid).HasDefaultValue(false);
 
-            entity.Property(o => o.KitchenStatus)
-                .HasConversion<string>()
-                .HasMaxLength(20)
-                .HasDefaultValue(KitchenStatus.Pending);
+            entity.HasOne(o => o.KitchenStatusCatalog)
+                .WithMany()
+                .HasForeignKey(o => o.KitchenStatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(o => o.SyncStatusCatalog)
+                .WithMany()
+                .HasForeignKey(o => o.SyncStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.Property(o => o.OrderSource)
                 .HasConversion<string>()
@@ -446,7 +460,7 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(o => new { o.BranchId, o.CreatedAt });
-            entity.HasIndex(o => o.SyncStatus);
+            entity.HasIndex(o => o.SyncStatusId);
             entity.HasIndex(o => o.CashRegisterSessionId);
             entity.HasIndex(o => o.CustomerId);
             entity.HasIndex(o => o.FacturapiId);
@@ -501,11 +515,15 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.PaymentProvider).HasMaxLength(30);
             entity.Property(p => p.ExternalTransactionId).HasMaxLength(100);
             entity.Property(p => p.OperationId).HasMaxLength(100);
-            entity.Property(p => p.Status).IsRequired().HasMaxLength(20);
+
+            entity.HasOne(p => p.PaymentStatus)
+                .WithMany()
+                .HasForeignKey(p => p.PaymentStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(p => p.OrderId);
             entity.HasIndex(p => p.ExternalTransactionId);
-            entity.HasIndex(p => p.Status);
+            entity.HasIndex(p => p.PaymentStatusId);
         });
 
         #endregion
@@ -574,19 +592,32 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(m => m.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasIndex(s => new { s.BranchId, s.Status });
+            entity.HasOne(s => s.CashRegisterStatusCatalog)
+                .WithMany()
+                .HasForeignKey(s => s.CashRegisterStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(s => new { s.BranchId, s.CashRegisterStatusId });
             entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
             entity.HasIndex(s => s.CashRegisterId);
 
             // Only one open session per cash register at any time
             entity.HasIndex(s => s.CashRegisterId)
                 .IsUnique()
-                .HasFilter("\"Status\" = 'open' AND \"CashRegisterId\" IS NOT NULL");
+                .HasFilter("\"CashRegisterStatusId\" = 1 AND \"CashRegisterId\" IS NOT NULL");
 
             entity.Property<uint>("xmin")
                 .HasColumnType("xid")
                 .ValueGeneratedOnAddOrUpdate()
                 .IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<CashMovement>(entity =>
+        {
+            entity.HasOne(m => m.CashMovementTypeCatalog)
+                .WithMany()
+                .HasForeignKey(m => m.CashMovementTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         #endregion
@@ -610,6 +641,11 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(t => t.ZoneId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(t => t.TableStatus)
+                .WithMany()
+                .HasForeignKey(t => t.TableStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(t => new { t.BranchId, t.IsActive });
 
@@ -675,6 +711,11 @@ public class ApplicationDbContext : DbContext
 
             // Composite index: type + date (for type-filtered branch-wide history)
             entity.HasIndex(m => new { m.TransactionType, m.CreatedAt });
+
+            entity.HasOne(m => m.InventoryMovementType)
+                .WithMany()
+                .HasForeignKey(m => m.InventoryMovementTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ProductConsumption>(entity =>
@@ -935,6 +976,12 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PromotionScopeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<OrderSyncStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<OnboardingStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<PaymentStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<CashRegisterStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<CashMovementTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<OrderStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<InventoryMovementTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<TableStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
 
         #endregion
 
@@ -952,9 +999,10 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Promotion>(entity =>
         {
-            entity.Property(p => p.Type)
-                .HasConversion<string>()
-                .HasMaxLength(20);
+            entity.HasOne(p => p.PromotionTypeCatalog)
+                .WithMany()
+                .HasForeignKey(p => p.PromotionTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.Property(p => p.AppliesTo)
                 .HasConversion<string>()
@@ -994,8 +1042,8 @@ public class ApplicationDbContext : DbContext
         {
             Id = 1,
             Name = "POS Táctil Demo",
-            BusinessType = BusinessType.Restaurant,
-            PlanType = PlanType.Basic,
+            BusinessTypeId = BusinessTypeIds.Restaurant,
+            PlanTypeId = PlanTypeIds.Basic,
             IsActive = true,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
@@ -1044,7 +1092,7 @@ public class ApplicationDbContext : DbContext
                 Email = "jesus@test.com",
                 PasswordHash = "$2a$11$4Qq2WK0QugEzhFlwvMDxieQ46r1Y.NafdFU8LLx3bXAJQ3JJwBSau",
                 PinHash = null,
-                Role = UserRole.Owner,
+                RoleId = UserRoleIds.Owner,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             },
@@ -1057,7 +1105,7 @@ public class ApplicationDbContext : DbContext
                 Email = null,
                 PasswordHash = null,
                 PinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi",
-                Role = UserRole.Cashier,
+                RoleId = UserRoleIds.Cashier,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             },
@@ -1070,7 +1118,7 @@ public class ApplicationDbContext : DbContext
                 Email = null,
                 PasswordHash = null,
                 PinHash = "$2a$11$1uDkWZWuha6zTWRnTY7Eke1GgFSozVZnRZZ8/ouAA6OdMOEp4k0sm",
-                Role = UserRole.Kitchen,
+                RoleId = UserRoleIds.Kitchen,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }

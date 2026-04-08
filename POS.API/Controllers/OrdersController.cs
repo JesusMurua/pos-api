@@ -233,7 +233,7 @@ public class OrdersController : BaseApiController
             ExternalTransactionId = request.ExternalTransactionId,
             PaymentMetadata = request.PaymentMetadata,
             OperationId = request.OperationId,
-            Status = request.Status
+            PaymentStatusId = POS.Domain.Helpers.PaymentStatus.FromString(request.Status)
         };
 
         await _orderService.AddPaymentAsync(id, BranchId, payment);

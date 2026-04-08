@@ -154,7 +154,7 @@ public class StripeEventProcessorWorker : BackgroundService
                 StripeCustomerId = session.CustomerId,
                 StripeSubscriptionId = stripeSubscriptionId,
                 StripePriceId = priceId,
-                PlanType = StripeConstants.ResolvePlanType(priceId),
+                PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId),
                 BillingCycle = StripeConstants.ResolveBillingCycle(priceId),
                 PricingGroup = StripeConstants.ResolvePricingGroup(priceId),
                 Status = stripeSub.Status,
@@ -170,7 +170,7 @@ public class StripeEventProcessorWorker : BackgroundService
             subscription.StripeCustomerId = session.CustomerId;
             subscription.StripeSubscriptionId = stripeSubscriptionId;
             subscription.StripePriceId = priceId;
-            subscription.PlanType = StripeConstants.ResolvePlanType(priceId);
+            subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId);
             subscription.BillingCycle = StripeConstants.ResolveBillingCycle(priceId);
             subscription.PricingGroup = StripeConstants.ResolvePricingGroup(priceId);
             subscription.Status = stripeSub.Status;
@@ -213,7 +213,7 @@ public class StripeEventProcessorWorker : BackgroundService
 
         subscription.Status = stripeSub.Status;
         subscription.StripePriceId = priceId;
-        subscription.PlanType = StripeConstants.ResolvePlanType(priceId);
+        subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId);
         subscription.BillingCycle = StripeConstants.ResolveBillingCycle(priceId);
         subscription.PricingGroup = StripeConstants.ResolvePricingGroup(priceId);
         subscription.CurrentPeriodStart = stripeSub.Items!.Data![0].CurrentPeriodStart;

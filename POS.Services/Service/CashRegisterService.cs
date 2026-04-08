@@ -169,7 +169,7 @@ public class CashRegisterService : ICashRegisterService
             CashRegisterId = request.CashRegisterId,
             OpenedBy = request.OpenedBy,
             InitialAmountCents = request.InitialAmountCents,
-            Status = CashRegisterStatus.Open
+            CashRegisterStatusId = CashRegisterStatus.Open
         };
 
         await _unitOfWork.CashRegisterSessions.AddAsync(session);
@@ -204,18 +204,18 @@ public class CashRegisterService : ICashRegisterService
         var closedAt = DateTime.UtcNow;
 
         var totalCashInCents = session.Movements?
-            .Where(m => m.Type == CashMovementType.In)
+            .Where(m => m.CashMovementTypeId == CashMovementType.In)
             .Sum(m => m.AmountCents) ?? 0;
 
         var totalCashOutCents = session.Movements?
-            .Where(m => m.Type == CashMovementType.Out)
+            .Where(m => m.CashMovementTypeId == CashMovementType.Out)
             .Sum(m => m.AmountCents) ?? 0;
 
         var cashSalesCents = await CalculateCashSalesAsync(session.Id);
 
         var expectedAmountCents = session.InitialAmountCents + cashSalesCents + totalCashInCents - totalCashOutCents;
 
-        session.Status = CashRegisterStatus.Closed;
+        session.CashRegisterStatusId = CashRegisterStatus.Closed;
         session.ClosedBy = request.ClosedBy;
         session.ClosedAt = closedAt;
         session.CountedAmountCents = request.CountedAmountCents;
@@ -249,7 +249,7 @@ public class CashRegisterService : ICashRegisterService
     public async Task<CashMovement> AddMovementAsync(int branchId, AddMovementRequest request, int? cashRegisterId = null)
     {
         if (request.Type is not (CashMovementType.In or CashMovementType.Out))
-            throw new ValidationException($"Movement type must be '{CashMovementType.In}' or '{CashMovementType.Out}'");
+            throw new ValidationException("Movement type must be 1 (In) or 2 (Out)");
 
         if (request.AmountCents <= 0)
             throw new ValidationException("Amount must be greater than zero");
@@ -266,7 +266,7 @@ public class CashRegisterService : ICashRegisterService
         var movement = new CashMovement
         {
             SessionId = session.Id,
-            Type = request.Type,
+            CashMovementTypeId = request.Type,
             AmountCents = request.AmountCents,
             Description = request.Description,
             CreatedBy = request.CreatedBy

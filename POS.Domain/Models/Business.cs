@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
@@ -12,9 +13,11 @@ public partial class Business
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    public BusinessType BusinessType { get; set; } = BusinessType.General;
+    /// <summary>FK to BusinessTypeCatalog.Id. Legacy — new registrations use BusinessGiros instead.</summary>
+    public int BusinessTypeId { get; set; } = BusinessTypeIds.General;
 
-    public PlanType PlanType { get; set; } = PlanType.Free;
+    /// <summary>FK to PlanTypeCatalog.Id (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>
+    public int PlanTypeId { get; set; } = PlanTypeIds.Free;
 
     public DateTime? TrialEndsAt { get; set; }
 
@@ -74,6 +77,10 @@ public partial class Business
     public int PointRedemptionValueCents { get; set; } = 10;
 
     #endregion
+
+    public BusinessTypeCatalog? BusinessTypeCatalog { get; set; }
+
+    public PlanTypeCatalog? PlanTypeCatalog { get; set; }
 
     public OnboardingStatusCatalog? OnboardingStatus { get; set; }
 

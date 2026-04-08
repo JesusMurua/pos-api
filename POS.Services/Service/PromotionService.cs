@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -89,7 +90,7 @@ public class PromotionService : IPromotionService
 
         existing.Name = promotion.Name;
         existing.Description = promotion.Description;
-        existing.Type = promotion.Type;
+        existing.PromotionTypeId = promotion.PromotionTypeId;
         existing.AppliesTo = promotion.AppliesTo;
         existing.Value = promotion.Value;
         existing.MinQuantity = promotion.MinQuantity;
@@ -148,7 +149,7 @@ public class PromotionService : IPromotionService
 
     private static void ValidatePromotionRules(Promotion promotion)
     {
-        if (promotion.Type == PromotionType.Bundle)
+        if (promotion.PromotionTypeId == PromotionTypeIds.Bundle)
         {
             if (!promotion.MinQuantity.HasValue || !promotion.PaidQuantity.HasValue)
                 throw new ValidationException("Bundle promotions require MinQuantity and PaidQuantity");
@@ -157,7 +158,7 @@ public class PromotionService : IPromotionService
                 throw new ValidationException("PaidQuantity must be less than MinQuantity");
         }
 
-        if (promotion.Type == PromotionType.Percentage)
+        if (promotion.PromotionTypeId == PromotionTypeIds.Percentage)
         {
             if (promotion.Value < 1 || promotion.Value > 100)
                 throw new ValidationException("Percentage value must be between 1 and 100");

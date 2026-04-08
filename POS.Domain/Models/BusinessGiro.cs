@@ -12,11 +12,8 @@ public class BusinessGiro
 
     public int BusinessId { get; set; }
 
-    /// <summary>
-    /// Code matching BusinessTypeCatalog.Code (e.g., "Restaurant", "Abarrotes").
-    /// </summary>
-    [Required, MaxLength(20)]
-    public string CatalogCode { get; set; } = null!;
+    /// <summary>FK to BusinessTypeCatalog.Id.</summary>
+    public int BusinessTypeId { get; set; }
 
     /// <summary>
     /// Optional user-defined description when the giro is "Otra tienda" or needs clarification.

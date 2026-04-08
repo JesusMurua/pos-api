@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.Settings;
 using POS.Repository;
@@ -50,19 +51,19 @@ public class AuthService : IAuthService
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var planType = subscription?.PlanType ?? "Free";
+        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
         var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType);
 
         return new AuthResponse
         {
             Token = token,
-            Role = user.Role.ToString(),
+            Role = UserRoleIds.ToCode(user.RoleId),
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
             PlanType = planType,
-            BusinessType = business!.BusinessType.ToString(),
+            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -93,19 +94,19 @@ public class AuthService : IAuthService
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
         var subscription = await ResolveSubscriptionAsync(matchedUser.BusinessId);
-        var planType = subscription?.PlanType ?? "Free";
+        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
         var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType);
 
         return new AuthResponse
         {
             Token = token,
-            Role = matchedUser.Role.ToString(),
+            Role = UserRoleIds.ToCode(matchedUser.RoleId),
             Name = matchedUser.Name,
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
             PlanType = planType,
-            BusinessType = business!.BusinessType.ToString(),
+            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -128,7 +129,7 @@ public class AuthService : IAuthService
         if (branch.BusinessId != user.BusinessId)
             throw new UnauthorizedException("Branch does not belong to the user's business");
 
-        var isAdminRole = user.Role == UserRole.Owner || user.Role == UserRole.Manager;
+        var isAdminRole = user.RoleId == UserRoleIds.Owner || user.RoleId == UserRoleIds.Manager;
 
         if (!isAdminRole)
         {
@@ -145,19 +146,19 @@ public class AuthService : IAuthService
             : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var planType = subscription?.PlanType ?? "Free";
+        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
         var token = GenerateToken(user, business!, branchId, branches, expiration, planType);
 
         return new AuthResponse
         {
             Token = token,
-            Role = user.Role.ToString(),
+            Role = UserRoleIds.ToCode(user.RoleId),
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
             Branches = branches,
             PlanType = planType,
-            BusinessType = business!.BusinessType.ToString(),
+            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -176,34 +177,38 @@ public class AuthService : IAuthService
         if (existingUser != null)
             throw new ValidationException("EMAIL_ALREADY_EXISTS");
 
-        if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var businessType))
-            businessType = BusinessType.General;
-
-        if (!Enum.TryParse<PlanType>(request.PlanType, true, out var planType))
-            planType = PlanType.Free;
+        // Resolve PlanType
+        if (!Enum.TryParse<PlanType>(request.PlanType, true, out var planTypeEnum))
+            planTypeEnum = PlanType.Free;
+        var planTypeId = PlanTypeIds.FromEnum(planTypeEnum);
 
         // Paid plans get a 14-day trial; Free plan has no trial
-        var isPaidPlan = planType is PlanType.Basic or PlanType.Pro or PlanType.Enterprise;
+        var isPaidPlan = planTypeId is PlanTypeIds.Basic or PlanTypeIds.Pro or PlanTypeIds.Enterprise;
         DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
 
         // ── Resolve giro codes: prefer BusinessTypes array, fallback to single BusinessType ──
         var giroCodes = request.BusinessTypes?.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
         if (giroCodes == null || giroCodes.Count == 0)
-            giroCodes = new List<string> { businessType.ToString() };
+        {
+            if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var btEnum))
+                btEnum = BusinessType.General;
+            giroCodes = new List<string> { btEnum.ToString() };
+        }
 
-        // Lookup catalog entries to derive HasKitchen / HasTables
+        // Lookup catalog entries to derive HasKitchen / HasTables + resolve IDs
         var allCatalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
         var matchedCatalogs = allCatalogs.Where(c => giroCodes.Contains(c.Code)).ToList();
 
         var hasKitchen = matchedCatalogs.Any(c => c.HasKitchen);
         var hasTables = matchedCatalogs.Any(c => c.HasTables);
+        var primaryBusinessTypeId = matchedCatalogs.FirstOrDefault()?.Id ?? BusinessTypeIds.General;
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
             Name = request.BusinessName,
-            BusinessType = businessType,
-            PlanType = planType,
+            BusinessTypeId = primaryBusinessTypeId,
+            PlanTypeId = planTypeId,
             CountryCode = request.CountryCode ?? "MX",
             TrialEndsAt = trialEndsAt,
             TrialUsed = false,
@@ -214,13 +219,13 @@ public class AuthService : IAuthService
         };
 
         // Build BusinessGiro junction rows
-        foreach (var code in giroCodes)
+        foreach (var catalog in matchedCatalogs)
         {
             business.BusinessGiros.Add(new BusinessGiro
             {
                 Business = business,
-                CatalogCode = code,
-                CustomDescription = string.Equals(code, "General", StringComparison.OrdinalIgnoreCase)
+                BusinessTypeId = catalog.Id,
+                CustomDescription = string.Equals(catalog.Code, "General", StringComparison.OrdinalIgnoreCase)
                     ? request.CustomGiroDescription
                     : null
             });
@@ -244,7 +249,7 @@ public class AuthService : IAuthService
             Name = request.OwnerName,
             Email = request.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = UserRole.Owner,
+            RoleId = UserRoleIds.Owner,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -257,7 +262,7 @@ public class AuthService : IAuthService
         };
 
         // Default zones
-        var zones = BuildDefaultZones(branch, businessType);
+        var zones = BuildDefaultZones(branch, primaryBusinessTypeId);
 
         // Default category so the POS frontend doesn't crash on empty state
         var defaultCategory = new Category
@@ -292,7 +297,7 @@ public class AuthService : IAuthService
                     Zone = zones.FirstOrDefault(),
                     Name = "Mesa 1",
                     Capacity = 4,
-                    Status = "available",
+                    TableStatusId = TableStatusIds.Available,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -309,7 +314,7 @@ public class AuthService : IAuthService
 
         // Generate JWT
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType.ToString());
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId));
 
         // Fire-and-forget: welcome email — never blocks the response
         _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
@@ -317,13 +322,13 @@ public class AuthService : IAuthService
         return new AuthResponse
         {
             Token = token,
-            Role = user.Role.ToString(),
+            Role = UserRoleIds.ToCode(user.RoleId),
             Name = user.Name,
             BusinessId = business.Id,
             CurrentBranchId = branch.Id,
             Branches = branches,
-            PlanType = business.PlanType.ToString(),
-            BusinessType = business.BusinessType.ToString(),
+            PlanType = PlanTypeIds.ToCode(business.PlanTypeId),
+            BusinessType = BusinessTypeIds.ToCode(business.BusinessTypeId),
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -348,7 +353,7 @@ public class AuthService : IAuthService
             return (defaultBranch.BranchId, branchList);
         }
 
-        if (user.Role == UserRole.Owner)
+        if (user.RoleId == UserRoleIds.Owner)
         {
             var businessBranches = await _unitOfWork.Branches.GetAsync(
                 b => b.BusinessId == user.BusinessId && b.IsActive);
@@ -384,13 +389,13 @@ public class AuthService : IAuthService
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Role, user.Role.ToString()),
+            new(ClaimTypes.Role, UserRoleIds.ToCode(user.RoleId)),
             new(ClaimTypes.Name, user.Name),
             new("businessId", user.BusinessId.ToString()),
             new("branchId", branchId.ToString()),
             new("branches", branchesJson),
             new("planType", planType),
-            new("businessType", business.BusinessType.ToString()),
+            new("businessType", BusinessTypeIds.ToCode(business.BusinessTypeId)),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
             new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower())
         };
@@ -420,9 +425,11 @@ public class AuthService : IAuthService
     /// <summary>
     /// Builds default zone entities (not persisted yet) using navigation properties.
     /// </summary>
-    private static List<Zone> BuildDefaultZones(Branch branch, BusinessType businessType)
+    private static List<Zone> BuildDefaultZones(Branch branch, int businessTypeId)
     {
-        if (businessType is BusinessType.Retail or BusinessType.FoodTruck or BusinessType.General)
+        if (businessTypeId is BusinessTypeIds.Retail or BusinessTypeIds.FoodTruck or BusinessTypeIds.General
+            or BusinessTypeIds.Abarrotes or BusinessTypeIds.Ferreteria or BusinessTypeIds.Papeleria
+            or BusinessTypeIds.Farmacia or BusinessTypeIds.Servicios)
             return [];
 
         var zones = new List<Zone>
@@ -430,7 +437,7 @@ public class AuthService : IAuthService
             new() { Branch = branch, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true }
         };
 
-        if (businessType == BusinessType.Bar)
+        if (businessTypeId == BusinessTypeIds.Bar)
             zones.Add(new Zone { Branch = branch, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true });
 
         zones.Add(new Zone { Branch = branch, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false });

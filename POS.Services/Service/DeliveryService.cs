@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -29,7 +30,7 @@ public class DeliveryService : IDeliveryService
             throw new ValidationException("Order can only be accepted when status is PendingAcceptance.");
 
         order.DeliveryStatus = DeliveryStatus.Accepted;
-        order.KitchenStatus = KitchenStatus.Pending;
+        order.KitchenStatusId = KitchenStatusIds.Pending;
 
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
@@ -66,7 +67,7 @@ public class DeliveryService : IDeliveryService
             throw new ValidationException("Order can only be marked ready when status is Accepted.");
 
         order.DeliveryStatus = DeliveryStatus.Ready;
-        order.KitchenStatus = KitchenStatus.Ready;
+        order.KitchenStatusId = KitchenStatusIds.Ready;
 
         _unitOfWork.Orders.Update(order);
         await _unitOfWork.SaveChangesAsync();
@@ -85,7 +86,7 @@ public class DeliveryService : IDeliveryService
             throw new ValidationException("Order can only be marked picked up when status is Ready.");
 
         order.DeliveryStatus = DeliveryStatus.PickedUp;
-        order.KitchenStatus = KitchenStatus.Delivered;
+        order.KitchenStatusId = KitchenStatusIds.Delivered;
         order.IsPaid = true;
 
         _unitOfWork.Orders.Update(order);
@@ -110,7 +111,7 @@ public class DeliveryService : IDeliveryService
             DeliveryCustomerName = order.DeliveryCustomerName,
             EstimatedPickupAt = order.EstimatedPickupAt,
             TotalCents = order.TotalCents,
-            KitchenStatus = order.KitchenStatus.ToString(),
+            KitchenStatus = order.KitchenStatusId switch { KitchenStatusIds.Pending => "Pending", KitchenStatusIds.Ready => "Ready", KitchenStatusIds.Delivered => "Delivered", _ => "Pending" },
             CreatedAt = order.CreatedAt,
             Items = order.Items.Select(i => new DeliveryOrderItemDto
             {
@@ -142,12 +143,12 @@ public class DeliveryService : IDeliveryService
             DeliveryStatus = DeliveryStatus.PendingAcceptance,
             DeliveryCustomerName = request.CustomerName,
             EstimatedPickupAt = request.EstimatedPickupAt,
-            KitchenStatus = KitchenStatus.Pending,
+            KitchenStatusId = KitchenStatusIds.Pending,
             BranchId = branchId,
             TotalCents = request.TotalCents,
             SubtotalCents = request.TotalCents,
             IsPaid = isPrepaidByPlatform,
-            SyncStatus = OrderSyncStatus.Synced,
+            SyncStatusId = SyncStatusIds.Synced,
             CreatedAt = DateTime.UtcNow,
             Items = request.Items.Select(i => new OrderItem
             {

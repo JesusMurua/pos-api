@@ -63,7 +63,7 @@ public class OrderService : IOrderService
         foreach (var sessionId in distinctSessionIds)
         {
             var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(sessionId);
-            if (session == null || session.BranchId != branchId || session.Status != CashRegisterStatus.Open)
+            if (session == null || session.BranchId != branchId || session.CashRegisterStatusId != CashRegisterStatus.Open)
                 throw new ValidationException(
                     "CASH_SESSION_CLOSED: Se requiere un turno de caja abierto para procesar órdenes locales.");
         }
@@ -88,7 +88,7 @@ public class OrderService : IOrderService
                     existingOrder.OrderPromotionId = request.OrderPromotionId;
                     existingOrder.OrderPromotionName = request.OrderPromotionName;
                     existingOrder.IsPaid = request.IsPaid;
-                    existingOrder.KitchenStatus = ParseKitchenStatus(request.KitchenStatus);
+                    existingOrder.KitchenStatusId = ParseKitchenStatusId(request.KitchenStatus);
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
                     existingOrder.CashRegisterSessionId ??= request.CashRegisterSessionId;
@@ -117,7 +117,7 @@ public class OrderService : IOrderService
                 else
                 {
                     var order = MapToOrder(request);
-                    order.SyncStatus = OrderSyncStatus.Synced;
+                    order.SyncStatusId = SyncStatusIds.Synced;
                     order.SyncedAt = DateTime.UtcNow;
 
                     RecalculateTotals(order);
@@ -229,11 +229,11 @@ public class OrderService : IOrderService
                 if (!table.IsActive)
                     throw new ValidationException($"Table '{table.Name}' is not active.");
 
-                if (table.Status == "occupied")
+                if (table.TableStatusId == TableStatusIds.Occupied)
                     throw new ConcurrencyConflictException(
                         $"Table '{table.Name}' is already occupied by another order.");
 
-                table.Status = "occupied";
+                table.TableStatusId = TableStatusIds.Occupied;
                 _unitOfWork.RestaurantTables.Update(table);
             }
         }
@@ -352,7 +352,7 @@ public class OrderService : IOrderService
                 try
                 {
                     var failedOrder = MapToOrder(req);
-                    failedOrder.SyncStatus = OrderSyncStatus.Failed;
+                    failedOrder.SyncStatusId = SyncStatusIds.Failed;
                     failedOrder.SyncedAt = DateTime.UtcNow;
                     failedOrders.Add(failedOrder);
                 }
@@ -390,7 +390,7 @@ public class OrderService : IOrderService
             {
                 if (tables.TryGetValue(order.TableId!.Value, out var table))
                 {
-                    table.Status = order.CancellationReason == null ? "occupied" : "available";
+                    table.TableStatusId = order.CancellationReason == null ? TableStatusIds.Occupied : TableStatusIds.Available;
                     _unitOfWork.RestaurantTables.Update(table);
                 }
             }
@@ -652,13 +652,13 @@ public class OrderService : IOrderService
     /// </summary>
     public async Task<Order> UpdateKitchenStatusAsync(string orderId, string status)
     {
-        var kitchenStatus = ParseKitchenStatus(status);
+        var kitchenStatusId = ParseKitchenStatusId(status);
 
         var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId);
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException($"Order with id {orderId} not found");
 
-        order.KitchenStatus = kitchenStatus;
+        order.KitchenStatusId = kitchenStatusId;
         _unitOfWork.Orders.Update(order);
         try
         {
@@ -669,7 +669,7 @@ public class OrderService : IOrderService
             throw new ValidationException("The order was modified by another user. Please refresh and try again.");
         }
 
-        if (kitchenStatus == KitchenStatus.Ready)
+        if (kitchenStatusId == KitchenStatusIds.Ready)
         {
             _ = Task.Run(async () =>
             {
@@ -728,19 +728,18 @@ public class OrderService : IOrderService
         if (order.CashRegisterSessionId.HasValue)
         {
             var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(order.CashRegisterSessionId.Value);
-            if (session == null || session.Status != CashRegisterStatus.Open)
+            if (session == null || session.CashRegisterStatusId != CashRegisterStatus.Open)
                 throw new ValidationException(
                     "CASH_SESSION_CLOSED: Cannot process payment: the associated cash register session is closed.");
         }
 
-        if (!PaymentStatus.IsValid(payment.Status))
+        if (!PaymentStatus.IsValid(payment.PaymentStatusId))
             throw new ValidationException(
-                $"Invalid payment status '{payment.Status}'. Must be one of: completed, pending, failed, refunded.");
+                $"Invalid payment status '{payment.PaymentStatusId}'. Must be 1-4.");
 
-        payment.Status = payment.Status.ToLowerInvariant();
         payment.OrderId = orderId;
         payment.CreatedAt = DateTime.UtcNow;
-        if (payment.Status == PaymentStatus.Completed && payment.ConfirmedAt == null)
+        if (payment.PaymentStatusId == PaymentStatus.Completed && payment.ConfirmedAt == null)
             payment.ConfirmedAt = DateTime.UtcNow;
         order.Payments.Add(payment);
 
@@ -806,10 +805,10 @@ public class OrderService : IOrderService
 
         var payment = order.Payments.First(p => p.ExternalTransactionId == externalTransactionId);
 
-        if (payment.Status == PaymentStatus.Completed)
+        if (payment.PaymentStatusId == PaymentStatus.Completed)
             return payment;
 
-        payment.Status = PaymentStatus.Completed;
+        payment.PaymentStatusId = PaymentStatus.Completed;
         payment.ConfirmedAt = DateTime.UtcNow;
 
         RecalculatePaymentTotals(order);
@@ -923,7 +922,7 @@ public class OrderService : IOrderService
         // If source has no items left, complete it and free table
         if (source.Items == null || source.Items.Count == 0)
         {
-            source.KitchenStatus = KitchenStatus.Delivered;
+            source.KitchenStatusId = KitchenStatusIds.Delivered;
             source.IsPaid = true;
 
             if (source.TableId.HasValue)
@@ -931,7 +930,7 @@ public class OrderService : IOrderService
                 var table = await _unitOfWork.RestaurantTables.GetByIdAsync(source.TableId.Value);
                 if (table != null)
                 {
-                    table.Status = "available";
+                    table.TableStatusId = TableStatusIds.Available;
                     _unitOfWork.RestaurantTables.Update(table);
                     sourceTableFreed = true;
                 }
@@ -1016,7 +1015,7 @@ public class OrderService : IOrderService
         source.SubtotalCents = 0;
         source.TotalCents = 0;
         source.TotalDiscountCents = source.OrderDiscountCents;
-        source.KitchenStatus = KitchenStatus.Delivered;
+        source.KitchenStatusId = KitchenStatusIds.Delivered;
         source.IsPaid = true;
 
         // Free source table
@@ -1028,7 +1027,7 @@ public class OrderService : IOrderService
             if (table != null)
             {
                 sourceTableName = table.Name;
-                table.Status = "available";
+                table.TableStatusId = TableStatusIds.Available;
                 _unitOfWork.RestaurantTables.Update(table);
                 sourceTableFreed = true;
             }
@@ -1110,11 +1109,11 @@ public class OrderService : IOrderService
                 OrderNumber = source.OrderNumber,
                 TableId = source.TableId,
                 TableName = source.TableName,
-                KitchenStatus = source.KitchenStatus,
+                KitchenStatusId = source.KitchenStatusId,
                 CashRegisterSessionId = source.CashRegisterSessionId,
                 FolioNumber = folioNumber,
                 CreatedAt = DateTime.UtcNow,
-                SyncStatus = OrderSyncStatus.Synced,
+                SyncStatusId = SyncStatusIds.Synced,
                 SyncedAt = DateTime.UtcNow,
                 Items = new List<OrderItem>(),
                 Payments = new List<OrderPayment>()
@@ -1206,7 +1205,7 @@ public class OrderService : IOrderService
             OrderPromotionId = request.OrderPromotionId,
             OrderPromotionName = request.OrderPromotionName,
             IsPaid = request.IsPaid,
-            KitchenStatus = ParseKitchenStatus(request.KitchenStatus),
+            KitchenStatusId = ParseKitchenStatusId(request.KitchenStatus),
             TableId = request.TableId,
             TableName = request.TableName,
             CashRegisterSessionId = request.CashRegisterSessionId,
@@ -1225,7 +1224,7 @@ public class OrderService : IOrderService
             FolioNumber = o.FolioNumber,
             TableId = o.TableId,
             TableName = o.TableName,
-            KitchenStatus = o.KitchenStatus.ToString(),
+            KitchenStatus = o.KitchenStatusId switch { KitchenStatusIds.Pending => "Pending", KitchenStatusIds.Ready => "Ready", KitchenStatusIds.Delivered => "Delivered", _ => "Pending" },
             IsPaid = o.IsPaid,
             TotalCents = o.TotalCents,
             SubtotalCents = o.SubtotalCents,
@@ -1278,19 +1277,7 @@ public class OrderService : IOrderService
         }
     }
 
-    private static KitchenStatus ParseKitchenStatus(string? status)
-    {
-        if (string.IsNullOrEmpty(status)) return KitchenStatus.Pending;
-
-        return status.ToLowerInvariant() switch
-        {
-            "pending" => KitchenStatus.Pending,
-            "preparing" => KitchenStatus.Pending,
-            "ready" => KitchenStatus.Ready,
-            "delivered" => KitchenStatus.Delivered,
-            _ => KitchenStatus.Pending
-        };
-    }
+    private static int ParseKitchenStatusId(string? status) => KitchenStatusIds.FromString(status);
 
     private static OrderItem MapToOrderItem(string orderId, SyncOrderItemRequest i)
     {
@@ -1315,11 +1302,7 @@ public class OrderService : IOrderService
         if (!Enum.TryParse<PaymentMethod>(p.Method, true, out var method))
             method = PaymentMethod.Cash;
 
-        if (!PaymentStatus.IsValid(p.Status))
-            throw new ValidationException(
-                $"Invalid payment status '{p.Status}'. Must be one of: completed, pending, failed, refunded.");
-
-        var status = p.Status.ToLowerInvariant();
+        var statusId = PaymentStatus.FromString(p.Status);
 
         return new OrderPayment
         {
@@ -1331,8 +1314,8 @@ public class OrderService : IOrderService
             ExternalTransactionId = p.ExternalTransactionId,
             PaymentMetadata = p.PaymentMetadata,
             OperationId = p.OperationId,
-            Status = status,
-            ConfirmedAt = status == PaymentStatus.Completed ? DateTime.UtcNow : null,
+            PaymentStatusId = statusId,
+            ConfirmedAt = statusId == PaymentStatus.Completed ? DateTime.UtcNow : null,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -1370,7 +1353,7 @@ public class OrderService : IOrderService
     private static void RecalculatePaymentTotals(Order order)
     {
         order.PaidCents = order.Payments
-            .Where(p => p.Status == PaymentStatus.Completed)
+            .Where(p => p.PaymentStatusId == PaymentStatus.Completed)
             .Sum(p => p.AmountCents);
         order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
     }

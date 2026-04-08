@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
 
@@ -23,7 +24,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     public async Task<IEnumerable<Order>> GetPendingSyncAsync()
     {
         return await _context.Orders
-            .Where(o => o.SyncStatus == OrderSyncStatus.Pending)
+            .Where(o => o.SyncStatusId == SyncStatusIds.Pending)
             .Include(o => o.Items)
             .ToListAsync();
     }
@@ -33,7 +34,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         return await _context.Orders
             .Where(o => o.BranchId == branchId
                 && o.CreatedAt.Date == date.Date
-                && o.SyncStatus != OrderSyncStatus.Failed)
+                && o.SyncStatusId != SyncStatusIds.Failed)
             .Include(o => o.Items)
             .ToListAsync();
     }
@@ -408,7 +409,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 o.OrderNumber,
                 ItemCount = o.Items!.Sum(i => i.Quantity),
                 o.TotalCents,
-                o.KitchenStatus,
+                o.KitchenStatusId,
                 o.CancelledAt,
                 o.CancellationReason,
                 o.CreatedAt,
@@ -421,7 +422,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             OrderNumber = o.OrderNumber,
             ItemCount = o.ItemCount,
             TotalCents = o.TotalCents,
-            KitchenStatus = o.KitchenStatus.ToString(),
+            KitchenStatus = o.KitchenStatusId switch { KitchenStatusIds.Pending => "Pending", KitchenStatusIds.Ready => "Ready", KitchenStatusIds.Delivered => "Delivered", _ => "Pending" },
             CancelledAt = o.CancelledAt,
             CancellationReason = o.CancellationReason,
             CreatedAt = o.CreatedAt,

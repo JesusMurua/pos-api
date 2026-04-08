@@ -1,3 +1,6 @@
+using POS.Domain.Helpers;
+using POS.Domain.Models.Catalogs;
+
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -15,8 +18,8 @@ public class Subscription
     public string StripePriceId { get; set; } = null!;
 
     // Plan info (denormalized for quick access)
-    /// <summary>Free | Basico | Pro | Enterprise</summary>
-    public string PlanType { get; set; } = null!;
+    /// <summary>FK to PlanTypeCatalog.Id (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>
+    public int PlanTypeId { get; set; } = PlanTypeIds.Free;
     /// <summary>Monthly | Annual</summary>
     public string BillingCycle { get; set; } = null!;
     /// <summary>General | Standard | Restaurant</summary>
@@ -29,4 +32,6 @@ public class Subscription
     public DateTime CurrentPeriodEnd { get; set; }
     public DateTime? CanceledAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    public PlanTypeCatalog? PlanTypeCatalog { get; set; }
 }

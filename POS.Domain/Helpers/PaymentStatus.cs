@@ -1,19 +1,26 @@
 namespace POS.Domain.Helpers;
 
 /// <summary>
-/// Constants for payment status values stored in OrderPayment.Status.
+/// Integer constants matching PaymentStatusCatalog.Id values.
 /// </summary>
 public static class PaymentStatus
 {
-    public const string Completed = "completed";
-    public const string Pending = "pending";
-    public const string Failed = "failed";
-    public const string Refunded = "refunded";
+    public const int Pending = 1;
+    public const int Completed = 2;
+    public const int Failed = 3;
+    public const int Refunded = 4;
 
-    private static readonly HashSet<string> ValidStatuses = new(StringComparer.OrdinalIgnoreCase)
+    public static bool IsValid(int statusId) => statusId is >= 1 and <= 4;
+
+    /// <summary>
+    /// Maps a legacy string status (from frontend/API) to the catalog integer Id.
+    /// </summary>
+    public static int FromString(string? status) => status?.ToLowerInvariant() switch
     {
-        Completed, Pending, Failed, Refunded
+        "pending" => Pending,
+        "completed" => Completed,
+        "failed" => Failed,
+        "refunded" => Refunded,
+        _ => Pending
     };
-
-    public static bool IsValid(string? status) => status is not null && ValidStatuses.Contains(status);
 }

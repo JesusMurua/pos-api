@@ -42,7 +42,7 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             .AsNoTracking()
             .Where(o => o.BranchId == branchId && o.TableId != null
                 && o.CancellationReason == null && o.IsPaid == false)
-            .Select(o => new { o.TableId, o.Id, o.TotalCents, o.KitchenStatus, o.CreatedAt })
+            .Select(o => new { o.TableId, o.Id, o.TotalCents, o.KitchenStatusId, o.CreatedAt })
             .ToListAsync();
 
         var orderByTable = activeOrders
@@ -75,7 +75,7 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
                 ZoneName = t.ZoneName,
                 OrderId = hasOrder ? order!.Id : null,
                 OrderTotalCents = hasOrder ? order!.TotalCents : null,
-                OrderKitchenStatus = hasOrder ? order!.KitchenStatus : null,
+                OrderKitchenStatusId = hasOrder ? order!.KitchenStatusId : null,
                 OrderCreatedAt = hasOrder ? order!.CreatedAt : null,
                 ReservationGuestName = hasReservation ? reservation!.GuestName : null,
                 ReservationTime = hasReservation ? reservation!.ReservationTime : null

@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -21,7 +23,8 @@ public partial class Order
 
     public int ChangeCents { get; set; }
 
-    public OrderSyncStatus SyncStatus { get; set; } = OrderSyncStatus.Pending;
+    /// <summary>FK to OrderSyncStatusCatalog.Id (1=Pending, 2=Synced, 3=Failed).</summary>
+    public int SyncStatusId { get; set; } = SyncStatusIds.Pending;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -51,7 +54,8 @@ public partial class Order
 
     public bool IsPaid { get; set; } = false;
 
-    public KitchenStatus KitchenStatus { get; set; } = KitchenStatus.Pending;
+    /// <summary>FK to KitchenStatusCatalog.Id (1=Pending, 2=Ready, 3=Delivered). Nullable for non-kitchen orders.</summary>
+    public int? KitchenStatusId { get; set; } = KitchenStatusIds.Pending;
 
     [MaxLength(20)]
     public string? FolioNumber { get; set; }
@@ -108,6 +112,10 @@ public partial class Order
     public int? InvoiceId { get; set; }
 
     #endregion
+
+    public KitchenStatusCatalog? KitchenStatusCatalog { get; set; }
+
+    public OrderSyncStatusCatalog? SyncStatusCatalog { get; set; }
 
     public virtual Branch? Branch { get; set; }
 

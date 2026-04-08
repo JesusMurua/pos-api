@@ -37,7 +37,7 @@ public class SubscriptionService : ISubscriptionService
 
         return new SubscriptionStatusDto
         {
-            PlanType = subscription.PlanType,
+            PlanType = PlanTypeIds.ToCode(subscription.PlanTypeId),
             Status = subscription.Status,
             PricingGroup = subscription.PricingGroup,
             BillingCycle = subscription.BillingCycle,

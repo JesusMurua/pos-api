@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.Models.Catalogs;
 
@@ -28,10 +29,10 @@ public static class DbInitializer
         if (!await context.PlanTypeCatalogs.AnyAsync())
         {
             context.PlanTypeCatalogs.AddRange(
-                new PlanTypeCatalog { Code = "Free", Name = "Gratis", SortOrder = 0 },
-                new PlanTypeCatalog { Code = "Basic", Name = "Básico", SortOrder = 1 },
-                new PlanTypeCatalog { Code = "Pro", Name = "Pro", SortOrder = 2 },
-                new PlanTypeCatalog { Code = "Enterprise", Name = "Enterprise", SortOrder = 3 }
+                new PlanTypeCatalog { Id = 1, Code = "Free", Name = "Gratis", SortOrder = 0 },
+                new PlanTypeCatalog { Id = 2, Code = "Basic", Name = "Básico", SortOrder = 1 },
+                new PlanTypeCatalog { Id = 3, Code = "Pro", Name = "Pro", SortOrder = 2 },
+                new PlanTypeCatalog { Id = 4, Code = "Enterprise", Name = "Enterprise", SortOrder = 3 }
             );
             await context.SaveChangesAsync();
         }
@@ -51,13 +52,13 @@ public static class DbInitializer
         if (!await context.UserRoleCatalogs.AnyAsync())
         {
             context.UserRoleCatalogs.AddRange(
-                new UserRoleCatalog { Code = "Owner", Name = "Dueño", Level = 1 },
-                new UserRoleCatalog { Code = "Manager", Name = "Gerente", Level = 2 },
-                new UserRoleCatalog { Code = "Cashier", Name = "Cajero", Level = 3 },
-                new UserRoleCatalog { Code = "Kitchen", Name = "Cocina", Level = 4 },
-                new UserRoleCatalog { Code = "Waiter", Name = "Mesero", Level = 5 },
-                new UserRoleCatalog { Code = "Kiosk", Name = "Kiosk", Level = 6 },
-                new UserRoleCatalog { Code = "Host", Name = "Hostess", Level = 7 }
+                new UserRoleCatalog { Id = 1, Code = "Owner", Name = "Dueño", Level = 1 },
+                new UserRoleCatalog { Id = 2, Code = "Manager", Name = "Gerente", Level = 2 },
+                new UserRoleCatalog { Id = 3, Code = "Cashier", Name = "Cajero", Level = 3 },
+                new UserRoleCatalog { Id = 4, Code = "Kitchen", Name = "Cocina", Level = 4 },
+                new UserRoleCatalog { Id = 5, Code = "Waiter", Name = "Mesero", Level = 5 },
+                new UserRoleCatalog { Id = 6, Code = "Kiosk", Name = "Kiosk", Level = 6 },
+                new UserRoleCatalog { Id = 7, Code = "Host", Name = "Hostess", Level = 7 }
             );
             await context.SaveChangesAsync();
         }
@@ -76,9 +77,9 @@ public static class DbInitializer
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
             context.KitchenStatusCatalogs.AddRange(
-                new KitchenStatusCatalog { Code = "Pending", Name = "En cocina", Color = "#F59E0B", SortOrder = 1 },
-                new KitchenStatusCatalog { Code = "Ready", Name = "Listo", Color = "#10B981", SortOrder = 2 },
-                new KitchenStatusCatalog { Code = "Delivered", Name = "Entregado", Color = "#3B82F6", SortOrder = 3 }
+                new KitchenStatusCatalog { Id = 1, Code = "Pending", Name = "En cocina", Color = "#F59E0B", SortOrder = 1 },
+                new KitchenStatusCatalog { Id = 2, Code = "Ready", Name = "Listo", Color = "#10B981", SortOrder = 2 },
+                new KitchenStatusCatalog { Id = 3, Code = "Delivered", Name = "Entregado", Color = "#3B82F6", SortOrder = 3 }
             );
             await context.SaveChangesAsync();
         }
@@ -133,9 +134,9 @@ public static class DbInitializer
         if (!await context.OrderSyncStatusCatalogs.AnyAsync())
         {
             context.OrderSyncStatusCatalogs.AddRange(
-                new OrderSyncStatusCatalog { Code = "Pending", Name = "Pendiente" },
-                new OrderSyncStatusCatalog { Code = "Synced", Name = "Sincronizado" },
-                new OrderSyncStatusCatalog { Code = "Failed", Name = "Error" }
+                new OrderSyncStatusCatalog { Id = 1, Code = "Pending", Name = "Pendiente" },
+                new OrderSyncStatusCatalog { Id = 2, Code = "Synced", Name = "Sincronizado" },
+                new OrderSyncStatusCatalog { Id = 3, Code = "Failed", Name = "Error" }
             );
             await context.SaveChangesAsync();
         }
@@ -147,6 +148,71 @@ public static class DbInitializer
                 new OnboardingStatusCatalog { Id = 2, Code = "InProgress", Name = "En progreso" },
                 new OnboardingStatusCatalog { Id = 3, Code = "Completed", Name = "Completado" },
                 new OnboardingStatusCatalog { Id = 4, Code = "Skipped", Name = "Omitido" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.PaymentStatusCatalogs.AnyAsync())
+        {
+            context.PaymentStatusCatalogs.AddRange(
+                new PaymentStatusCatalog { Id = 1, Code = "pending", Name = "Pendiente" },
+                new PaymentStatusCatalog { Id = 2, Code = "completed", Name = "Completado" },
+                new PaymentStatusCatalog { Id = 3, Code = "failed", Name = "Fallido" },
+                new PaymentStatusCatalog { Id = 4, Code = "refunded", Name = "Reembolsado" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.CashRegisterStatusCatalogs.AnyAsync())
+        {
+            context.CashRegisterStatusCatalogs.AddRange(
+                new CashRegisterStatusCatalog { Id = 1, Code = "open", Name = "Abierto" },
+                new CashRegisterStatusCatalog { Id = 2, Code = "closed", Name = "Cerrado" },
+                new CashRegisterStatusCatalog { Id = 3, Code = "auditing", Name = "En auditoría" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.CashMovementTypeCatalogs.AnyAsync())
+        {
+            context.CashMovementTypeCatalogs.AddRange(
+                new CashMovementTypeCatalog { Id = 1, Code = "in", Name = "Entrada" },
+                new CashMovementTypeCatalog { Id = 2, Code = "out", Name = "Salida" },
+                new CashMovementTypeCatalog { Id = 3, Code = "adjustment", Name = "Ajuste" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.OrderStatusCatalogs.AnyAsync())
+        {
+            context.OrderStatusCatalogs.AddRange(
+                new OrderStatusCatalog { Id = 1, Code = "Draft", Name = "Borrador" },
+                new OrderStatusCatalog { Id = 2, Code = "Pending", Name = "Pendiente" },
+                new OrderStatusCatalog { Id = 3, Code = "Preparing", Name = "En preparación" },
+                new OrderStatusCatalog { Id = 4, Code = "Ready", Name = "Listo" },
+                new OrderStatusCatalog { Id = 5, Code = "Delivered", Name = "Entregado" },
+                new OrderStatusCatalog { Id = 6, Code = "Cancelled", Name = "Cancelado" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.InventoryMovementTypeCatalogs.AnyAsync())
+        {
+            context.InventoryMovementTypeCatalogs.AddRange(
+                new InventoryMovementTypeCatalog { Id = 1, Code = "in", Name = "Entrada" },
+                new InventoryMovementTypeCatalog { Id = 2, Code = "out", Name = "Salida" },
+                new InventoryMovementTypeCatalog { Id = 3, Code = "adjustment", Name = "Ajuste" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.TableStatusCatalogs.AnyAsync())
+        {
+            context.TableStatusCatalogs.AddRange(
+                new TableStatusCatalog { Id = 1, Code = "available", Name = "Disponible" },
+                new TableStatusCatalog { Id = 2, Code = "occupied", Name = "Ocupada" },
+                new TableStatusCatalog { Id = 3, Code = "reserved", Name = "Reservada" },
+                new TableStatusCatalog { Id = 4, Code = "maintenance", Name = "Mantenimiento" }
             );
             await context.SaveChangesAsync();
         }
@@ -187,8 +253,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Fonda La Esperanza",
-            BusinessType = BusinessType.Restaurant,
-            PlanType = PlanType.Pro,
+            BusinessTypeId = BusinessTypeIds.Restaurant,
+            PlanTypeId = PlanTypeIds.Pro,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -232,12 +298,12 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // Users
-        var owner = CreateUser(business.Id, null, "Carmen López", "carmen@fondaesperanza.com", UserRole.Owner, hasPassword: true);
-        var manager = CreateUser(business.Id, branch.Id, "Roberto Pérez", null, UserRole.Manager);
-        var cashier = CreateUser(business.Id, branch.Id, "Ana García", null, UserRole.Cashier);
-        var waiter = CreateUser(business.Id, branch.Id, "Luis Martínez", null, UserRole.Waiter);
-        var kitchen = CreateUser(business.Id, branch.Id, "Chef Rodríguez", null, UserRole.Kitchen);
-        var host = CreateUser(business.Id, branch.Id, "Sofía Ramírez", null, UserRole.Host);
+        var owner = CreateUser(business.Id, null, "Carmen López", "carmen@fondaesperanza.com", UserRoleIds.Owner, hasPassword: true);
+        var manager = CreateUser(business.Id, branch.Id, "Roberto Pérez", null, UserRoleIds.Manager);
+        var cashier = CreateUser(business.Id, branch.Id, "Ana García", null, UserRoleIds.Cashier);
+        var waiter = CreateUser(business.Id, branch.Id, "Luis Martínez", null, UserRoleIds.Waiter);
+        var kitchen = CreateUser(business.Id, branch.Id, "Chef Rodríguez", null, UserRoleIds.Kitchen);
+        var host = CreateUser(business.Id, branch.Id, "Sofía Ramírez", null, UserRoleIds.Host);
         context.Users.AddRange(owner, manager, cashier, waiter, kitchen, host);
         await context.SaveChangesAsync();
 
@@ -295,8 +361,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Bar El Coyote",
-            BusinessType = BusinessType.Bar,
-            PlanType = PlanType.Basic,
+            BusinessTypeId = BusinessTypeIds.Bar,
+            PlanTypeId = PlanTypeIds.Basic,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -338,9 +404,9 @@ public static class DbInitializer
         await context.SaveChangesAsync();
 
         // Users
-        var owner = CreateUser(business.Id, null, "Marcos Ruiz", "marcos@elcoyote.com", UserRole.Owner, hasPassword: true);
-        var cashier = CreateUser(business.Id, branch.Id, "Diana Flores", null, UserRole.Cashier);
-        var waiter = CreateUser(business.Id, branch.Id, "Pedro Sánchez", null, UserRole.Waiter);
+        var owner = CreateUser(business.Id, null, "Marcos Ruiz", "marcos@elcoyote.com", UserRoleIds.Owner, hasPassword: true);
+        var cashier = CreateUser(business.Id, branch.Id, "Diana Flores", null, UserRoleIds.Cashier);
+        var waiter = CreateUser(business.Id, branch.Id, "Pedro Sánchez", null, UserRoleIds.Waiter);
         context.Users.AddRange(owner, cashier, waiter);
         await context.SaveChangesAsync();
 
@@ -394,8 +460,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Café Nogales Specialty",
-            BusinessType = BusinessType.Cafe,
-            PlanType = PlanType.Basic,
+            BusinessTypeId = BusinessTypeIds.Cafe,
+            PlanTypeId = PlanTypeIds.Basic,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -429,8 +495,8 @@ public static class DbInitializer
         context.RestaurantTables.AddRange(tables);
         await context.SaveChangesAsync();
 
-        var owner = CreateUser(business.Id, null, "Sofía Mendoza", "sofia@cafenogales.com", UserRole.Owner, hasPassword: true);
-        var barista = CreateUser(business.Id, branch.Id, "Valentina Cruz", null, UserRole.Cashier);
+        var owner = CreateUser(business.Id, null, "Sofía Mendoza", "sofia@cafenogales.com", UserRoleIds.Owner, hasPassword: true);
+        var barista = CreateUser(business.Id, branch.Id, "Valentina Cruz", null, UserRoleIds.Cashier);
         context.Users.AddRange(owner, barista);
         await context.SaveChangesAsync();
 
@@ -479,8 +545,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Minisuper El Progreso",
-            BusinessType = BusinessType.Retail,
-            PlanType = PlanType.Basic,
+            BusinessTypeId = BusinessTypeIds.Retail,
+            PlanTypeId = PlanTypeIds.Basic,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -502,8 +568,8 @@ public static class DbInitializer
         context.Branches.Add(branch);
         await context.SaveChangesAsync();
 
-        var owner = CreateUser(business.Id, null, "Don Ernesto Vega", "ernesto@elprogreso.com", UserRole.Owner, hasPassword: true);
-        var cashier = CreateUser(business.Id, branch.Id, "Martha Vega", null, UserRole.Cashier);
+        var owner = CreateUser(business.Id, null, "Don Ernesto Vega", "ernesto@elprogreso.com", UserRoleIds.Owner, hasPassword: true);
+        var cashier = CreateUser(business.Id, branch.Id, "Martha Vega", null, UserRoleIds.Cashier);
         context.Users.AddRange(owner, cashier);
         await context.SaveChangesAsync();
 
@@ -609,8 +675,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Tacos El Güero",
-            BusinessType = BusinessType.FoodTruck,
-            PlanType = PlanType.Free,
+            BusinessTypeId = BusinessTypeIds.FoodTruck,
+            PlanTypeId = PlanTypeIds.Free,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -632,7 +698,7 @@ public static class DbInitializer
         context.Branches.Add(branch);
         await context.SaveChangesAsync();
 
-        var owner = CreateUser(business.Id, null, "Güero Castellanos", "guero@tacosguero.com", UserRole.Owner, hasPassword: true);
+        var owner = CreateUser(business.Id, null, "Güero Castellanos", "guero@tacosguero.com", UserRoleIds.Owner, hasPassword: true);
         context.Users.Add(owner);
         await context.SaveChangesAsync();
 
@@ -674,8 +740,8 @@ public static class DbInitializer
             DeliveryCustomerName = "Carlos M.",
             TotalCents = 18500,
             SubtotalCents = 18500,
-            KitchenStatus = KitchenStatus.Pending,
-            SyncStatus = OrderSyncStatus.Synced,
+            KitchenStatusId = KitchenStatusIds.Pending,
+            SyncStatusId = SyncStatusIds.Synced,
             IsPaid = false,
             CreatedAt = SeedDate
         };
@@ -697,8 +763,8 @@ public static class DbInitializer
             DeliveryCustomerName = "Ana R.",
             TotalCents = 24000,
             SubtotalCents = 24000,
-            KitchenStatus = KitchenStatus.Pending,
-            SyncStatus = OrderSyncStatus.Synced,
+            KitchenStatusId = KitchenStatusIds.Pending,
+            SyncStatusId = SyncStatusIds.Synced,
             IsPaid = false,
             CreatedAt = SeedDate
         };
@@ -752,8 +818,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Papelería El Estudiante",
-            BusinessType = BusinessType.General,
-            PlanType = PlanType.Free,
+            BusinessTypeId = BusinessTypeIds.General,
+            PlanTypeId = PlanTypeIds.Free,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -774,7 +840,7 @@ public static class DbInitializer
         context.Branches.Add(branch);
         await context.SaveChangesAsync();
 
-        var owner = CreateUser(business.Id, null, "Señora Hilda Campos", "hilda@papeleriaestudiante.com", UserRole.Owner, hasPassword: true);
+        var owner = CreateUser(business.Id, null, "Señora Hilda Campos", "hilda@papeleriaestudiante.com", UserRoleIds.Owner, hasPassword: true);
         context.Users.Add(owner);
         await context.SaveChangesAsync();
 
@@ -815,8 +881,8 @@ public static class DbInitializer
         var business = new Business
         {
             Name = "Abarrotes El Güero",
-            BusinessType = BusinessType.Abarrotes,
-            PlanType = PlanType.Free,
+            BusinessTypeId = BusinessTypeIds.Abarrotes,
+            PlanTypeId = PlanTypeIds.Free,
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -839,8 +905,8 @@ public static class DbInitializer
         context.Branches.Add(branch);
         await context.SaveChangesAsync();
 
-        var owner = CreateUser(business.Id, null, "Pedro Gutiérrez", "pedro@abarroteselguero.com", UserRole.Owner, hasPassword: true);
-        var cashier = CreateUser(business.Id, branch.Id, "María López", null, UserRole.Cashier);
+        var owner = CreateUser(business.Id, null, "Pedro Gutiérrez", "pedro@abarroteselguero.com", UserRoleIds.Owner, hasPassword: true);
+        var cashier = CreateUser(business.Id, branch.Id, "María López", null, UserRoleIds.Cashier);
         context.Users.AddRange(owner, cashier);
         await context.SaveChangesAsync();
 
@@ -892,9 +958,9 @@ public static class DbInitializer
                 StripeCustomerId = $"test_customer_{business.Id}",
                 StripeSubscriptionId = $"test_sub_{business.Id}",
                 StripePriceId = "free",
-                PlanType = "Free",
+                PlanTypeId = PlanTypeIds.Free,
                 BillingCycle = "Monthly",
-                PricingGroup = Domain.Helpers.StripeConstants.GetPricingGroup(business.BusinessType.ToString()),
+                PricingGroup = Domain.Helpers.StripeConstants.GetPricingGroup(BusinessTypeIds.ToCode(business.BusinessTypeId)),
                 Status = "trialing",
                 TrialEndsAt = trialEnd,
                 CurrentPeriodStart = now,
@@ -910,7 +976,7 @@ public static class DbInitializer
 
     #region Helpers
 
-    private static User CreateUser(int businessId, int? branchId, string name, string? email, UserRole role, bool hasPassword = false)
+    private static User CreateUser(int businessId, int? branchId, string name, string? email, int roleId, bool hasPassword = false)
     {
         return new User
         {
@@ -920,7 +986,7 @@ public static class DbInitializer
             Email = email,
             PasswordHash = hasPassword ? SeedPasswordHash : null,
             PinHash = SeedPinHash,
-            Role = role,
+            RoleId = roleId,
             IsActive = true,
             CreatedAt = SeedDate
         };

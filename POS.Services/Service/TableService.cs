@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -92,9 +93,14 @@ public class TableService : ITableService
     /// </summary>
     public async Task<RestaurantTable> UpdateStatusAsync(int id, string status)
     {
-        var validStatuses = new[] { "available", "occupied" };
+        var statusId = status.ToLowerInvariant() switch
+        {
+            "available" => TableStatusIds.Available,
+            "occupied" => TableStatusIds.Occupied,
+            _ => 0
+        };
 
-        if (!validStatuses.Contains(status.ToLowerInvariant()))
+        if (statusId == 0)
             throw new ValidationException("Status must be 'available' or 'occupied'");
 
         var table = await _unitOfWork.RestaurantTables.GetByIdAsync(id);
@@ -102,7 +108,7 @@ public class TableService : ITableService
         if (table == null)
             throw new NotFoundException($"Table with id {id} not found");
 
-        table.Status = status.ToLowerInvariant();
+        table.TableStatusId = statusId;
 
         _unitOfWork.RestaurantTables.Update(table);
         await _unitOfWork.SaveChangesAsync();
@@ -120,8 +126,8 @@ public class TableService : ITableService
         return projections.Select(p =>
         {
             string displayStatus;
-            if (p.OrderKitchenStatus.HasValue)
-                displayStatus = MapKitchenToDisplay(p.OrderKitchenStatus.Value);
+            if (p.OrderKitchenStatusId.HasValue)
+                displayStatus = MapKitchenToDisplay(p.OrderKitchenStatusId.Value);
             else if (p.ReservationGuestName != null)
                 displayStatus = "reserved";
             else
@@ -146,13 +152,13 @@ public class TableService : ITableService
 
     #region Private Helper Methods
 
-    private static string MapKitchenToDisplay(KitchenStatus status)
+    private static string MapKitchenToDisplay(int kitchenStatusId)
     {
-        return status switch
+        return kitchenStatusId switch
         {
-            KitchenStatus.Pending => "in_kitchen",
-            KitchenStatus.Ready => "ready",
-            KitchenStatus.Delivered => "with_order",
+            KitchenStatusIds.Pending => "in_kitchen",
+            KitchenStatusIds.Ready => "ready",
+            KitchenStatusIds.Delivered => "with_order",
             _ => "with_order"
         };
     }

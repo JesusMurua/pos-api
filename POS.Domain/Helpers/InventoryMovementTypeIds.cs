@@ -1,9 +1,9 @@
 namespace POS.Domain.Helpers;
 
 /// <summary>
-/// Integer constants matching CashMovementTypeCatalog.Id values.
+/// Integer constants matching InventoryMovementTypeCatalog.Id values.
 /// </summary>
-public static class CashMovementType
+public static class InventoryMovementTypeIds
 {
     public const int In = 1;
     public const int Out = 2;

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using POS.Domain.Enums;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -17,7 +18,8 @@ public partial class Promotion
     [MaxLength(255)]
     public string? Description { get; set; }
 
-    public PromotionType Type { get; set; }
+    /// <summary>FK to PromotionTypeCatalog.Id (1=Percentage, 2=Fixed, 3=Bogo, 4=Bundle, 5=OrderDiscount, 6=FreeProduct).</summary>
+    public int PromotionTypeId { get; set; }
 
     public PromotionScope AppliesTo { get; set; }
 
@@ -44,6 +46,8 @@ public partial class Promotion
     public bool IsStackable { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public PromotionTypeCatalog? PromotionTypeCatalog { get; set; }
 
     public virtual Branch Branch { get; set; } = null!;
     public virtual ICollection<PromotionUsage> Usages { get; set; } = new List<PromotionUsage>();

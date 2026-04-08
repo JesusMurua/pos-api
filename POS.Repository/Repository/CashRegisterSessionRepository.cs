@@ -14,7 +14,7 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
     public async Task<CashRegisterSession?> GetOpenSessionAsync(int branchId)
     {
         return await _context.CashRegisterSessions
-            .Where(s => s.BranchId == branchId && s.Status == CashRegisterStatus.Open)
+            .Where(s => s.BranchId == branchId && s.CashRegisterStatusId == CashRegisterStatus.Open)
             .Include(s => s.Movements)
             .FirstOrDefaultAsync();
     }
@@ -22,7 +22,7 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
     public async Task<CashRegisterSession?> GetOpenSessionByRegisterAsync(int registerId)
     {
         return await _context.CashRegisterSessions
-            .Where(s => s.CashRegisterId == registerId && s.Status == CashRegisterStatus.Open)
+            .Where(s => s.CashRegisterId == registerId && s.CashRegisterStatusId == CashRegisterStatus.Open)
             .Include(s => s.Movements)
             .FirstOrDefaultAsync();
     }

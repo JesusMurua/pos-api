@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using POS.Repository;
@@ -11,9 +12,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260408220634_AddLogisticsOperationsCatalogs")]
+    partial class AddLogisticsOperationsCatalogs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -259,8 +262,10 @@ namespace POS.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BusinessTypeId")
-                        .HasColumnType("integer");
+                    b.Property<string>("BusinessType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("CountryCode")
                         .IsRequired()
@@ -308,8 +313,10 @@ namespace POS.Repository.Migrations
                     b.Property<int>("OnboardingStatusId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PlanTypeId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PlanType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("PointRedemptionValueCents")
                         .HasColumnType("integer");
@@ -335,11 +342,7 @@ namespace POS.Repository.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessTypeId");
-
                     b.HasIndex("OnboardingStatusId");
-
-                    b.HasIndex("PlanTypeId");
 
                     b.ToTable("Businesses");
 
@@ -347,7 +350,7 @@ namespace POS.Repository.Migrations
                         new
                         {
                             Id = 1,
-                            BusinessTypeId = 1,
+                            BusinessType = "Restaurant",
                             CountryCode = "MX",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             CurrencyUnitsPerPoint = 1000,
@@ -358,7 +361,7 @@ namespace POS.Repository.Migrations
                             Name = "POS Táctil Demo",
                             OnboardingCompleted = false,
                             OnboardingStatusId = 1,
-                            PlanTypeId = 2,
+                            PlanType = "Basic",
                             PointRedemptionValueCents = 10,
                             PointsPerCurrencyUnit = 1,
                             TrialUsed = false
@@ -376,8 +379,10 @@ namespace POS.Repository.Migrations
                     b.Property<int>("BusinessId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("BusinessTypeId")
-                        .HasColumnType("integer");
+                    b.Property<string>("CatalogCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("CustomDescription")
                         .HasMaxLength(100)
@@ -385,9 +390,9 @@ namespace POS.Repository.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessTypeId");
+                    b.HasIndex("CatalogCode");
 
-                    b.HasIndex("BusinessId", "BusinessTypeId")
+                    b.HasIndex("BusinessId", "CatalogCode")
                         .IsUnique();
 
                     b.ToTable("BusinessGiros");
@@ -2577,18 +2582,18 @@ namespace POS.Repository.Migrations
                     b.Property<int?>("ProductId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PromotionTypeId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime?>("StartsAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("Value")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("PromotionTypeId");
 
                     b.HasIndex("BranchId", "CouponCode")
                         .IsUnique()
@@ -2948,8 +2953,10 @@ namespace POS.Repository.Migrations
                     b.Property<DateTime>("CurrentPeriodStart")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("PlanTypeId")
-                        .HasColumnType("integer");
+                    b.Property<string>("PlanType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("PricingGroup")
                         .IsRequired()
@@ -2986,8 +2993,6 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BusinessId")
                         .IsUnique();
-
-                    b.HasIndex("PlanTypeId");
 
                     b.HasIndex("StripeCustomerId");
 
@@ -3115,8 +3120,10 @@ namespace POS.Repository.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<int>("RoleId")
-                        .HasColumnType("integer");
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
 
@@ -3127,8 +3134,6 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasFilter("\"Email\" IS NOT NULL");
-
-                    b.HasIndex("RoleId");
 
                     b.ToTable("Users");
 
@@ -3142,7 +3147,7 @@ namespace POS.Repository.Migrations
                             IsActive = true,
                             Name = "Jesús",
                             PasswordHash = "$2a$11$4Qq2WK0QugEzhFlwvMDxieQ46r1Y.NafdFU8LLx3bXAJQ3JJwBSau",
-                            RoleId = 1
+                            Role = "Owner"
                         },
                         new
                         {
@@ -3153,7 +3158,7 @@ namespace POS.Repository.Migrations
                             IsActive = true,
                             Name = "Juan",
                             PinHash = "$2a$11$PLbPC9JX4Q40UwlEWXqPxOX/POSRhFAgxbLNRW24kvbmmlp4Fq3Zi",
-                            RoleId = 3
+                            Role = "Cashier"
                         },
                         new
                         {
@@ -3164,7 +3169,7 @@ namespace POS.Repository.Migrations
                             IsActive = true,
                             Name = "Cocina",
                             PinHash = "$2a$11$1uDkWZWuha6zTWRnTY7Eke1GgFSozVZnRZZ8/ouAA6OdMOEp4k0sm",
-                            RoleId = 4
+                            Role = "Kitchen"
                         });
                 });
 
@@ -3279,29 +3284,13 @@ namespace POS.Repository.Migrations
 
             modelBuilder.Entity("POS.Domain.Models.Business", b =>
                 {
-                    b.HasOne("POS.Domain.Models.Catalogs.BusinessTypeCatalog", "BusinessTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("BusinessTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("POS.Domain.Models.Catalogs.OnboardingStatusCatalog", "OnboardingStatus")
                         .WithMany()
                         .HasForeignKey("OnboardingStatusId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.Catalogs.PlanTypeCatalog", "PlanTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("PlanTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("BusinessTypeCatalog");
-
                     b.Navigation("OnboardingStatus");
-
-                    b.Navigation("PlanTypeCatalog");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.BusinessGiro", b =>
@@ -3314,7 +3303,8 @@ namespace POS.Repository.Migrations
 
                     b.HasOne("POS.Domain.Models.Catalogs.BusinessTypeCatalog", "BusinessTypeCatalog")
                         .WithMany()
-                        .HasForeignKey("BusinessTypeId")
+                        .HasForeignKey("CatalogCode")
+                        .HasPrincipalKey("Code")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -3787,15 +3777,7 @@ namespace POS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.Catalogs.PromotionTypeCatalog", "PromotionTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("PromotionTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Branch");
-
-                    b.Navigation("PromotionTypeCatalog");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.PromotionUsage", b =>
@@ -3946,15 +3928,7 @@ namespace POS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.Catalogs.PlanTypeCatalog", "PlanTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("PlanTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Business");
-
-                    b.Navigation("PlanTypeCatalog");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Supplier", b =>
@@ -3981,17 +3955,9 @@ namespace POS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.Catalogs.UserRoleCatalog", "RoleCatalog")
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Branch");
 
                     b.Navigation("Business");
-
-                    b.Navigation("RoleCatalog");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.UserBranch", b =>

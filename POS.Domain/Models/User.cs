@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Helpers;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -24,11 +26,14 @@ public partial class User
     [MaxLength(255)]
     public string? PinHash { get; set; }
 
-    public UserRole Role { get; set; } = UserRole.Cashier;
+    /// <summary>FK to UserRoleCatalog.Id (1=Owner, 2=Manager, 3=Cashier, 4=Kitchen, 5=Waiter, 6=Kiosk, 7=Host).</summary>
+    public int RoleId { get; set; } = UserRoleIds.Cashier;
 
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public UserRoleCatalog? RoleCatalog { get; set; }
 
     public virtual Business? Business { get; set; }
 

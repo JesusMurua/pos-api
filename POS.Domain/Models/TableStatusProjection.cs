@@ -1,5 +1,3 @@
-using POS.Domain.Enums;
-
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -13,7 +11,7 @@ public class TableStatusProjection
     public string ZoneName { get; set; } = null!;
     public string? OrderId { get; set; }
     public int? OrderTotalCents { get; set; }
-    public KitchenStatus? OrderKitchenStatus { get; set; }
+    public int? OrderKitchenStatusId { get; set; }
     public DateTime? OrderCreatedAt { get; set; }
     public string? ReservationGuestName { get; set; }
     public TimeOnly? ReservationTime { get; set; }

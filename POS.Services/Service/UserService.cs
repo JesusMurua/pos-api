@@ -1,5 +1,6 @@
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -13,8 +14,8 @@ public class UserService : IUserService
 {
     private readonly IUnitOfWork _unitOfWork;
 
-    private static readonly UserRole[] PinRoles = { UserRole.Cashier, UserRole.Kitchen, UserRole.Waiter, UserRole.Kiosk };
-    private static readonly UserRole[] EmailRoles = { UserRole.Owner, UserRole.Manager };
+    private static readonly int[] PinRoleIds = { UserRoleIds.Cashier, UserRoleIds.Kitchen, UserRoleIds.Waiter, UserRoleIds.Kiosk };
+    private static readonly int[] EmailRoleIds = { UserRoleIds.Owner, UserRoleIds.Manager };
 
     public UserService(IUnitOfWork unitOfWork)
     {
@@ -34,10 +35,10 @@ public class UserService : IUserService
 
         var users = await _unitOfWork.Users.GetAsync(
             u => u.BranchId == branchId
-                || (u.BusinessId == branch.BusinessId && u.Role == UserRole.Owner));
+                || (u.BusinessId == branch.BusinessId && u.RoleId == UserRoleIds.Owner));
 
         return users
-            .OrderBy(u => u.Role)
+            .OrderBy(u => u.RoleId)
             .ThenBy(u => u.Name)
             .Select(MapToDto);
     }
@@ -52,14 +53,14 @@ public class UserService : IUserService
             throw new NotFoundException($"Branch with id {branchId} not found");
 
         // Validate PIN-based roles
-        if (PinRoles.Contains(request.Role))
+        if (PinRoleIds.Contains(UserRoleIds.FromEnum(request.Role)))
         {
             if (string.IsNullOrEmpty(request.Pin) || request.Pin.Length != 4 || !request.Pin.All(char.IsDigit))
                 throw new ValidationException("PIN must be exactly 4 digits");
         }
 
         // Validate email-based roles
-        if (EmailRoles.Contains(request.Role))
+        if (EmailRoleIds.Contains(UserRoleIds.FromEnum(request.Role)))
         {
             if (string.IsNullOrEmpty(request.Email))
                 throw new ValidationException("Email is required for Owner and Manager roles");
@@ -75,9 +76,9 @@ public class UserService : IUserService
         var user = new User
         {
             BusinessId = branch.BusinessId,
-            BranchId = EmailRoles.Contains(request.Role) ? null : branchId,
+            BranchId = EmailRoleIds.Contains(UserRoleIds.FromEnum(request.Role)) ? null : branchId,
             Name = request.Name,
-            Role = request.Role,
+            RoleId = UserRoleIds.FromEnum(request.Role),
             Email = request.Email,
             PasswordHash = !string.IsNullOrEmpty(request.Password)
                 ? BCrypt.Net.BCrypt.HashPassword(request.Password)
@@ -118,7 +119,7 @@ public class UserService : IUserService
             throw new NotFoundException($"User with id {id} not found");
 
         user.Name = request.Name;
-        user.Role = request.Role;
+        user.RoleId = UserRoleIds.FromEnum(request.Role);
         user.IsActive = request.IsActive;
 
         if (!string.IsNullOrEmpty(request.Pin))
@@ -150,10 +151,10 @@ public class UserService : IUserService
             throw new NotFoundException($"User with id {id} not found");
 
         // Prevent deactivating the last active owner
-        if (user.IsActive && user.Role == UserRole.Owner)
+        if (user.IsActive && user.RoleId == UserRoleIds.Owner)
         {
             var owners = await _unitOfWork.Users.GetAsync(
-                u => u.BusinessId == user.BusinessId && u.Role == UserRole.Owner && u.IsActive);
+                u => u.BusinessId == user.BusinessId && u.RoleId == UserRoleIds.Owner && u.IsActive);
 
             if (owners.Count() <= 1)
                 throw new ValidationException("Cannot deactivate the last active owner");
@@ -246,8 +247,8 @@ public class UserService : IUserService
             Id = user.Id,
             Name = user.Name,
             Email = user.Email,
-            Role = user.Role,
-            RoleName = user.Role.ToString(),
+            Role = (UserRole)(user.RoleId - 1),
+            RoleName = UserRoleIds.ToCode(user.RoleId),
             BranchId = user.BranchId,
             IsActive = user.IsActive,
             HasPin = user.PinHash != null,

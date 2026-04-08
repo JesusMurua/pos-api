@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -124,7 +125,7 @@ public class StockReceiptService : IStockReceiptService
                     movements.Add(new InventoryMovement
                     {
                         InventoryItemId = itemReq.InventoryItemId.Value,
-                        Type = "in",
+                        InventoryMovementTypeId = InventoryMovementTypeIds.In,
                         Quantity = itemReq.Quantity,
                         Reason = "Recepción de mercancía",
                         CreatedAt = DateTime.UtcNow
@@ -141,7 +142,7 @@ public class StockReceiptService : IStockReceiptService
                     movements.Add(new InventoryMovement
                     {
                         ProductId = itemReq.ProductId.Value,
-                        Type = "in",
+                        InventoryMovementTypeId = InventoryMovementTypeIds.In,
                         Quantity = itemReq.Quantity,
                         Reason = "Recepción de mercancía",
                         CreatedAt = DateTime.UtcNow

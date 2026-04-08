@@ -47,9 +47,9 @@ public class CloseSessionRequest
 
 public class AddMovementRequest
 {
+    /// <summary>CashMovementTypeCatalog.Id: 1=In, 2=Out, 3=Adjustment.</summary>
     [Required]
-    [MaxLength(20)]
-    public string Type { get; set; } = null!;
+    public int Type { get; set; }
 
     public int AmountCents { get; set; }
 

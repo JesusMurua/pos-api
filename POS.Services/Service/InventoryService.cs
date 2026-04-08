@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Repository.Utils;
@@ -142,8 +143,8 @@ public class InventoryService : IInventoryService
         {
             InventoryItemId = itemId,
             TransactionType = MapLegacyTypeToTransactionType(normalizedType),
-            Type = normalizedType,
-            Quantity = normalizedType == "adjustment" ? Math.Abs(quantity) : Math.Abs(quantity),
+            InventoryMovementTypeId = normalizedType switch { "in" => InventoryMovementTypeIds.In, "out" => InventoryMovementTypeIds.Out, _ => InventoryMovementTypeIds.Adjustment },
+            Quantity = Math.Abs(quantity),
             StockAfterTransaction = item.CurrentStock,
             Reason = reason,
             OrderId = orderId,
@@ -200,7 +201,7 @@ public class InventoryService : IInventoryService
         {
             InventoryItemId = inventoryItemId,
             TransactionType = InventoryTransactionType.Purchase,
-            Type = "in",
+            InventoryMovementTypeId = InventoryMovementTypeIds.In,
             Quantity = quantity,
             StockAfterTransaction = item.CurrentStock,
             Reason = note,
@@ -240,7 +241,7 @@ public class InventoryService : IInventoryService
         {
             InventoryItemId = inventoryItemId,
             TransactionType = InventoryTransactionType.Waste,
-            Type = "out",
+            InventoryMovementTypeId = InventoryMovementTypeIds.Out,
             Quantity = quantity,
             StockAfterTransaction = item.CurrentStock,
             Reason = reason,
@@ -280,7 +281,7 @@ public class InventoryService : IInventoryService
         {
             InventoryItemId = inventoryItemId,
             TransactionType = InventoryTransactionType.ManualAdjustment,
-            Type = delta >= 0 ? "in" : "out",
+            InventoryMovementTypeId = delta >= 0 ? InventoryMovementTypeIds.In : InventoryMovementTypeIds.Out,
             Quantity = Math.Abs(delta),
             StockAfterTransaction = item.CurrentStock,
             Reason = reason,
@@ -514,7 +515,7 @@ public class InventoryService : IInventoryService
                 {
                     ProductId = productId,
                     TransactionType = InventoryTransactionType.ConsumeFromSale,
-                    Type = "out",
+                    InventoryMovementTypeId = InventoryMovementTypeIds.Out,
                     Quantity = quantity,
                     StockAfterTransaction = product.CurrentStock,
                     Reason = $"Venta orden {orderId}",
@@ -548,7 +549,7 @@ public class InventoryService : IInventoryService
                     {
                         InventoryItemId = consumption.InventoryItemId,
                         TransactionType = InventoryTransactionType.ConsumeFromSale,
-                        Type = "out",
+                        InventoryMovementTypeId = InventoryMovementTypeIds.Out,
                         Quantity = quantityToDeduct,
                         StockAfterTransaction = invItem.CurrentStock,
                         Reason = $"Venta orden {orderId}",

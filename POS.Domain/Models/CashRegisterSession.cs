@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Helpers;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -42,14 +43,15 @@ public class CashRegisterSession
     [MaxLength(500)]
     public string? Notes { get; set; }
 
-    [Required]
-    [MaxLength(20)]
-    public string Status { get; set; } = CashRegisterStatus.Open;
+    /// <summary>FK to CashRegisterStatusCatalog.Id (1=Open, 2=Closed, 3=Auditing).</summary>
+    public int CashRegisterStatusId { get; set; } = CashRegisterStatus.Open;
 
     /// <summary>Bumped on every mutation to trigger xmin concurrency token update.</summary>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public int? CashRegisterId { get; set; }
+
+    public CashRegisterStatusCatalog? CashRegisterStatusCatalog { get; set; }
 
     public virtual Branch? Branch { get; set; }
 

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -33,10 +34,8 @@ public class OrderPayment
     [MaxLength(100)]
     public string? OperationId { get; set; }
 
-    /// <summary>Payment lifecycle status: "completed", "pending", "failed", "refunded".</summary>
-    [Required]
-    [MaxLength(20)]
-    public string Status { get; set; } = null!;
+    /// <summary>FK to PaymentStatusCatalog.Id (1=Pending, 2=Completed, 3=Failed, 4=Refunded).</summary>
+    public int PaymentStatusId { get; set; } = Helpers.PaymentStatus.Pending;
 
     /// <summary>Timestamp when the payment was confirmed by the external provider. Null for manual/pending payments.</summary>
     public DateTime? ConfirmedAt { get; set; }
@@ -44,4 +43,6 @@ public class OrderPayment
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Order Order { get; set; } = null!;
+
+    public PaymentStatusCatalog? PaymentStatus { get; set; }
 }

@@ -112,6 +112,9 @@ public static class StripeConstants
     public static string ResolvePlanType(string priceId) =>
         PriceMap.TryGetValue(priceId, out var info) ? info.Plan : "Free";
 
+    public static int ResolvePlanTypeId(string priceId) =>
+        PlanTypeIds.FromEnum(Enum.TryParse<Enums.PlanType>(ResolvePlanType(priceId), true, out var p) ? p : Enums.PlanType.Free);
+
     public static string ResolveBillingCycle(string priceId) =>
         PriceMap.TryGetValue(priceId, out var info) ? info.Cycle : "Monthly";
 

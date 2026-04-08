@@ -60,7 +60,7 @@ public class MercadoPagoService : IMercadoPagoService
             AmountCents = amountCents,
             PaymentProvider = "mercadopago",
             ExternalTransactionId = externalTransactionId,
-            Status = PaymentStatus.Pending
+            PaymentStatusId = PaymentStatus.Pending
         };
 
         await _orderService.AddPaymentAsync(orderId, branchId, payment);
@@ -69,7 +69,7 @@ public class MercadoPagoService : IMercadoPagoService
         {
             ExternalTransactionId = externalTransactionId,
             InitPoint = initPoint,
-            Status = PaymentStatus.Pending
+            Status = "pending"
         };
     }
 
@@ -129,9 +129,9 @@ public class MercadoPagoService : IMercadoPagoService
     }
 
     /// <summary>
-    /// Maps MercadoPago webhook status to internal PaymentStatus.
+    /// Maps MercadoPago webhook status to internal PaymentStatus catalog Id.
     /// </summary>
-    private static string ExtractPaymentStatus(JsonElement root)
+    private static int ExtractPaymentStatus(JsonElement root)
     {
         string? mpStatus = null;
 

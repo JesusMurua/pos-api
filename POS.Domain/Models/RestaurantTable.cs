@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Helpers;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -14,17 +16,16 @@ public partial class RestaurantTable
 
     public int? Capacity { get; set; }
 
-    /// <summary>
-    /// Table occupancy status: available | occupied.
-    /// </summary>
-    [MaxLength(20)]
-    public string Status { get; set; } = "available";
+    /// <summary>FK to TableStatusCatalog.Id (1=Available, 2=Occupied, 3=Reserved, 4=Maintenance).</summary>
+    public int TableStatusId { get; set; } = TableStatusIds.Available;
 
     public int? ZoneId { get; set; }
 
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public TableStatusCatalog? TableStatus { get; set; }
 
     public virtual Branch? Branch { get; set; }
 

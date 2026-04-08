@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
@@ -8,9 +9,8 @@ public class CashMovement
 
     public int SessionId { get; set; }
 
-    [Required]
-    [MaxLength(20)]
-    public string Type { get; set; } = null!;
+    /// <summary>FK to CashMovementTypeCatalog.Id (1=In, 2=Out, 3=Adjustment).</summary>
+    public int CashMovementTypeId { get; set; }
 
     public int AmountCents { get; set; }
 
@@ -25,4 +25,6 @@ public class CashMovement
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual CashRegisterSession? Session { get; set; }
+
+    public CashMovementTypeCatalog? CashMovementTypeCatalog { get; set; }
 }

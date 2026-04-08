@@ -1,4 +1,5 @@
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.PartialModels;
 using POS.Repository;
@@ -109,7 +110,7 @@ public class BranchService : IBranchService
         if (branch == null)
             throw new NotFoundException($"Branch with id {branchId} not found");
 
-        var businessTypeCode = branch.Business!.BusinessType.ToString();
+        var businessTypeCode = BusinessTypeIds.ToCode(branch.Business!.BusinessTypeId);
         var catalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
         var catalog = catalogs.FirstOrDefault(c => c.Code == businessTypeCode);
 
@@ -126,7 +127,7 @@ public class BranchService : IBranchService
             FolioPrefix = branch.FolioPrefix,
             FolioFormat = branch.FolioFormat,
             FolioCounter = branch.FolioCounter,
-            PlanType = branch.Business.PlanType.ToString(),
+            PlanType = PlanTypeIds.ToCode(branch.Business.PlanTypeId),
             BusinessType = businessTypeCode,
             PosExperience = catalog?.PosExperience ?? "Quick"
         };
