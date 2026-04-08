@@ -103,6 +103,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
     public DbSet<Device> Devices { get; set; } = null!;
+    public DbSet<Tax> Taxes { get; set; } = null!;
+    public DbSet<ProductTax> ProductTaxes { get; set; } = null!;
+    public DbSet<OrderItemTax> OrderItemTaxes { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -141,6 +144,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(b => b.TaxRegime).HasMaxLength(3);
             entity.Property(b => b.LegalName).HasMaxLength(300);
             entity.Property(b => b.FacturapiOrganizationId).HasMaxLength(50);
+            entity.Property(b => b.CountryCode).HasMaxLength(2).HasDefaultValue("MX");
 
             entity.HasMany(b => b.Branches)
                 .WithOne(br => br.Business)
@@ -280,9 +284,59 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.SatProductCode).HasMaxLength(10);
             entity.Property(p => p.SatUnitCode).HasMaxLength(5);
             entity.Property(p => p.TaxRate).HasPrecision(5, 2);
+            entity.Property(p => p.IsTaxIncluded).HasDefaultValue(true);
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
+        });
+
+        #endregion
+
+        #region Tax Configuration
+
+        modelBuilder.Entity<Tax>(entity =>
+        {
+            entity.Property(t => t.CountryCode).HasMaxLength(2).IsRequired();
+            entity.Property(t => t.Name).HasMaxLength(50).IsRequired();
+            entity.Property(t => t.Rate).HasPrecision(5, 4);
+            entity.Property(t => t.Code).HasMaxLength(20);
+
+            entity.HasIndex(t => new { t.CountryCode, t.Code, t.Rate }).IsUnique()
+                .HasFilter("\"Code\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<ProductTax>(entity =>
+        {
+            entity.HasKey(pt => new { pt.ProductId, pt.TaxId });
+
+            entity.HasOne(pt => pt.Product)
+                .WithMany(p => p.ProductTaxes)
+                .HasForeignKey(pt => pt.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(pt => pt.Tax)
+                .WithMany(t => t.ProductTaxes)
+                .HasForeignKey(pt => pt.TaxId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderItemTax>(entity =>
+        {
+            entity.Property(oit => oit.TaxName).HasMaxLength(50).IsRequired();
+            entity.Property(oit => oit.TaxRate).HasPrecision(5, 4);
+
+            entity.HasOne(oit => oit.OrderItem)
+                .WithMany(oi => oi.AppliedTaxes)
+                .HasForeignKey(oit => oit.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(oit => oit.Tax)
+                .WithMany()
+                .HasForeignKey(oit => oit.TaxId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(oit => oit.OrderItemId);
         });
 
         #endregion

@@ -139,6 +139,17 @@ public static class DbInitializer
             );
             await context.SaveChangesAsync();
         }
+
+        if (!await context.Taxes.AnyAsync())
+        {
+            context.Taxes.AddRange(
+                new Tax { CountryCode = "MX", Name = "IVA 16%", Rate = 0.16m, Code = "002", IsDefault = true },
+                new Tax { CountryCode = "MX", Name = "IVA 8%", Rate = 0.08m, Code = "002", IsDefault = false },
+                new Tax { CountryCode = "MX", Name = "IVA 0%", Rate = 0.00m, Code = "002", IsDefault = false },
+                new Tax { CountryCode = "MX", Name = "IEPS 8%", Rate = 0.08m, Code = "003", IsDefault = false }
+            );
+            await context.SaveChangesAsync();
+        }
     }
 
     /// <summary>

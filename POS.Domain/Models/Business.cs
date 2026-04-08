@@ -25,6 +25,10 @@ public partial class Business
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>ISO 3166-1 alpha-2 country code (e.g., "MX" for Mexico).</summary>
+    [MaxLength(2)]
+    public string CountryCode { get; set; } = "MX";
+
     #region Fiscal / Invoicing Fields
 
     /// <summary>RFC of the business (tax ID). 12 chars for companies, 13 for individuals.</summary>

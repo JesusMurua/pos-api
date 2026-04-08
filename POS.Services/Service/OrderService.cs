@@ -134,8 +134,8 @@ public class OrderService : IOrderService
         }
 
         // ── Phase 2a-fiscal: Freeze SAT fields from Product onto OrderItem ──
-        // Batch-fetch all products referenced by new orders, then enrich each item
-        // with immutable fiscal data (SatProductCode, SatUnitCode, TaxRatePercent, TaxAmountCents).
+        // Batch-fetch all products referenced by new orders (with their taxes),
+        // then enrich each item with immutable fiscal data and OrderItemTax snapshots.
         if (ordersToInsert.Count > 0)
         {
             var allProductIds = ordersToInsert
@@ -145,7 +145,8 @@ public class OrderService : IOrderService
                 .Distinct().ToList();
 
             var productFiscalMap = (await _unitOfWork.Products.GetAsync(
-                p => allProductIds.Contains(p.Id)))
+                p => allProductIds.Contains(p.Id),
+                "ProductTaxes.Tax"))
                 .ToDictionary(p => p.Id);
 
             foreach (var order in ordersToInsert)
@@ -157,17 +158,54 @@ public class OrderService : IOrderService
                     {
                         item.SatProductCode = product.SatProductCode;
                         item.SatUnitCode = product.SatUnitCode;
-                        item.TaxRatePercent = product.TaxRate;
 
-                        // Calculate tax amount (prices include IVA in Mexico)
-                        var taxRate = product.TaxRate ?? 0.16m;
-                        if (taxRate > 0)
+                        var lineTotal = item.UnitPriceCents * item.Quantity;
+
+                        // New relational tax engine: create OrderItemTax snapshots
+                        if (product.ProductTaxes.Count > 0)
                         {
-                            var lineTotal = item.UnitPriceCents * item.Quantity;
-                            item.TaxAmountCents = (int)(lineTotal * taxRate / (1 + taxRate));
+                            int itemTaxTotal = 0;
+                            foreach (var pt in product.ProductTaxes)
+                            {
+                                if (pt.Tax == null) continue;
+
+                                var taxCents = product.IsTaxIncluded
+                                    ? TaxCalculator.CalculateInclusiveTax(lineTotal, pt.Tax.Rate)
+                                    : TaxCalculator.CalculateExclusiveTax(lineTotal, pt.Tax.Rate);
+
+                                item.AppliedTaxes.Add(new OrderItemTax
+                                {
+                                    TaxId = pt.Tax.Id,
+                                    TaxName = pt.Tax.Name,
+                                    TaxRate = pt.Tax.Rate,
+                                    TaxAmountCents = taxCents
+                                });
+
+                                itemTaxTotal += taxCents;
+                            }
+
+                            // Legacy fields — keep in sync for backward compatibility
+                            item.TaxRatePercent = product.ProductTaxes
+                                .Where(pt => pt.Tax != null)
+                                .Sum(pt => pt.Tax!.Rate);
+                            item.TaxAmountCents = itemTaxTotal;
+                        }
+                        else
+                        {
+                            // Fallback: product has no ProductTaxes yet (legacy data).
+                            // Use the old TaxRate scalar field.
+                            item.TaxRatePercent = product.TaxRate;
+                            var taxRate = product.TaxRate ?? 0.16m;
+                            if (taxRate > 0)
+                            {
+                                item.TaxAmountCents = TaxCalculator.CalculateInclusiveTax(lineTotal, taxRate);
+                            }
                         }
                     }
                 }
+
+                // Populate order-level tax total
+                order.TaxAmountCents = order.Items.Sum(i => i.TaxAmountCents);
             }
         }
 
@@ -1308,6 +1346,7 @@ public class OrderService : IOrderService
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
         if (order.TotalCents < 0) order.TotalCents = 0;
+        order.TaxAmountCents = order.Items.Sum(i => i.TaxAmountCents);
     }
 
     private async Task AutoSeatReservationAsync(int tableId, int branchId)

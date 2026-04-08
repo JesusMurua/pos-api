@@ -52,6 +52,9 @@ public partial class Product
     /// <summary>IVA tax rate for this product. 0.16 (16%), 0.08 (border zone), 0 (exempt). Null = default 16%.</summary>
     public decimal? TaxRate { get; set; }
 
+    /// <summary>Whether PriceCents includes tax. Default true (Mexican standard).</summary>
+    public bool IsTaxIncluded { get; set; } = true;
+
     #endregion
 
     #region Printing
@@ -74,4 +77,6 @@ public partial class Product
     public virtual ICollection<ProductExtra>? Extras { get; set; }
 
     public virtual ICollection<ProductImage>? Images { get; set; }
+
+    public virtual ICollection<ProductTax> ProductTaxes { get; set; } = new List<ProductTax>();
 }

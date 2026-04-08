@@ -57,4 +57,8 @@ public class RegisterApiRequest
     public string? BusinessType { get; set; }
 
     public string? PlanType { get; set; }
+
+    /// <summary>ISO 3166-1 alpha-2 country code. Defaults to "MX" if not provided.</summary>
+    [MaxLength(2)]
+    public string? CountryCode { get; set; }
 }

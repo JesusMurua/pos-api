@@ -109,7 +109,8 @@ public class AuthController : ControllerBase
                 Email = request.Email,
                 Password = request.Password,
                 BusinessType = request.BusinessType,
-                PlanType = request.PlanType
+                PlanType = request.PlanType,
+                CountryCode = request.CountryCode
             });
             return Ok(response);
         }

@@ -40,6 +40,7 @@ public class RegisterRequest
     public string Password { get; set; } = null!;
     public string? BusinessType { get; set; }
     public string? PlanType { get; set; }
+    public string? CountryCode { get; set; }
 }
 
 /// <summary>

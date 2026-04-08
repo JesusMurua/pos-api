@@ -29,6 +29,9 @@ public partial class Order
 
     public int SubtotalCents { get; set; }
 
+    /// <summary>Total tax amount in cents, summed from all OrderItem taxes.</summary>
+    public int TaxAmountCents { get; set; }
+
     public int OrderDiscountCents { get; set; }
 
     public int TotalDiscountCents { get; set; }

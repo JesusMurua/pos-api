@@ -195,6 +195,7 @@ public class AuthService : IAuthService
             Name = request.BusinessName,
             BusinessType = businessType,
             PlanType = planType,
+            CountryCode = request.CountryCode ?? "MX",
             TrialEndsAt = trialEndsAt,
             TrialUsed = false,
             IsActive = true,
