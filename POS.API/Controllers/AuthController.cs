@@ -109,6 +109,8 @@ public class AuthController : ControllerBase
                 Email = request.Email,
                 Password = request.Password,
                 BusinessType = request.BusinessType,
+                BusinessTypes = request.BusinessTypes,
+                CustomGiroDescription = request.CustomGiroDescription,
                 PlanType = request.PlanType,
                 CountryCode = request.CountryCode
             });

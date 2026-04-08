@@ -68,6 +68,8 @@ public partial class Business
 
     #endregion
 
+    public virtual ICollection<BusinessGiro> BusinessGiros { get; set; } = new List<BusinessGiro>();
+
     public virtual ICollection<Branch>? Branches { get; set; }
 
     public virtual ICollection<User>? Users { get; set; }

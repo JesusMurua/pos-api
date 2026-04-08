@@ -186,8 +186,17 @@ public class AuthService : IAuthService
         var isPaidPlan = planType is PlanType.Basic or PlanType.Pro or PlanType.Enterprise;
         DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
 
-        var hasKitchen = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar or BusinessType.FoodTruck;
-        var hasTables = businessType is BusinessType.Restaurant or BusinessType.Cafe or BusinessType.Bar;
+        // ── Resolve giro codes: prefer BusinessTypes array, fallback to single BusinessType ──
+        var giroCodes = request.BusinessTypes?.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+        if (giroCodes == null || giroCodes.Count == 0)
+            giroCodes = new List<string> { businessType.ToString() };
+
+        // Lookup catalog entries to derive HasKitchen / HasTables
+        var allCatalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
+        var matchedCatalogs = allCatalogs.Where(c => giroCodes.Contains(c.Code)).ToList();
+
+        var hasKitchen = matchedCatalogs.Any(c => c.HasKitchen);
+        var hasTables = matchedCatalogs.Any(c => c.HasTables);
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
@@ -201,6 +210,19 @@ public class AuthService : IAuthService
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
+
+        // Build BusinessGiro junction rows
+        foreach (var code in giroCodes)
+        {
+            business.BusinessGiros.Add(new BusinessGiro
+            {
+                Business = business,
+                CatalogCode = code,
+                CustomDescription = string.Equals(code, "General", StringComparison.OrdinalIgnoreCase)
+                    ? request.CustomGiroDescription
+                    : null
+            });
+        }
 
         var branch = new Branch
         {

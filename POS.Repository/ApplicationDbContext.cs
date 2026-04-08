@@ -106,6 +106,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Tax> Taxes { get; set; } = null!;
     public DbSet<ProductTax> ProductTaxes { get; set; } = null!;
     public DbSet<OrderItemTax> OrderItemTaxes { get; set; } = null!;
+    public DbSet<BusinessGiro> BusinessGiros { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -157,6 +158,25 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(b => b.Subscription)
                 .WithOne(s => s.Business)
                 .HasForeignKey<Subscription>(s => s.BusinessId);
+
+            entity.HasMany(b => b.BusinessGiros)
+                .WithOne(bg => bg.Business)
+                .HasForeignKey(bg => bg.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BusinessGiro>(entity =>
+        {
+            entity.HasIndex(bg => new { bg.BusinessId, bg.CatalogCode }).IsUnique();
+
+            entity.Property(bg => bg.CatalogCode).HasMaxLength(20);
+            entity.Property(bg => bg.CustomDescription).HasMaxLength(100);
+
+            entity.HasOne(bg => bg.BusinessTypeCatalog)
+                .WithMany()
+                .HasForeignKey(bg => bg.CatalogCode)
+                .HasPrincipalKey(c => c.Code)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         #endregion

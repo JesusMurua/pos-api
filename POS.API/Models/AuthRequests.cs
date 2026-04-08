@@ -56,6 +56,18 @@ public class RegisterApiRequest
 
     public string? BusinessType { get; set; }
 
+    /// <summary>
+    /// List of business type codes for multi-giro support (e.g., ["Papeleria", "Abarrotes"]).
+    /// Takes precedence over BusinessType when provided.
+    /// </summary>
+    public List<string>? BusinessTypes { get; set; }
+
+    /// <summary>
+    /// Optional description when the user selects "Otra tienda" or a custom giro.
+    /// </summary>
+    [MaxLength(100)]
+    public string? CustomGiroDescription { get; set; }
+
     public string? PlanType { get; set; }
 
     /// <summary>ISO 3166-1 alpha-2 country code. Defaults to "MX" if not provided.</summary>
