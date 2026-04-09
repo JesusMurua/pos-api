@@ -30,6 +30,11 @@ public interface ICashRegisterService
     Task<CashRegister> ToggleRegisterAsync(int registerId, int branchId);
 
     /// <summary>
+    /// Links a physical device to a cash register by its UUID.
+    /// </summary>
+    Task<CashRegister> LinkDeviceAsync(int registerId, int branchId, LinkDeviceRequest request);
+
+    /// <summary>
     /// Gets a cash register by its bound device UUID.
     /// </summary>
     Task<CashRegister?> GetRegisterByDeviceUuidAsync(int branchId, string deviceUuid);

@@ -64,6 +64,28 @@ public class CashRegisterController : BaseApiController
     }
 
     /// <summary>
+    /// Links a physical device to a cash register by UUID.
+    /// </summary>
+    /// <param name="id">Cash register identifier.</param>
+    /// <param name="request">Device UUID to link.</param>
+    /// <returns>The updated cash register.</returns>
+    /// <response code="200">Device linked successfully.</response>
+    /// <response code="400">If the UUID is invalid or already in use.</response>
+    /// <response code="404">If the cash register is not found.</response>
+    [HttpPatch("registers/{id}/link-device")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> LinkDevice(int id, [FromBody] LinkDeviceRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var register = await _cashRegisterService.LinkDeviceAsync(id, BranchId, request);
+        return Ok(register);
+    }
+
+    /// <summary>
     /// Toggles a cash register's active status.
     /// </summary>
     [HttpPatch("registers/{id}/toggle")]

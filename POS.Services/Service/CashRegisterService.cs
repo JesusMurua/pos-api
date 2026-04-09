@@ -110,6 +110,33 @@ public class CashRegisterService : ICashRegisterService
     }
 
     /// <summary>
+    /// Links a physical device to a cash register by its UUID.
+    /// </summary>
+    public async Task<CashRegister> LinkDeviceAsync(int registerId, int branchId, LinkDeviceRequest request)
+    {
+        var register = await _unitOfWork.CashRegisters.GetByIdAsync(registerId)
+            ?? throw new NotFoundException($"Cash register with id {registerId} not found");
+
+        if (register.BranchId != branchId)
+            throw new UnauthorizedException("Cash register does not belong to this branch");
+
+        register.DeviceUuid = request.DeviceUuid;
+        _unitOfWork.CashRegisters.Update(register);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new ValidationException(
+                "A cash register with that device UUID already exists for this branch.");
+        }
+
+        return register;
+    }
+
+    /// <summary>
     /// Gets a cash register by its bound device UUID.
     /// </summary>
     public async Task<CashRegister?> GetRegisterByDeviceUuidAsync(int branchId, string deviceUuid)

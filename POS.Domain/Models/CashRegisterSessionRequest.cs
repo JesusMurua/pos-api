@@ -33,6 +33,13 @@ public class UpdateCashRegisterRequest
     public string? DeviceUuid { get; set; }
 }
 
+public class LinkDeviceRequest
+{
+    [Required]
+    [MaxLength(100)]
+    public string DeviceUuid { get; set; } = null!;
+}
+
 public class CloseSessionRequest
 {
     public int CountedAmountCents { get; set; }
