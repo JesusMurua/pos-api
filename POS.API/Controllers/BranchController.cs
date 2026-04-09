@@ -230,7 +230,7 @@ public class BranchController : BaseApiController
     /// <returns>Success acknowledgement.</returns>
     /// <response code="200">Folio config updated.</response>
     /// <response code="400">If validation fails.</response>
-    [HttpPut("folio-config")]
+    [HttpPost("folio-config")]
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

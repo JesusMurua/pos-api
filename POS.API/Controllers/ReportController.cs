@@ -127,7 +127,7 @@ public class ReportController : BaseApiController
     /// <returns>Dashboard chart data.</returns>
     /// <response code="200">Returns the chart data.</response>
     /// <response code="400">If the request parameters are invalid.</response>
-    [HttpGet("dashboard-charts")]
+    [HttpGet("charts")]
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(DashboardChartsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
