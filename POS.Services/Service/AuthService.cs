@@ -57,13 +57,13 @@ public class AuthService : IAuthService
         return new AuthResponse
         {
             Token = token,
-            Role = UserRoleIds.ToCode(user.RoleId),
+            RoleId = user.RoleId,
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanType = planType,
-            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
+            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -100,13 +100,13 @@ public class AuthService : IAuthService
         return new AuthResponse
         {
             Token = token,
-            Role = UserRoleIds.ToCode(matchedUser.RoleId),
+            RoleId = matchedUser.RoleId,
             Name = matchedUser.Name,
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanType = planType,
-            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
+            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -152,13 +152,13 @@ public class AuthService : IAuthService
         return new AuthResponse
         {
             Token = token,
-            Role = UserRoleIds.ToCode(user.RoleId),
+            RoleId = user.RoleId,
             Name = user.Name,
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
             Branches = branches,
-            PlanType = planType,
-            BusinessType = BusinessTypeIds.ToCode(business!.BusinessTypeId),
+            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -177,27 +177,23 @@ public class AuthService : IAuthService
         if (existingUser != null)
             throw new ValidationException("EMAIL_ALREADY_EXISTS");
 
-        // Resolve PlanType
-        if (!Enum.TryParse<PlanType>(request.PlanType, true, out var planTypeEnum))
-            planTypeEnum = PlanType.Free;
-        var planTypeId = PlanTypeIds.FromEnum(planTypeEnum);
+        // Resolve PlanType — default to Free if not provided
+        var planTypeId = request.PlanTypeId ?? PlanTypeIds.Free;
 
         // Paid plans get a 14-day trial; Free plan has no trial
         var isPaidPlan = planTypeId is PlanTypeIds.Basic or PlanTypeIds.Pro or PlanTypeIds.Enterprise;
         DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
 
-        // ── Resolve giro codes: prefer BusinessTypes array, fallback to single BusinessType ──
-        var giroCodes = request.BusinessTypes?.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
-        if (giroCodes == null || giroCodes.Count == 0)
+        // ── Resolve giro IDs: prefer BusinessTypeIds array, fallback to single BusinessTypeId ──
+        var giroIds = request.BusinessTypeIds?.Where(id => id > 0).Distinct().ToList();
+        if (giroIds == null || giroIds.Count == 0)
         {
-            if (!Enum.TryParse<BusinessType>(request.BusinessType, true, out var btEnum))
-                btEnum = BusinessType.General;
-            giroCodes = new List<string> { btEnum.ToString() };
+            giroIds = new List<int> { request.BusinessTypeId ?? BusinessTypeIds.General };
         }
 
-        // Lookup catalog entries to derive HasKitchen / HasTables + resolve IDs
+        // Lookup catalog entries to derive HasKitchen / HasTables
         var allCatalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
-        var matchedCatalogs = allCatalogs.Where(c => giroCodes.Contains(c.Code)).ToList();
+        var matchedCatalogs = allCatalogs.Where(c => giroIds.Contains(c.Id)).ToList();
 
         var hasKitchen = matchedCatalogs.Any(c => c.HasKitchen);
         var hasTables = matchedCatalogs.Any(c => c.HasTables);
@@ -322,13 +318,13 @@ public class AuthService : IAuthService
         return new AuthResponse
         {
             Token = token,
-            Role = UserRoleIds.ToCode(user.RoleId),
+            RoleId = user.RoleId,
             Name = user.Name,
             BusinessId = business.Id,
             CurrentBranchId = branch.Id,
             Branches = branches,
-            PlanType = PlanTypeIds.ToCode(business.PlanTypeId),
-            BusinessType = BusinessTypeIds.ToCode(business.BusinessTypeId),
+            PlanTypeId = business.PlanTypeId,
+            BusinessTypeId = business.BusinessTypeId,
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };

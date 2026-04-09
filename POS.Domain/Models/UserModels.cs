@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using POS.Domain.Enums;
 
 namespace POS.Domain.Models;
 
@@ -12,7 +11,8 @@ public class CreateUserRequest
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    public UserRole Role { get; set; }
+    [Required]
+    public int RoleId { get; set; }
 
     public int? BranchId { get; set; }
 
@@ -41,7 +41,8 @@ public class UpdateUserRequest
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    public UserRole Role { get; set; }
+    [Required]
+    public int RoleId { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -92,8 +93,7 @@ public class UserDto
     public int Id { get; set; }
     public string Name { get; set; } = null!;
     public string? Email { get; set; }
-    public UserRole Role { get; set; }
-    public string RoleName { get; set; } = null!;
+    public int RoleId { get; set; }
     public int? BranchId { get; set; }
     public bool IsActive { get; set; }
     public bool HasPin { get; set; }

@@ -16,7 +16,7 @@ public class BranchConfigDto
     public string? FolioPrefix { get; set; }
     public string? FolioFormat { get; set; }
     public int FolioCounter { get; set; }
-    public string PlanType { get; set; } = null!;
-    public string BusinessType { get; set; } = null!;
+    public int PlanTypeId { get; set; }
+    public int BusinessTypeId { get; set; }
     public string PosExperience { get; set; } = null!;
 }

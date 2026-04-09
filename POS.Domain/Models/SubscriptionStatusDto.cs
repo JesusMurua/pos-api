@@ -5,7 +5,7 @@ namespace POS.Domain.Models;
 /// </summary>
 public class SubscriptionStatusDto
 {
-    public string PlanType { get; set; } = null!;
+    public int PlanTypeId { get; set; }
     public string Status { get; set; } = null!;
     public string PricingGroup { get; set; } = null!;
     public string BillingCycle { get; set; } = null!;

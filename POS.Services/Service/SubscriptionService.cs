@@ -26,7 +26,7 @@ public class SubscriptionService : ISubscriptionService
         {
             return new SubscriptionStatusDto
             {
-                PlanType = "Free",
+                PlanTypeId = PlanTypeIds.Free,
                 Status = StripeSubscriptionStatus.Active,
                 PricingGroup = "General",
                 BillingCycle = "Monthly",
@@ -37,7 +37,7 @@ public class SubscriptionService : ISubscriptionService
 
         return new SubscriptionStatusDto
         {
-            PlanType = PlanTypeIds.ToCode(subscription.PlanTypeId),
+            PlanTypeId = subscription.PlanTypeId,
             Status = subscription.Status,
             PricingGroup = subscription.PricingGroup,
             BillingCycle = subscription.BillingCycle,

@@ -53,14 +53,14 @@ public class UserService : IUserService
             throw new NotFoundException($"Branch with id {branchId} not found");
 
         // Validate PIN-based roles
-        if (PinRoleIds.Contains(UserRoleIds.FromEnum(request.Role)))
+        if (PinRoleIds.Contains(request.RoleId))
         {
             if (string.IsNullOrEmpty(request.Pin) || request.Pin.Length != 4 || !request.Pin.All(char.IsDigit))
                 throw new ValidationException("PIN must be exactly 4 digits");
         }
 
         // Validate email-based roles
-        if (EmailRoleIds.Contains(UserRoleIds.FromEnum(request.Role)))
+        if (EmailRoleIds.Contains(request.RoleId))
         {
             if (string.IsNullOrEmpty(request.Email))
                 throw new ValidationException("Email is required for Owner and Manager roles");
@@ -76,9 +76,9 @@ public class UserService : IUserService
         var user = new User
         {
             BusinessId = branch.BusinessId,
-            BranchId = EmailRoleIds.Contains(UserRoleIds.FromEnum(request.Role)) ? null : branchId,
+            BranchId = EmailRoleIds.Contains(request.RoleId) ? null : branchId,
             Name = request.Name,
-            RoleId = UserRoleIds.FromEnum(request.Role),
+            RoleId = request.RoleId,
             Email = request.Email,
             PasswordHash = !string.IsNullOrEmpty(request.Password)
                 ? BCrypt.Net.BCrypt.HashPassword(request.Password)
@@ -119,7 +119,7 @@ public class UserService : IUserService
             throw new NotFoundException($"User with id {id} not found");
 
         user.Name = request.Name;
-        user.RoleId = UserRoleIds.FromEnum(request.Role);
+        user.RoleId = request.RoleId;
         user.IsActive = request.IsActive;
 
         if (!string.IsNullOrEmpty(request.Pin))
@@ -247,8 +247,7 @@ public class UserService : IUserService
             Id = user.Id,
             Name = user.Name,
             Email = user.Email,
-            Role = (UserRole)(user.RoleId - 1),
-            RoleName = UserRoleIds.ToCode(user.RoleId),
+            RoleId = user.RoleId,
             BranchId = user.BranchId,
             IsActive = user.IsActive,
             HasPin = user.PinHash != null,

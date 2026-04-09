@@ -108,10 +108,10 @@ public class AuthController : ControllerBase
                 OwnerName = request.OwnerName,
                 Email = request.Email,
                 Password = request.Password,
-                BusinessType = request.BusinessType,
-                BusinessTypes = request.BusinessTypes,
+                BusinessTypeId = request.BusinessTypeId,
+                BusinessTypeIds = request.BusinessTypeIds,
                 CustomGiroDescription = request.CustomGiroDescription,
-                PlanType = request.PlanType,
+                PlanTypeId = request.PlanTypeId,
                 CountryCode = request.CountryCode
             });
             return Ok(response);

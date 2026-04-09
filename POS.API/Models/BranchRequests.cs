@@ -62,6 +62,5 @@ public class CreateBusinessRequest
     public string Name { get; set; } = null!;
 
     [Required]
-    [MaxLength(50)]
-    public string PlanType { get; set; } = null!;
+    public int PlanTypeId { get; set; }
 }

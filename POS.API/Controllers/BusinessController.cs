@@ -54,13 +54,10 @@ public class BusinessController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        if (!Enum.TryParse<POS.Domain.Enums.PlanType>(request.PlanType, true, out var planTypeEnum))
-            planTypeEnum = POS.Domain.Enums.PlanType.Free;
-
         var business = new Business
         {
             Name = request.Name,
-            PlanTypeId = POS.Domain.Helpers.PlanTypeIds.FromEnum(planTypeEnum)
+            PlanTypeId = request.PlanTypeId
         };
 
         var created = await _businessService.CreateAsync(business, UserId);
@@ -80,14 +77,13 @@ public class BusinessController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateType([FromBody] UpdateBusinessTypeRequest request)
     {
-        var businessTypeId = POS.Domain.Helpers.BusinessTypeIds.FromCode(request.BusinessType);
-        if (businessTypeId == 0)
+        if (request.BusinessTypeId <= 0)
             return BadRequest(new { message = "Invalid business type" });
 
         var business = await _businessService.GetByIdAsync(BusinessId);
-        business.BusinessTypeId = businessTypeId;
+        business.BusinessTypeId = request.BusinessTypeId;
         await _businessService.UpdateAsync(business);
-        return Ok(new { message = "Business type updated", businessType = POS.Domain.Helpers.BusinessTypeIds.ToCode(businessTypeId) });
+        return Ok(new { message = "Business type updated", businessTypeId = request.BusinessTypeId });
     }
 
     /// <summary>
@@ -206,7 +202,7 @@ public class BusinessController : BaseApiController
 /// </summary>
 public class UpdateBusinessTypeRequest
 {
-    public string BusinessType { get; set; } = null!;
+    public int BusinessTypeId { get; set; }
 }
 
 /// <summary>

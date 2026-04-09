@@ -38,10 +38,10 @@ public class RegisterRequest
     public string OwnerName { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string Password { get; set; } = null!;
-    public string? BusinessType { get; set; }
-    public List<string>? BusinessTypes { get; set; }
+    public int? BusinessTypeId { get; set; }
+    public List<int>? BusinessTypeIds { get; set; }
     public string? CustomGiroDescription { get; set; }
-    public string? PlanType { get; set; }
+    public int? PlanTypeId { get; set; }
     public string? CountryCode { get; set; }
 }
 
@@ -51,7 +51,7 @@ public class RegisterRequest
 public class AuthResponse
 {
     public string Token { get; set; } = null!;
-    public string Role { get; set; } = null!;
+    public int RoleId { get; set; }
     public string Name { get; set; } = null!;
     public int BusinessId { get; set; }
 
@@ -65,8 +65,8 @@ public class AuthResponse
     /// </summary>
     public List<BranchSummary> Branches { get; set; } = new();
 
-    public string PlanType { get; set; } = null!;
-    public string BusinessType { get; set; } = null!;
+    public int PlanTypeId { get; set; }
+    public int BusinessTypeId { get; set; }
     public string? TrialEndsAt { get; set; }
     public string? SubscriptionStatus { get; set; }
     public bool OnboardingCompleted { get; set; }

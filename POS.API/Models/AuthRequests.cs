@@ -54,13 +54,13 @@ public class RegisterApiRequest
     [MinLength(8)]
     public string Password { get; set; } = null!;
 
-    public string? BusinessType { get; set; }
+    public int? BusinessTypeId { get; set; }
 
     /// <summary>
-    /// List of business type codes for multi-giro support (e.g., ["Papeleria", "Abarrotes"]).
-    /// Takes precedence over BusinessType when provided.
+    /// List of business type catalog IDs for multi-giro support.
+    /// Takes precedence over BusinessTypeId when provided.
     /// </summary>
-    public List<string>? BusinessTypes { get; set; }
+    public List<int>? BusinessTypeIds { get; set; }
 
     /// <summary>
     /// Optional description when the user selects "Otra tienda" or a custom giro.
@@ -68,7 +68,7 @@ public class RegisterApiRequest
     [MaxLength(100)]
     public string? CustomGiroDescription { get; set; }
 
-    public string? PlanType { get; set; }
+    public int? PlanTypeId { get; set; }
 
     /// <summary>ISO 3166-1 alpha-2 country code. Defaults to "MX" if not provided.</summary>
     [MaxLength(2)]
