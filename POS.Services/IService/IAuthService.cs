@@ -42,6 +42,7 @@ public class RegisterRequest
     public List<int>? BusinessTypeIds { get; set; }
     public string? CustomGiroDescription { get; set; }
     public int? PlanTypeId { get; set; }
+    public string? FolioPrefix { get; set; }
     public string? CountryCode { get; set; }
 }
 

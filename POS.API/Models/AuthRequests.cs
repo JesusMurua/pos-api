@@ -70,6 +70,10 @@ public class RegisterApiRequest
 
     public int? PlanTypeId { get; set; }
 
+    /// <summary>Folio prefix for the matrix branch (e.g., "ANB").</summary>
+    [MaxLength(10)]
+    public string? FolioPrefix { get; set; }
+
     /// <summary>ISO 3166-1 alpha-2 country code. Defaults to "MX" if not provided.</summary>
     [MaxLength(2)]
     public string? CountryCode { get; set; }

@@ -112,6 +112,7 @@ public class AuthController : ControllerBase
                 BusinessTypeIds = request.BusinessTypeIds,
                 CustomGiroDescription = request.CustomGiroDescription,
                 PlanTypeId = request.PlanTypeId,
+                FolioPrefix = request.FolioPrefix,
                 CountryCode = request.CountryCode
             });
             return Ok(response);

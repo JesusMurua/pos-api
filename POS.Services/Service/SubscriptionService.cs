@@ -24,9 +24,12 @@ public class SubscriptionService : ISubscriptionService
 
         if (subscription == null)
         {
+            // No Stripe subscription yet — use the PlanTypeId stored on the Business entity
+            var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+
             return new SubscriptionStatusDto
             {
-                PlanTypeId = PlanTypeIds.Free,
+                PlanTypeId = business?.PlanTypeId ?? PlanTypeIds.Free,
                 Status = StripeSubscriptionStatus.Active,
                 PricingGroup = "General",
                 BillingCycle = "Monthly",

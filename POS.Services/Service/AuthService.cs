@@ -51,7 +51,8 @@ public class AuthService : IAuthService
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
+        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
+        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
         var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType);
 
         return new AuthResponse
@@ -62,7 +63,7 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            PlanTypeId = effectivePlanTypeId,
             BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
@@ -94,7 +95,8 @@ public class AuthService : IAuthService
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
         var subscription = await ResolveSubscriptionAsync(matchedUser.BusinessId);
-        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
+        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
+        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
         var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType);
 
         return new AuthResponse
@@ -105,7 +107,7 @@ public class AuthService : IAuthService
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            PlanTypeId = effectivePlanTypeId,
             BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
@@ -146,7 +148,8 @@ public class AuthService : IAuthService
             : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var planType = PlanTypeIds.ToCode(subscription?.PlanTypeId ?? PlanTypeIds.Free);
+        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
+        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
         var token = GenerateToken(user, business!, branchId, branches, expiration, planType);
 
         return new AuthResponse
@@ -157,7 +160,7 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
             Branches = branches,
-            PlanTypeId = subscription?.PlanTypeId ?? PlanTypeIds.Free,
+            PlanTypeId = effectivePlanTypeId,
             BusinessTypeId = business!.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
@@ -197,7 +200,11 @@ public class AuthService : IAuthService
 
         var hasKitchen = matchedCatalogs.Any(c => c.HasKitchen);
         var hasTables = matchedCatalogs.Any(c => c.HasTables);
-        var primaryBusinessTypeId = matchedCatalogs.FirstOrDefault()?.Id ?? BusinessTypeIds.General;
+
+        // Primary = first ID the user selected (preserve user's intent, not DB order)
+        var primaryBusinessTypeId = matchedCatalogs.Any()
+            ? giroIds.First(id => matchedCatalogs.Any(c => c.Id == id))
+            : BusinessTypeIds.General;
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
@@ -235,6 +242,7 @@ public class AuthService : IAuthService
             IsActive = true,
             HasKitchen = hasKitchen,
             HasTables = hasTables,
+            FolioPrefix = request.FolioPrefix,
             FolioCounter = 0,
             CreatedAt = DateTime.UtcNow
         };
