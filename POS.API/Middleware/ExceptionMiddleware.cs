@@ -21,6 +21,31 @@ public class ExceptionMiddleware
         {
             await _next(context);
         }
+        catch (RegisterNameTakenException ex)
+        {
+            _logger.LogWarning(ex,
+                "Register name conflict (existing id: {ExistingId}): {Message}",
+                ex.ExistingRegisterId, ex.Message);
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = 409;
+
+            var conflictBody = new
+            {
+                error = "register_name_taken",
+                message = ex.Message,
+                existingRegisterId = ex.ExistingRegisterId,
+                hasOpenSession = ex.HasOpenSession,
+                statusCode = 409
+            };
+
+            var conflictJson = JsonSerializer.Serialize(conflictBody, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            await context.Response.WriteAsync(conflictJson);
+        }
         catch (PlanLimitExceededException ex)
         {
             _logger.LogWarning(ex, "Plan limit exceeded: {Message}", ex.Message);

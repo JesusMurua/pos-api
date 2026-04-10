@@ -28,10 +28,54 @@ public class CashRegisterService : ICashRegisterService
     }
 
     /// <summary>
-    /// Creates a new cash register for a branch.
+    /// Creates a new cash register for a branch, or — when <c>request.Takeover</c>
+    /// is true — recovers an existing register with the same name by overwriting
+    /// its DeviceUuid. This unblocks users who lost their local DeviceUuid (e.g.
+    /// after clearing the browser cache) without orphaning the open session.
     /// </summary>
     public async Task<CashRegister> CreateRegisterAsync(int branchId, CreateCashRegisterRequest request)
     {
+        var existing = await _unitOfWork.CashRegisters.GetByNameAsync(branchId, request.Name);
+
+        if (existing != null)
+        {
+            // Inactive registers were intentionally disabled by an admin —
+            // recovery must NOT silently re-enable them.
+            if (!existing.IsActive)
+                throw new ValidationException("Esta caja fue desactivada por el administrador.");
+
+            if (!request.Takeover)
+            {
+                var openSession = await _unitOfWork.CashRegisterSessions
+                    .GetOpenSessionByRegisterAsync(existing.Id);
+
+                throw new RegisterNameTakenException(
+                    existingRegisterId: existing.Id,
+                    hasOpenSession: openSession != null);
+            }
+
+            // Takeover branch: free the requested DeviceUuid from any other
+            // register in this branch (permissive policy) before reassigning it,
+            // so the unique (BranchId, DeviceUuid) constraint cannot fire.
+            if (!string.IsNullOrWhiteSpace(request.DeviceUuid))
+            {
+                var collidingRegister = await _unitOfWork.CashRegisters
+                    .GetByDeviceUuidAsync(branchId, request.DeviceUuid);
+
+                if (collidingRegister != null && collidingRegister.Id != existing.Id)
+                {
+                    collidingRegister.DeviceUuid = null;
+                    _unitOfWork.CashRegisters.Update(collidingRegister);
+                }
+            }
+
+            existing.DeviceUuid = request.DeviceUuid;
+            _unitOfWork.CashRegisters.Update(existing);
+            await _unitOfWork.SaveChangesAsync();
+
+            return existing;
+        }
+
         var register = new CashRegister
         {
             BranchId = branchId,
@@ -47,6 +91,8 @@ public class CashRegisterService : ICashRegisterService
         }
         catch (DbUpdateException)
         {
+            // Name was free a moment ago (race) or the DeviceUuid is already
+            // bound to another register and the caller did not opt into takeover.
             throw new ValidationException(
                 "A cash register with that name or device UUID already exists for this branch.");
         }

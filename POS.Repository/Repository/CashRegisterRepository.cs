@@ -23,4 +23,10 @@ public class CashRegisterRepository : GenericRepository<CashRegister>, ICashRegi
         return await _context.CashRegisters
             .FirstOrDefaultAsync(r => r.BranchId == branchId && r.DeviceUuid == deviceUuid);
     }
+
+    public async Task<CashRegister?> GetByNameAsync(int branchId, string name)
+    {
+        return await _context.CashRegisters
+            .FirstOrDefaultAsync(r => r.BranchId == branchId && r.Name == name);
+    }
 }

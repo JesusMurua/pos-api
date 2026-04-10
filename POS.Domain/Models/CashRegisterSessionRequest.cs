@@ -21,6 +21,14 @@ public class CreateCashRegisterRequest
 
     [MaxLength(100)]
     public string? DeviceUuid { get; set; }
+
+    /// <summary>
+    /// When true and a register with the same Name already exists in the branch,
+    /// the existing register's DeviceUuid is overwritten with the incoming one
+    /// (recovery flow for users who lost their local DeviceUuid). When false,
+    /// a name collision returns HTTP 409 with the existing register id.
+    /// </summary>
+    public bool Takeover { get; set; } = false;
 }
 
 public class UpdateCashRegisterRequest
