@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Filters;
+using POS.Domain.Enums;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -10,6 +12,7 @@ namespace POS.API.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [Authorize]
+[RequiresPlan(PlanType.Pro)]
 public class InvoicingController : BaseApiController
 {
     private readonly IInvoicingService _invoicingService;

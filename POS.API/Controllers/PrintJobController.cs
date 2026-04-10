@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Filters;
 using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Services.IService;
@@ -12,6 +13,7 @@ namespace POS.API.Controllers;
 /// and acknowledge completion or failure.
 /// </summary>
 [Route("api/print-jobs")]
+[RequiresPlan(PlanType.Pro)]
 public class PrintJobController : BaseApiController
 {
     private readonly IPrintJobService _printJobService;

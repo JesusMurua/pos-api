@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Filters;
+using POS.Domain.Enums;
 using POS.Domain.Models;
 using POS.Services.IService;
 
@@ -49,6 +51,7 @@ public class ReportController : BaseApiController
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/excel")]
     [Authorize(Roles = "Owner")]
+    [RequiresPlan(PlanType.Pro)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportExcel(
@@ -73,6 +76,7 @@ public class ReportController : BaseApiController
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/pdf")]
     [Authorize(Roles = "Owner")]
+    [RequiresPlan(PlanType.Pro)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportPdf(
@@ -98,6 +102,7 @@ public class ReportController : BaseApiController
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/fiscal-csv")]
     [Authorize(Roles = "Owner")]
+    [RequiresPlan(PlanType.Pro)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportFiscalCsv(
@@ -129,6 +134,7 @@ public class ReportController : BaseApiController
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("charts")]
     [Authorize(Roles = "Owner")]
+    [RequiresPlan(PlanType.Pro)]
     [ProducesResponseType(typeof(DashboardChartsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetDashboardCharts(
@@ -159,6 +165,7 @@ public class ReportController : BaseApiController
     /// <response code="400">If the request parameters are invalid.</response>
     [HttpGet("export/detailed-sales-csv")]
     [Authorize(Roles = "Owner")]
+    [RequiresPlan(PlanType.Pro)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportDetailedSalesCsv(

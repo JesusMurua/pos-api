@@ -1,4 +1,3 @@
-using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
@@ -51,6 +50,9 @@ public class UserService : IUserService
         var branch = await _unitOfWork.Branches.GetByIdAsync(branchId);
         if (branch == null)
             throw new NotFoundException($"Branch with id {branchId} not found");
+
+        // Enforce Free plan user limit
+        await EnforcePlanUserLimitAsync(branch.BusinessId);
 
         // Validate PIN-based roles
         if (PinRoleIds.Contains(request.RoleId))
@@ -228,6 +230,21 @@ public class UserService : IUserService
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Throws PlanLimitExceededException if the business is on the Free plan
+    /// and already has the maximum allowed users.
+    /// </summary>
+    private async Task EnforcePlanUserLimitAsync(int businessId)
+    {
+        var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+        if (business == null || business.PlanTypeId != PlanTypeIds.Free)
+            return;
+
+        var users = await _unitOfWork.Users.GetAsync(u => u.BusinessId == businessId);
+        if (users.Count() >= PlanLimits.FreeMaxUsers)
+            throw new PlanLimitExceededException("usuarios", PlanLimits.FreeMaxUsers, "Free");
+    }
 
     /// <summary>
     /// Resolves the default branch for a business: matrix branch first, then lowest ID.

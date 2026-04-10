@@ -1,4 +1,5 @@
 using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -55,6 +56,7 @@ public class ProductService : IProductService
     /// </summary>
     public async Task<Product> CreateAsync(Product product)
     {
+        await EnforcePlanProductLimitAsync(product.BranchId);
         await ValidateBarcodeUniqueAsync(product.BranchId, product.Barcode, null);
         await _unitOfWork.Products.AddAsync(product);
         await _unitOfWork.SaveChangesAsync();
@@ -170,6 +172,24 @@ public class ProductService : IProductService
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Throws PlanLimitExceededException if the business is on the Free plan
+    /// and already has the maximum allowed products across all branches.
+    /// </summary>
+    private async Task EnforcePlanProductLimitAsync(int branchId)
+    {
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId);
+        if (branch == null) return;
+
+        var business = await _unitOfWork.Business.GetByIdAsync(branch.BusinessId);
+        if (business == null || business.PlanTypeId != PlanTypeIds.Free)
+            return;
+
+        var products = await _unitOfWork.Products.GetAsync(p => p.BranchId == branchId);
+        if (products.Count() >= PlanLimits.FreeMaxProducts)
+            throw new PlanLimitExceededException("productos", PlanLimits.FreeMaxProducts, "Free");
+    }
 
     private async Task ValidateBarcodeUniqueAsync(int branchId, string? barcode, int? excludeProductId)
     {

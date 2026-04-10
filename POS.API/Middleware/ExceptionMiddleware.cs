@@ -21,6 +21,29 @@ public class ExceptionMiddleware
         {
             await _next(context);
         }
+        catch (PlanLimitExceededException ex)
+        {
+            _logger.LogWarning(ex, "Plan limit exceeded: {Message}", ex.Message);
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = 402;
+
+            var planError = new
+            {
+                error = "plan_limit_exceeded",
+                message = ex.Message,
+                currentPlan = ex.CurrentPlan,
+                resource = ex.Resource,
+                limit = ex.Limit,
+                statusCode = 402
+            };
+
+            var json = JsonSerializer.Serialize(planError, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            await context.Response.WriteAsync(json);
+        }
         catch (NotFoundException ex)
         {
             _logger.LogWarning(ex, "Resource not found: {Message}", ex.Message);
