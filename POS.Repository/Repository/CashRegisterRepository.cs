@@ -26,7 +26,8 @@ public class CashRegisterRepository : GenericRepository<CashRegister>, ICashRegi
 
     public async Task<CashRegister?> GetByNameAsync(int branchId, string name)
     {
+        var normalizedName = name.Trim().ToLowerInvariant();
         return await _context.CashRegisters
-            .FirstOrDefaultAsync(r => r.BranchId == branchId && r.Name == name);
+            .FirstOrDefaultAsync(r => r.BranchId == branchId && r.Name == normalizedName);
     }
 }

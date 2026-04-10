@@ -35,6 +35,9 @@ public class CashRegisterService : ICashRegisterService
     /// </summary>
     public async Task<CashRegister> CreateRegisterAsync(int branchId, CreateCashRegisterRequest request)
     {
+        // Normalize name so "Caja", "caja " and "CAJA" collide on the unique index.
+        request.Name = request.Name.Trim().ToLowerInvariant();
+
         var existing = await _unitOfWork.CashRegisters.GetByNameAsync(branchId, request.Name);
 
         if (existing != null)
@@ -105,6 +108,9 @@ public class CashRegisterService : ICashRegisterService
     /// </summary>
     public async Task<CashRegister> UpdateRegisterAsync(int registerId, int branchId, UpdateCashRegisterRequest request)
     {
+        // Normalize name to keep the unique (BranchId, Name) index case-insensitive.
+        request.Name = request.Name.Trim().ToLowerInvariant();
+
         var register = await _unitOfWork.CashRegisters.GetByIdAsync(registerId)
             ?? throw new NotFoundException($"Cash register with id {registerId} not found");
 
