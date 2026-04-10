@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -14,10 +15,17 @@ public class PrintJobService : IPrintJobService
     private const int MaxAttempts = 3;
 
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPushNotificationService _pushService;
+    private readonly ILogger<PrintJobService> _logger;
 
-    public PrintJobService(IUnitOfWork unitOfWork)
+    public PrintJobService(
+        IUnitOfWork unitOfWork,
+        IPushNotificationService pushService,
+        ILogger<PrintJobService> logger)
     {
         _unitOfWork = unitOfWork;
+        _pushService = pushService;
+        _logger = logger;
     }
 
     #region Public API Methods
@@ -70,6 +78,10 @@ public class PrintJobService : IPrintJobService
         _unitOfWork.PrintJobs.Update(job);
         await _unitOfWork.SaveChangesAsync();
 
+        // Best-effort push to the waiter who placed the order. Failures must NEVER
+        // bubble up — the chef's KDS already saw a successful 200 from the PATCH.
+        await NotifyWaiterAsync(job);
+
         return job;
     }
 
@@ -94,6 +106,58 @@ public class PrintJobService : IPrintJobService
         await _unitOfWork.SaveChangesAsync();
 
         return job;
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Sends a "Comanda Lista" web push to the waiter that originated the order.
+    /// Wrapped in try/catch so a missing subscription, expired endpoint, or VAPID
+    /// gateway timeout cannot fail the parent MarkPrinted operation.
+    /// </summary>
+    private async Task NotifyWaiterAsync(PrintJob job)
+    {
+        try
+        {
+            var order = (await _unitOfWork.Orders.GetAsync(o => o.Id == job.OrderId)).FirstOrDefault();
+            if (order?.UserId == null)
+                return;
+
+            var location = !string.IsNullOrWhiteSpace(order.TableName)
+                ? $"la {order.TableName}"
+                : "la orden para llevar";
+
+            var destination = job.Destination switch
+            {
+                PrintingDestination.Kitchen => "Cocina",
+                PrintingDestination.Bar     => "Barra",
+                PrintingDestination.Waiters => "Meseros",
+                _                           => job.Destination.ToString()
+            };
+
+            var title = "¡Comanda Lista! 🔔";
+            var body  = $"La orden #{order.OrderNumber} de {location} ya está lista en {destination}.";
+
+            await _pushService.SendToUserAsync(
+                order.UserId.Value,
+                title,
+                body,
+                new
+                {
+                    orderId = job.OrderId,
+                    orderNumber = order.OrderNumber,
+                    tableName = order.TableName,
+                    destination = job.Destination.ToString()
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to push 'comanda lista' notification for print job {JobId} (order {OrderId})",
+                job.Id, job.OrderId);
+        }
     }
 
     #endregion

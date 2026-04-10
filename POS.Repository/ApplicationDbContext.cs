@@ -102,6 +102,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PaymentWebhookInbox> PaymentWebhookInbox { get; set; } = null!;
     public DbSet<BranchPaymentConfig> BranchPaymentConfigs { get; set; } = null!;
     public DbSet<PrintJob> PrintJobs { get; set; } = null!;
+    public DbSet<KdsEventOutbox> KdsEventOutbox { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
     public DbSet<Device> Devices { get; set; } = null!;
     public DbSet<Tax> Taxes { get; set; } = null!;
@@ -925,6 +926,21 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(e => e.StripeEventId).IsUnique();
             entity.HasIndex(e => e.Status);
+        });
+
+        #endregion
+
+        #region KdsEventOutbox Configuration
+
+        modelBuilder.Entity<KdsEventOutbox>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Destination).IsRequired().HasMaxLength(32);
+            entity.Property(e => e.Payload).IsRequired();
+
+            // Covering index so the dispatcher's hot-path query
+            // (WHERE IsProcessed = false ORDER BY CreatedAt) is cheap.
+            entity.HasIndex(e => new { e.IsProcessed, e.CreatedAt });
         });
 
         #endregion

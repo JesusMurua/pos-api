@@ -41,6 +41,7 @@ public class UnitOfWork : IUnitOfWork
     private ICustomerRepository? _customers;
     private ICustomerTransactionRepository? _customerTransactions;
     private IPrintJobRepository? _printJobs;
+    private IKdsEventOutboxRepository? _kdsEventOutbox;
     private IInvoiceRepository? _invoices;
     private IDeviceRepository? _devices;
 
@@ -147,6 +148,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IPrintJobRepository PrintJobs =>
         _printJobs ??= new PrintJobRepository(_context);
+
+    public IKdsEventOutboxRepository KdsEventOutbox =>
+        _kdsEventOutbox ??= new KdsEventOutboxRepository(_context);
 
     public IInvoiceRepository Invoices =>
         _invoices ??= new InvoiceRepository(_context);

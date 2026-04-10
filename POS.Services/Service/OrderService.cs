@@ -1480,6 +1480,33 @@ public class OrderService : IOrderService
         if (printJobs.Count == 0) return;
 
         await _unitOfWork.PrintJobs.AddRangeAsync(printJobs);
+
+        // Outbox pattern: queue a KDS notification for every new print job inside
+        // the SAME SaveChangesAsync transaction so that a crash between writing
+        // the job and broadcasting it cannot silently drop the event.
+        // NOTE: PrintJob.Id is not yet assigned here (DB generates it in the shared
+        // SaveChangesAsync below), so the payload is keyed by the stable
+        // (OrderId, Destination) tuple. Clients that need the numeric id can look it
+        // up via GET /api/print-jobs/by-order/{orderId}.
+        var outboxEvents = printJobs.Select(job => new KdsEventOutbox
+        {
+            BranchId    = job.BranchId,
+            Destination = job.Destination.ToString(),
+            Payload     = JsonSerializer.Serialize(new
+            {
+                orderId           = job.OrderId,
+                branchId          = job.BranchId,
+                destination       = job.Destination.ToString(),
+                status            = job.Status.ToString(),
+                structuredContent = job.StructuredContent,
+                createdAt         = job.CreatedAt
+            }),
+            IsProcessed = false,
+            CreatedAt   = DateTime.UtcNow
+        }).ToList();
+
+        await _unitOfWork.KdsEventOutbox.AddRangeAsync(outboxEvents);
+
         await _unitOfWork.SaveChangesAsync();
     }
 

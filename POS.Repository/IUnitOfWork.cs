@@ -38,6 +38,7 @@ public interface IUnitOfWork : IDisposable
     ICustomerRepository Customers { get; }
     ICustomerTransactionRepository CustomerTransactions { get; }
     IPrintJobRepository PrintJobs { get; }
+    IKdsEventOutboxRepository KdsEventOutbox { get; }
     IInvoiceRepository Invoices { get; }
     IDeviceRepository Devices { get; }
 

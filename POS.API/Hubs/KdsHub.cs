@@ -1,0 +1,53 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+
+namespace POS.API.Hubs;
+
+/// <summary>
+/// SignalR hub used by Kitchen Display Systems to receive real-time
+/// notifications when new print jobs are generated for their branch/destination.
+/// Clients connect with a JWT in the <c>access_token</c> query string and
+/// specify the KDS area they want to subscribe to via the <c>destination</c>
+/// query string (e.g. <c>?destination=Kitchen</c>).
+/// </summary>
+[Authorize]
+public class KdsHub : Hub
+{
+    /// <summary>
+    /// Group name prefix used for broadcasts. A connection is placed in the
+    /// group <c>branch-{branchId}-{destination}</c>. The dispatcher worker
+    /// sends events to the same group name so only the intended KDS station
+    /// receives the payload.
+    /// </summary>
+    public const string GroupPrefix = "branch-";
+
+    /// <summary>
+    /// Builds the SignalR group name used by both the hub (on connect) and the
+    /// dispatcher worker (on broadcast). Centralising this avoids drift.
+    /// </summary>
+    public static string BuildGroupName(int branchId, string destination)
+        => $"{GroupPrefix}{branchId}-{destination}";
+
+    public override async Task OnConnectedAsync()
+    {
+        // BranchId is taken from the JWT claim — never from the client —
+        // so a compromised device can only subscribe to its own branch.
+        var branchClaim = Context.User?.FindFirst("branchId")?.Value;
+        if (!int.TryParse(branchClaim, out var branchId))
+        {
+            Context.Abort();
+            return;
+        }
+
+        var httpContext = Context.GetHttpContext();
+        var destination = httpContext?.Request.Query["destination"].ToString();
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            Context.Abort();
+            return;
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, BuildGroupName(branchId, destination));
+        await base.OnConnectedAsync();
+    }
+}

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using POS.API.Authorization;
+using POS.API.Hubs;
 using POS.API.Middleware;
 using POS.API.Workers;
 using POS.Domain.Settings;
@@ -83,6 +84,8 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSignalR();
+
 // JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
@@ -133,6 +136,22 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings.Audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret))
     };
+
+    // SignalR clients cannot set Authorization headers on the WebSocket handshake,
+    // so for any request under /hubs/ we accept the JWT from the access_token query string.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // Plan-based authorization policies
@@ -152,7 +171,8 @@ builder.Services.AddCors(options =>
 
         policy.WithOrigins(origins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -185,6 +205,7 @@ builder.Services.AddServiceDependencies();
 // Background workers
 builder.Services.AddHostedService<StripeEventProcessorWorker>();
 builder.Services.AddHostedService<PaymentWebhookProcessorWorker>();
+builder.Services.AddHostedService<KdsEventDispatcherWorker>();
 
 var app = builder.Build();
 
@@ -236,5 +257,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<KdsHub>("/hubs/kds");
 
 app.Run();
