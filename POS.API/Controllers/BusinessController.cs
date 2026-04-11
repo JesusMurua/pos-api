@@ -15,11 +15,31 @@ public class BusinessController : BaseApiController
 {
     private readonly IBusinessService _businessService;
     private readonly IAuthService _authService;
+    private readonly IFeatureGateService _featureGate;
 
-    public BusinessController(IBusinessService businessService, IAuthService authService)
+    public BusinessController(
+        IBusinessService businessService,
+        IAuthService authService,
+        IFeatureGateService featureGate)
     {
         _businessService = businessService;
         _authService = authService;
+        _featureGate = featureGate;
+    }
+
+    /// <summary>
+    /// Returns the list of feature codes enabled for the caller's business.
+    /// The frontend uses this to hide or disable UI elements up-front instead of
+    /// probing each feature individually.
+    /// </summary>
+    /// <returns>A flat array of feature codes (e.g. "CoreHardware", "RealtimeKds").</returns>
+    /// <response code="200">Returns the enabled feature codes.</response>
+    [HttpGet("features")]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFeatures()
+    {
+        var features = await _featureGate.GetEnabledFeaturesAsync(BusinessId);
+        return Ok(features);
     }
 
     /// <summary>

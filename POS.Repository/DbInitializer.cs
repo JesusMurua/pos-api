@@ -1035,7 +1035,7 @@ public static class DbInitializer
 
             new() { Id = FeatureIds.TableMap,                Key = FeatureKey.TableMap,                Code = "TableMap",                Name = "Mapa de mesas",                     Description = "Layout visual de mesas y asignación de órdenes",                 IsQuantitative = false, SortOrder = 40 },
             new() { Id = FeatureIds.WaiterApp,               Key = FeatureKey.WaiterApp,               Code = "WaiterApp",               Name = "App de meseros",                    Description = "Aplicación móvil para toma de órdenes en mesa",                  IsQuantitative = false, SortOrder = 41 },
-            new() { Id = FeatureIds.SelfServiceKiosk,        Key = FeatureKey.SelfServiceKiosk,        Code = "SelfServiceKiosk",        Name = "Kiosco autoservicio",               Description = "Modo kiosco para que clientes ordenen sin cajero",               IsQuantitative = false, SortOrder = 42 },
+            new() { Id = FeatureIds.KioskMode,               Key = FeatureKey.KioskMode,               Code = "KioskMode",                Name = "Modo kiosco",                       Description = "Modo kiosco de autoservicio para clientes",                      IsQuantitative = false, SortOrder = 42 },
 
             new() { Id = FeatureIds.RecipeInventory,         Key = FeatureKey.RecipeInventory,         Code = "RecipeInventory",         Name = "Inventario con recetas",            Description = "Descuento de ingredientes por receta y control de mermas",       IsQuantitative = false, SortOrder = 50 },
             new() { Id = FeatureIds.MultiWarehouseInventory, Key = FeatureKey.MultiWarehouseInventory, Code = "MultiWarehouseInventory", Name = "Inventario multi-bodega",           Description = "Control de inventario en múltiples bodegas",                     IsQuantitative = false, SortOrder = 51 },
@@ -1043,6 +1043,7 @@ public static class DbInitializer
 
             new() { Id = FeatureIds.StoreCredit,             Key = FeatureKey.StoreCredit,             Code = "StoreCredit",             Name = "Control de fiado / crédito",        Description = "Gestión de fiado a clientes con saldo y abonos",                 IsQuantitative = false, SortOrder = 60 },
             new() { Id = FeatureIds.ComparativeReports,      Key = FeatureKey.ComparativeReports,      Code = "ComparativeReports",      Name = "Reportes comparativos",             Description = "Comparación de ventas entre periodos y sucursales",              IsQuantitative = false, SortOrder = 61 },
+            new() { Id = FeatureIds.AdvancedReports,         Key = FeatureKey.AdvancedReports,         Code = "AdvancedReports",         Name = "Reportes avanzados",                Description = "Exportaciones (Excel, PDF, CSV) y dashboards avanzados",         IsQuantitative = false, SortOrder = 62 },
 
             new() { Id = FeatureIds.LoyaltyCrm,              Key = FeatureKey.LoyaltyCrm,              Code = "LoyaltyCrm",              Name = "Lealtad y CRM",                     Description = "Puntos de lealtad y recompensas",                                IsQuantitative = false, SortOrder = 70 },
             new() { Id = FeatureIds.CustomerDatabase,        Key = FeatureKey.CustomerDatabase,        Code = "CustomerDatabase",        Name = "Base de clientes",                  Description = "Historial y perfil básico del cliente",                           IsQuantitative = false, SortOrder = 71 },
@@ -1052,6 +1053,7 @@ public static class DbInitializer
             new() { Id = FeatureIds.AppointmentReminders,    Key = FeatureKey.AppointmentReminders,    Code = "AppointmentReminders",    Name = "Recordatorios de citas",            Description = "Envío automático de recordatorios (WhatsApp / SMS)",             IsQuantitative = false, SortOrder = 82 },
 
             new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",                IsQuantitative = false, SortOrder = 90 },
+            new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",            IsQuantitative = false, SortOrder = 91 },
         };
 
         var existingFeatures = await context.FeatureCatalogs.ToListAsync();
@@ -1145,10 +1147,10 @@ public static class DbInitializer
             (PlanTypeIds.Pro,        FeatureIds.WaiterApp, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.WaiterApp, true,  null),
 
-            (PlanTypeIds.Free,       FeatureIds.SelfServiceKiosk, false, null),
-            (PlanTypeIds.Basic,      FeatureIds.SelfServiceKiosk, false, null),
-            (PlanTypeIds.Pro,        FeatureIds.SelfServiceKiosk, true,  null),
-            (PlanTypeIds.Enterprise, FeatureIds.SelfServiceKiosk, true,  null),
+            (PlanTypeIds.Free,       FeatureIds.KioskMode, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.KioskMode, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.KioskMode, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.KioskMode, true,  null),
 
             // Recipe Inventory — Enterprise only (Food & Beverage).
             (PlanTypeIds.Free,       FeatureIds.RecipeInventory, false, null),
@@ -1215,6 +1217,18 @@ public static class DbInitializer
             (PlanTypeIds.Basic,      FeatureIds.PublicApi, false, null),
             (PlanTypeIds.Pro,        FeatureIds.PublicApi, false, null),
             (PlanTypeIds.Enterprise, FeatureIds.PublicApi, true,  null),
+
+            // Multi-Sucursal — Enterprise only (Food & Beverage franchises).
+            (PlanTypeIds.Free,       FeatureIds.MultiBranch, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.MultiBranch, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.MultiBranch, false, null),
+            (PlanTypeIds.Enterprise, FeatureIds.MultiBranch, true,  null),
+
+            // Advanced Reports (exports, charts) — Pro+ for every applicable giro.
+            (PlanTypeIds.Free,       FeatureIds.AdvancedReports, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.AdvancedReports, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.AdvancedReports, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.AdvancedReports, true,  null),
         };
 
         var existingPlanRows = await context.PlanFeatureMatrices.ToListAsync();
@@ -1279,15 +1293,22 @@ public static class DbInitializer
         AddAll(foodAndBeverage, FeatureIds.PrintedCommandaTickets);
         AddAll(foodAndBeverage, FeatureIds.TableMap);
         AddAll(foodAndBeverage, FeatureIds.WaiterApp);
-        AddAll(foodAndBeverage, FeatureIds.SelfServiceKiosk);
+        AddAll(foodAndBeverage, FeatureIds.KioskMode);
         AddAll(foodAndBeverage, FeatureIds.RecipeInventory);
         AddAll(foodAndBeverage, FeatureIds.PublicApi);
+        AddAll(foodAndBeverage, FeatureIds.MultiBranch);
 
         // Quick Service — shares KDS and kiosk with F&B, adds loyalty.
         AddAll(quickService, FeatureIds.RealtimeKds);
         AddAll(quickService, FeatureIds.PrintedCommandaTickets);
-        AddAll(quickService, FeatureIds.SelfServiceKiosk);
+        AddAll(quickService, FeatureIds.KioskMode);
         AddAll(quickService, FeatureIds.LoyaltyCrm);
+
+        // Advanced reports (exports/charts) are applicable to every commercial giro.
+        AddAll(foodAndBeverage, FeatureIds.AdvancedReports);
+        AddAll(quickService, FeatureIds.AdvancedReports);
+        AddAll(retail, FeatureIds.AdvancedReports);
+        AddAll(services, FeatureIds.AdvancedReports);
 
         // Retail
         AddAll(retail, FeatureIds.StoreCredit);
@@ -1338,6 +1359,7 @@ public static class DbInitializer
         {
             (PlanTypeIds.Basic, BusinessTypeIds.Cafe,      FeatureIds.RealtimeKds, true),
             (PlanTypeIds.Basic, BusinessTypeIds.FoodTruck, FeatureIds.RealtimeKds, true),
+            (PlanTypeIds.Basic, BusinessTypeIds.Taqueria,  FeatureIds.RealtimeKds, true),
         };
 
         var existingOverrides = await context.PlanBusinessTypeFeatureOverrides.ToListAsync();

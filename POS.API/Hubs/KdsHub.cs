@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using POS.Domain.Enums;
+using POS.Services.IService;
 
 namespace POS.API.Hubs;
 
@@ -39,9 +41,25 @@ public class KdsHub : Hub
             return;
         }
 
+        var businessClaim = Context.User?.FindFirst("businessId")?.Value;
+        if (!int.TryParse(businessClaim, out var businessId))
+        {
+            Context.Abort();
+            return;
+        }
+
         var httpContext = Context.GetHttpContext();
         var destination = httpContext?.Request.Query["destination"].ToString();
         if (string.IsNullOrWhiteSpace(destination))
+        {
+            Context.Abort();
+            return;
+        }
+
+        // Realtime KDS is gated by plan × giro. Polling-based PrintJobController
+        // stays accessible; only the socket push layer is restricted here.
+        var featureGate = httpContext?.RequestServices.GetRequiredService<IFeatureGateService>();
+        if (featureGate == null || !await featureGate.IsEnabledAsync(businessId, FeatureKey.RealtimeKds))
         {
             Context.Abort();
             return;

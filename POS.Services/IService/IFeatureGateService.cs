@@ -23,6 +23,12 @@ public interface IFeatureGateService
     Task<int?> GetLimitAsync(int businessId, FeatureKey feature);
 
     /// <summary>
+    /// Returns the list of enabled feature codes for a business (string form of FeatureKey).
+    /// Used by the frontend to render/hide UI elements without having to probe each feature.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetEnabledFeaturesAsync(int businessId);
+
+    /// <summary>
     /// Throws PlanLimitExceededException if the feature is disabled OR, for quantitative
     /// features, the given current usage has reached the resolved limit.
     /// Use from POST/PUT paths; GETs should stay untouched (soft enforcement).

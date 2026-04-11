@@ -21,15 +21,18 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _unitOfWork;
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
+    private readonly IFeatureGateService _featureGate;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IOptions<JwtSettings> jwtSettings,
-        IEmailService emailService)
+        IEmailService emailService,
+        IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -50,10 +53,11 @@ public class AuthService : IAuthService
         var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
+        // Single Source of Truth: Business.PlanTypeId is kept in sync by the Stripe worker.
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
-        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
-        var token = GenerateToken(user, business!, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType);
+        var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
+        var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, features);
 
         return new AuthResponse
         {
@@ -63,8 +67,8 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanTypeId = effectivePlanTypeId,
-            BusinessTypeId = business!.BusinessTypeId,
+            PlanTypeId = business.PlanTypeId,
+            BusinessTypeId = business.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -95,9 +99,9 @@ public class AuthService : IAuthService
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
         var subscription = await ResolveSubscriptionAsync(matchedUser.BusinessId);
-        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
-        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
-        var token = GenerateToken(matchedUser, business!, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType);
+        var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
+        var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, features);
 
         return new AuthResponse
         {
@@ -107,8 +111,8 @@ public class AuthService : IAuthService
             BusinessId = matchedUser.BusinessId,
             CurrentBranchId = currentBranchId,
             Branches = branches,
-            PlanTypeId = effectivePlanTypeId,
-            BusinessTypeId = business!.BusinessTypeId,
+            PlanTypeId = business.PlanTypeId,
+            BusinessTypeId = business.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -148,9 +152,9 @@ public class AuthService : IAuthService
             : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
-        var effectivePlanTypeId = subscription?.PlanTypeId ?? business!.PlanTypeId;
-        var planType = PlanTypeIds.ToCode(effectivePlanTypeId);
-        var token = GenerateToken(user, business!, branchId, branches, expiration, planType);
+        var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
+        var token = GenerateToken(user, business, branchId, branches, expiration, planType, features);
 
         return new AuthResponse
         {
@@ -160,8 +164,8 @@ public class AuthService : IAuthService
             BusinessId = user.BusinessId,
             CurrentBranchId = branchId,
             Branches = branches,
-            PlanTypeId = effectivePlanTypeId,
-            BusinessTypeId = business!.BusinessTypeId,
+            PlanTypeId = business.PlanTypeId,
+            BusinessTypeId = business.BusinessTypeId,
             TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -316,9 +320,11 @@ public class AuthService : IAuthService
             throw new ValidationException("EMAIL_ALREADY_EXISTS");
         }
 
-        // Generate JWT
+        // Generate JWT — resolve features once the transaction has committed so the
+        // gate service sees the fresh BusinessGiros rows.
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId));
+        var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), features);
 
         // Fire-and-forget: welcome email — never blocks the response
         _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
@@ -382,13 +388,22 @@ public class AuthService : IAuthService
         return await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
     }
 
-    private string GenerateToken(User user, Business business, int branchId, List<BranchSummary> branches, TimeSpan expiration, string planType)
+    private string GenerateToken(
+        User user,
+        Business business,
+        int branchId,
+        List<BranchSummary> branches,
+        TimeSpan expiration,
+        string planType,
+        IReadOnlyList<string> features)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var branchesJson = JsonSerializer.Serialize(
             branches.Select(b => new { id = b.Id, name = b.Name }));
+
+        var featuresJson = JsonSerializer.Serialize(features);
 
         var claims = new List<Claim>
         {
@@ -401,7 +416,8 @@ public class AuthService : IAuthService
             new("planType", planType),
             new("businessType", BusinessTypeIds.ToCode(business.BusinessTypeId)),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
-            new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower())
+            new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower()),
+            new("features", featuresJson)
         };
 
         var token = new JwtSecurityToken(

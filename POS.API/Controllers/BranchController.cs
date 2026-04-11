@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using POS.API.Authorization;
+using POS.API.Filters;
 using POS.API.Models;
 using POS.Domain.Enums;
 using POS.Domain.Models;
@@ -46,10 +46,10 @@ public class BranchController : BaseApiController
     /// <response code="400">If the request data is invalid.</response>
     [HttpPost]
     [Authorize(Roles = "Owner")]
-    [RequiresPlan(PlanType.Pro)]
+    [RequiresFeature(FeatureKey.MultiBranch)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Create([FromBody] CreateBranchRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

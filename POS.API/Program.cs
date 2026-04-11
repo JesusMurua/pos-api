@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authorization;
-using POS.API.Authorization;
 using POS.API.Hubs;
 using POS.API.Middleware;
 using POS.API.Workers;
@@ -155,13 +153,6 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-
-// Plan-based authorization policies
-builder.Services.AddSingleton<IAuthorizationHandler, PlanRequirementHandler>();
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("RequiresPlan_Basic", p => p.AddRequirements(new PlanRequirement(POS.Domain.Enums.PlanType.Basic)))
-    .AddPolicy("RequiresPlan_Pro", p => p.AddRequirements(new PlanRequirement(POS.Domain.Enums.PlanType.Pro)))
-    .AddPolicy("RequiresPlan_Enterprise", p => p.AddRequirements(new PlanRequirement(POS.Domain.Enums.PlanType.Enterprise)));
 
 // CORS
 builder.Services.AddCors(options =>

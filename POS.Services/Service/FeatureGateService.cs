@@ -37,6 +37,15 @@ public class FeatureGateService : IFeatureGateService
         return snapshot.Entries.TryGetValue(feature, out var entry) ? entry.Limit : null;
     }
 
+    public async Task<IReadOnlyList<string>> GetEnabledFeaturesAsync(int businessId)
+    {
+        var snapshot = await GetSnapshotAsync(businessId);
+        return snapshot.Entries
+            .Where(kv => kv.Value.IsEnabled)
+            .Select(kv => kv.Key.ToString())
+            .ToList();
+    }
+
     public async Task EnforceAsync(int businessId, FeatureKey feature, int? currentUsage = null)
     {
         var snapshot = await GetSnapshotAsync(businessId);

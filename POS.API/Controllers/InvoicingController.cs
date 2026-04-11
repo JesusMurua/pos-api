@@ -12,7 +12,7 @@ namespace POS.API.Controllers;
 /// </summary>
 [Route("api/[controller]")]
 [Authorize]
-[RequiresPlan(PlanType.Pro)]
+[RequiresFeature(FeatureKey.CfdiInvoicing)]
 public class InvoicingController : BaseApiController
 {
     private readonly IInvoicingService _invoicingService;

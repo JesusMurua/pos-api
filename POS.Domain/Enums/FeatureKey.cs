@@ -26,7 +26,7 @@ public enum FeatureKey
     // Restaurant operations
     TableMap = 40,
     WaiterApp = 41,
-    SelfServiceKiosk = 42,
+    KioskMode = 42,
 
     // Inventory
     RecipeInventory = 50,
@@ -36,6 +36,7 @@ public enum FeatureKey
     // Retail / Commerce
     StoreCredit = 60,
     ComparativeReports = 61,
+    AdvancedReports = 62,
 
     // CRM / Loyalty
     LoyaltyCrm = 70,
@@ -47,5 +48,6 @@ public enum FeatureKey
     AppointmentReminders = 82,
 
     // Platform
-    PublicApi = 90
+    PublicApi = 90,
+    MultiBranch = 91
 }

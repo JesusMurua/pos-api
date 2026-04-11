@@ -2,6 +2,7 @@ using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.IService;
 using Stripe;
 
 namespace POS.API.Workers;
@@ -49,6 +50,7 @@ public class StripeEventProcessorWorker : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stripeClient = scope.ServiceProvider.GetRequiredService<IStripeClient>();
+        var featureGate = scope.ServiceProvider.GetRequiredService<IFeatureGateService>();
 
         var pendingEvents = await unitOfWork.StripeEventInbox.GetPendingEventsAsync(BatchSize);
         if (pendingEvents.Count == 0) return;
@@ -62,7 +64,7 @@ public class StripeEventProcessorWorker : BackgroundService
             try
             {
                 var stripeEvent = EventUtility.ParseEvent(inboxEvent.RawJson);
-                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient);
+                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate);
 
                 inboxEvent.Status = StripeEventStatus.Processed;
                 inboxEvent.ProcessedAt = DateTime.UtcNow;
@@ -86,20 +88,24 @@ public class StripeEventProcessorWorker : BackgroundService
 
     #region Event Handlers
 
-    private async Task ProcessEventAsync(Event stripeEvent, IUnitOfWork unitOfWork, IStripeClient stripeClient)
+    private async Task ProcessEventAsync(
+        Event stripeEvent,
+        IUnitOfWork unitOfWork,
+        IStripeClient stripeClient,
+        IFeatureGateService featureGate)
     {
         switch (stripeEvent.Type)
         {
             case EventTypes.CheckoutSessionCompleted:
-                await HandleCheckoutSessionCompletedAsync(stripeEvent, unitOfWork, stripeClient);
+                await HandleCheckoutSessionCompletedAsync(stripeEvent, unitOfWork, stripeClient, featureGate);
                 break;
 
             case EventTypes.CustomerSubscriptionUpdated:
-                await HandleSubscriptionUpdatedAsync(stripeEvent, unitOfWork);
+                await HandleSubscriptionUpdatedAsync(stripeEvent, unitOfWork, featureGate);
                 break;
 
             case EventTypes.CustomerSubscriptionDeleted:
-                await HandleSubscriptionDeletedAsync(stripeEvent, unitOfWork);
+                await HandleSubscriptionDeletedAsync(stripeEvent, unitOfWork, featureGate);
                 break;
 
             case EventTypes.InvoicePaymentFailed:
@@ -117,7 +123,7 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     private async Task HandleCheckoutSessionCompletedAsync(
-        Event stripeEvent, IUnitOfWork unitOfWork, IStripeClient stripeClient)
+        Event stripeEvent, IUnitOfWork unitOfWork, IStripeClient stripeClient, IFeatureGateService featureGate)
     {
         var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
         if (session == null) return;
@@ -181,12 +187,23 @@ public class StripeEventProcessorWorker : BackgroundService
             unitOfWork.Subscriptions.Update(subscription);
         }
 
+        // Single Source of Truth: Business.PlanTypeId is the canonical plan used by
+        // FeatureGateService. Keep it in sync with the Stripe subscription on every mutation.
+        var business = await unitOfWork.Business.GetByIdAsync(businessId);
+        if (business != null)
+        {
+            business.PlanTypeId = subscription.PlanTypeId;
+            unitOfWork.Business.Update(business);
+        }
+
         await unitOfWork.SaveChangesAsync();
-        _logger.LogInformation("Checkout completed for business {BusinessId}, subscription {SubId}",
-            businessId, stripeSubscriptionId);
+        featureGate.Invalidate(businessId);
+        _logger.LogInformation("Checkout completed for business {BusinessId}, subscription {SubId}, plan {PlanId}",
+            businessId, stripeSubscriptionId, subscription.PlanTypeId);
     }
 
-    private async Task HandleSubscriptionUpdatedAsync(Event stripeEvent, IUnitOfWork unitOfWork)
+    private async Task HandleSubscriptionUpdatedAsync(
+        Event stripeEvent, IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         var stripeSub = stripeEvent.Data.Object as Stripe.Subscription;
         if (stripeSub == null) return;
@@ -220,13 +237,24 @@ public class StripeEventProcessorWorker : BackgroundService
         subscription.CurrentPeriodEnd = stripeSub.Items!.Data![0].CurrentPeriodEnd;
 
         unitOfWork.Subscriptions.Update(subscription);
-        await unitOfWork.SaveChangesAsync();
 
-        _logger.LogInformation("Subscription updated: {SubId}, status: {Status}",
-            stripeSub.Id, stripeSub.Status);
+        // Single Source of Truth: propagate plan change to Business.
+        var business = await unitOfWork.Business.GetByIdAsync(subscription.BusinessId);
+        if (business != null)
+        {
+            business.PlanTypeId = subscription.PlanTypeId;
+            unitOfWork.Business.Update(business);
+        }
+
+        await unitOfWork.SaveChangesAsync();
+        featureGate.Invalidate(subscription.BusinessId);
+
+        _logger.LogInformation("Subscription updated: {SubId}, status: {Status}, plan {PlanId}",
+            stripeSub.Id, stripeSub.Status, subscription.PlanTypeId);
     }
 
-    private async Task HandleSubscriptionDeletedAsync(Event stripeEvent, IUnitOfWork unitOfWork)
+    private async Task HandleSubscriptionDeletedAsync(
+        Event stripeEvent, IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         var stripeSub = stripeEvent.Data.Object as Stripe.Subscription;
         if (stripeSub == null) return;
@@ -245,11 +273,23 @@ public class StripeEventProcessorWorker : BackgroundService
 
         subscription.Status = StripeSubscriptionStatus.Canceled;
         subscription.CanceledAt = DateTime.UtcNow;
+        subscription.PlanTypeId = PlanTypeIds.Free;
 
         unitOfWork.Subscriptions.Update(subscription);
-        await unitOfWork.SaveChangesAsync();
 
-        _logger.LogInformation("Subscription deleted: {SubId}", stripeSub.Id);
+        // Single Source of Truth: downgrade Business to Free when the subscription ends.
+        var business = await unitOfWork.Business.GetByIdAsync(subscription.BusinessId);
+        if (business != null)
+        {
+            business.PlanTypeId = PlanTypeIds.Free;
+            unitOfWork.Business.Update(business);
+        }
+
+        await unitOfWork.SaveChangesAsync();
+        featureGate.Invalidate(subscription.BusinessId);
+
+        _logger.LogInformation("Subscription deleted: {SubId}, business {BusinessId} reverted to Free",
+            stripeSub.Id, subscription.BusinessId);
     }
 
     private async Task HandleInvoicePaymentFailedAsync(Event stripeEvent, IUnitOfWork unitOfWork)

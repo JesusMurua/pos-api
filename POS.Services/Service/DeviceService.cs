@@ -11,11 +11,13 @@ namespace POS.Services.Service;
 public class DeviceService : IDeviceService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
     private static readonly Random _random = new();
 
-    public DeviceService(IUnitOfWork unitOfWork)
+    public DeviceService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -28,8 +30,11 @@ public class DeviceService : IDeviceService
         int businessId, int branchId, string mode, int createdBy)
     {
         var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
-        if (!validModes.Contains(mode.ToLowerInvariant()))
+        var normalizedMode = mode.ToLowerInvariant();
+        if (!validModes.Contains(normalizedMode))
             throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
+
+        await EnforceDeviceModeGateAsync(businessId, normalizedMode);
 
         string code;
         var attempts = 0;
@@ -149,6 +154,11 @@ public class DeviceService : IDeviceService
         if (!validModes.Contains(normalizedMode))
             throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
 
+        var branch = await _unitOfWork.Branches.GetByIdAsync(request.BranchId)
+            ?? throw new NotFoundException($"Branch with id {request.BranchId} not found");
+
+        await EnforceDeviceModeGateAsync(branch.BusinessId, normalizedMode);
+
         var existing = await _unitOfWork.Devices.GetByDeviceUuidAsync(request.DeviceUuid);
 
         if (existing != null)
@@ -219,6 +229,42 @@ public class DeviceService : IDeviceService
             LastSeenAt = device.LastSeenAt,
             CreatedAt = device.CreatedAt
         };
+    }
+
+    /// <summary>
+    /// Validates that the business's current plan × giros supports the requested device mode.
+    /// Kiosk requires <see cref="FeatureKey.KioskMode"/>; kitchen requires either
+    /// <see cref="FeatureKey.KdsBasic"/> or <see cref="FeatureKey.RealtimeKds"/>.
+    /// Cashier and tables are universally available.
+    /// </summary>
+    private async Task EnforceDeviceModeGateAsync(int businessId, string normalizedMode)
+    {
+        switch (normalizedMode)
+        {
+            case "kiosk":
+                if (!await _featureGate.IsEnabledAsync(businessId, FeatureKey.KioskMode))
+                {
+                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+                    throw new PlanLimitExceededException(
+                        "modo Kiosco",
+                        0,
+                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
+                }
+                break;
+
+            case "kitchen":
+                var hasKdsBasic = await _featureGate.IsEnabledAsync(businessId, FeatureKey.KdsBasic);
+                var hasRealtimeKds = await _featureGate.IsEnabledAsync(businessId, FeatureKey.RealtimeKds);
+                if (!hasKdsBasic && !hasRealtimeKds)
+                {
+                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+                    throw new PlanLimitExceededException(
+                        "modo Cocina (KDS)",
+                        0,
+                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
+                }
+                break;
+        }
     }
 
     #endregion

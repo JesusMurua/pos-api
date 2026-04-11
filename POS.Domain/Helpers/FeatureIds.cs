@@ -23,7 +23,7 @@ public static class FeatureIds
 
     public const int TableMap = (int)FeatureKey.TableMap;
     public const int WaiterApp = (int)FeatureKey.WaiterApp;
-    public const int SelfServiceKiosk = (int)FeatureKey.SelfServiceKiosk;
+    public const int KioskMode = (int)FeatureKey.KioskMode;
 
     public const int RecipeInventory = (int)FeatureKey.RecipeInventory;
     public const int MultiWarehouseInventory = (int)FeatureKey.MultiWarehouseInventory;
@@ -31,6 +31,7 @@ public static class FeatureIds
 
     public const int StoreCredit = (int)FeatureKey.StoreCredit;
     public const int ComparativeReports = (int)FeatureKey.ComparativeReports;
+    public const int AdvancedReports = (int)FeatureKey.AdvancedReports;
 
     public const int LoyaltyCrm = (int)FeatureKey.LoyaltyCrm;
     public const int CustomerDatabase = (int)FeatureKey.CustomerDatabase;
@@ -40,4 +41,5 @@ public static class FeatureIds
     public const int AppointmentReminders = (int)FeatureKey.AppointmentReminders;
 
     public const int PublicApi = (int)FeatureKey.PublicApi;
+    public const int MultiBranch = (int)FeatureKey.MultiBranch;
 }

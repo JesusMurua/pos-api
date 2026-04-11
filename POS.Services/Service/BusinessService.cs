@@ -8,10 +8,12 @@ namespace POS.Services.Service;
 public class BusinessService : IBusinessService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
 
-    public BusinessService(IUnitOfWork unitOfWork)
+    public BusinessService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -67,12 +69,14 @@ public class BusinessService : IBusinessService
     }
 
     /// <summary>
-    /// Updates an existing business.
+    /// Updates an existing business. Invalidates the feature gate cache because
+    /// BusinessTypeId / PlanTypeId changes shift the resolved matrix.
     /// </summary>
     public async Task<Business> UpdateAsync(Business business)
     {
         _unitOfWork.Business.Update(business);
         await _unitOfWork.SaveChangesAsync();
+        _featureGate.Invalidate(business.Id);
         return business;
     }
 
