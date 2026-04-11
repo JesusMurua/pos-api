@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using POS.Repository;
@@ -11,9 +12,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260411010006_AddFeatureGatingMatrix")]
+    partial class AddFeatureGatingMatrix
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -960,31 +963,6 @@ namespace POS.Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("PaymentStatusCatalogs");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanBusinessTypeFeatureOverride", b =>
-                {
-                    b.Property<int>("PlanTypeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("BusinessTypeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("FeatureId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.HasKey("PlanTypeId", "BusinessTypeId", "FeatureId");
-
-                    b.HasIndex("BusinessTypeId");
-
-                    b.HasIndex("FeatureId");
-
-                    b.HasIndex("PlanTypeId", "FeatureId");
-
-                    b.ToTable("PlanBusinessTypeFeatureOverrides");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanFeatureMatrix", b =>
@@ -3540,33 +3518,6 @@ namespace POS.Repository.Migrations
                     b.Navigation("BusinessTypeCatalog");
 
                     b.Navigation("Feature");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanBusinessTypeFeatureOverride", b =>
-                {
-                    b.HasOne("POS.Domain.Models.Catalogs.BusinessTypeCatalog", "BusinessTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("BusinessTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("POS.Domain.Models.Catalogs.FeatureCatalog", "Feature")
-                        .WithMany()
-                        .HasForeignKey("FeatureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("POS.Domain.Models.Catalogs.PlanTypeCatalog", "PlanTypeCatalog")
-                        .WithMany()
-                        .HasForeignKey("PlanTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BusinessTypeCatalog");
-
-                    b.Navigation("Feature");
-
-                    b.Navigation("PlanTypeCatalog");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanFeatureMatrix", b =>

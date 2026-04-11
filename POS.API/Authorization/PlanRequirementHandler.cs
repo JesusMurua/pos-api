@@ -5,6 +5,9 @@ namespace POS.API.Authorization;
 
 /// <summary>
 /// Authorization requirement: business must have at least the specified plan tier.
+/// Backs the legacy RequiresPlan_* policies used by controllers that still rely on
+/// AuthorizeAttribute-based plan gating. Phase 4 will migrate these to
+/// <see cref="POS.API.Filters.RequiresFeatureAttribute"/> and this file will be removed.
 /// </summary>
 public class PlanRequirement : IAuthorizationRequirement
 {
@@ -16,9 +19,6 @@ public class PlanRequirement : IAuthorizationRequirement
     }
 }
 
-/// <summary>
-/// Reads the "planType" claim from the JWT and compares against the required minimum.
-/// </summary>
 public class PlanRequirementHandler : AuthorizationHandler<PlanRequirement>
 {
     protected override Task HandleRequirementAsync(

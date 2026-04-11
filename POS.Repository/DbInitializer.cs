@@ -227,6 +227,8 @@ public static class DbInitializer
             );
             await context.SaveChangesAsync();
         }
+
+        await UpsertFeatureMatrixAsync(context);
     }
 
     /// <summary>
@@ -1012,6 +1014,365 @@ public static class DbInitializer
     #endregion
 
     #region Catalog Upsert Helpers
+
+    private static async Task UpsertFeatureMatrixAsync(ApplicationDbContext context)
+    {
+        // 1. Upsert FeatureCatalog rows — stable Ids come from FeatureKey enum values.
+        var desiredFeatures = new List<FeatureCatalog>
+        {
+            new() { Id = FeatureIds.CoreHardware,            Key = FeatureKey.CoreHardware,            Code = "CoreHardware",            Name = "Hardware local",                 Description = "Impresoras, escáneres, básculas y cajón de dinero locales",     IsQuantitative = false, SortOrder = 1 },
+
+            new() { Id = FeatureIds.MaxProducts,             Key = FeatureKey.MaxProducts,             Code = "MaxProducts",             Name = "Límite de productos",             Description = "Número máximo de productos permitidos",                          IsQuantitative = true,  ResourceLabel = "productos",        SortOrder = 10 },
+            new() { Id = FeatureIds.MaxUsers,                Key = FeatureKey.MaxUsers,                Code = "MaxUsers",                Name = "Límite de usuarios",               Description = "Número máximo de usuarios activos",                              IsQuantitative = true,  ResourceLabel = "usuarios",         SortOrder = 11 },
+            new() { Id = FeatureIds.MaxBranches,             Key = FeatureKey.MaxBranches,             Code = "MaxBranches",             Name = "Límite de sucursales",             Description = "Número máximo de sucursales operativas",                         IsQuantitative = true,  ResourceLabel = "sucursales",       SortOrder = 12 },
+            new() { Id = FeatureIds.MaxCashRegisters,        Key = FeatureKey.MaxCashRegisters,        Code = "MaxCashRegisters",        Name = "Límite de cajas",                  Description = "Número máximo de cajas registradoras abiertas",                  IsQuantitative = true,  ResourceLabel = "cajas",            SortOrder = 13 },
+
+            new() { Id = FeatureIds.CfdiInvoicing,           Key = FeatureKey.CfdiInvoicing,           Code = "CfdiInvoicing",           Name = "Facturación CFDI",                 Description = "Emisión de comprobantes fiscales digitales (México)",            IsQuantitative = false, SortOrder = 20 },
+
+            new() { Id = FeatureIds.KdsBasic,                Key = FeatureKey.KdsBasic,                Code = "KdsBasic",                Name = "KDS básico",                        Description = "Pantalla de cocina con auto-refresh (sin sockets)",              IsQuantitative = false, SortOrder = 30 },
+            new() { Id = FeatureIds.RealtimeKds,             Key = FeatureKey.RealtimeKds,             Code = "RealtimeKds",             Name = "KDS en tiempo real",               Description = "Pantalla de cocina vía WebSockets con eventos en vivo",          IsQuantitative = false, SortOrder = 31 },
+            new() { Id = FeatureIds.PrintedCommandaTickets,  Key = FeatureKey.PrintedCommandaTickets,  Code = "PrintedCommandaTickets",  Name = "Comandas impresas",                Description = "Impresión de comandas en impresora térmica",                     IsQuantitative = false, SortOrder = 32 },
+
+            new() { Id = FeatureIds.TableMap,                Key = FeatureKey.TableMap,                Code = "TableMap",                Name = "Mapa de mesas",                     Description = "Layout visual de mesas y asignación de órdenes",                 IsQuantitative = false, SortOrder = 40 },
+            new() { Id = FeatureIds.WaiterApp,               Key = FeatureKey.WaiterApp,               Code = "WaiterApp",               Name = "App de meseros",                    Description = "Aplicación móvil para toma de órdenes en mesa",                  IsQuantitative = false, SortOrder = 41 },
+            new() { Id = FeatureIds.SelfServiceKiosk,        Key = FeatureKey.SelfServiceKiosk,        Code = "SelfServiceKiosk",        Name = "Kiosco autoservicio",               Description = "Modo kiosco para que clientes ordenen sin cajero",               IsQuantitative = false, SortOrder = 42 },
+
+            new() { Id = FeatureIds.RecipeInventory,         Key = FeatureKey.RecipeInventory,         Code = "RecipeInventory",         Name = "Inventario con recetas",            Description = "Descuento de ingredientes por receta y control de mermas",       IsQuantitative = false, SortOrder = 50 },
+            new() { Id = FeatureIds.MultiWarehouseInventory, Key = FeatureKey.MultiWarehouseInventory, Code = "MultiWarehouseInventory", Name = "Inventario multi-bodega",           Description = "Control de inventario en múltiples bodegas",                     IsQuantitative = false, SortOrder = 51 },
+            new() { Id = FeatureIds.StockAlerts,             Key = FeatureKey.StockAlerts,             Code = "StockAlerts",             Name = "Alertas de stock",                  Description = "Notificaciones automáticas de stock bajo",                        IsQuantitative = false, SortOrder = 52 },
+
+            new() { Id = FeatureIds.StoreCredit,             Key = FeatureKey.StoreCredit,             Code = "StoreCredit",             Name = "Control de fiado / crédito",        Description = "Gestión de fiado a clientes con saldo y abonos",                 IsQuantitative = false, SortOrder = 60 },
+            new() { Id = FeatureIds.ComparativeReports,      Key = FeatureKey.ComparativeReports,      Code = "ComparativeReports",      Name = "Reportes comparativos",             Description = "Comparación de ventas entre periodos y sucursales",              IsQuantitative = false, SortOrder = 61 },
+
+            new() { Id = FeatureIds.LoyaltyCrm,              Key = FeatureKey.LoyaltyCrm,              Code = "LoyaltyCrm",              Name = "Lealtad y CRM",                     Description = "Puntos de lealtad y recompensas",                                IsQuantitative = false, SortOrder = 70 },
+            new() { Id = FeatureIds.CustomerDatabase,        Key = FeatureKey.CustomerDatabase,        Code = "CustomerDatabase",        Name = "Base de clientes",                  Description = "Historial y perfil básico del cliente",                           IsQuantitative = false, SortOrder = 71 },
+
+            new() { Id = FeatureIds.SimpleFolios,            Key = FeatureKey.SimpleFolios,            Code = "SimpleFolios",            Name = "Folios simples",                    Description = "Numeración secuencial de tickets",                               IsQuantitative = false, SortOrder = 80 },
+            new() { Id = FeatureIds.CustomFolios,            Key = FeatureKey.CustomFolios,            Code = "CustomFolios",            Name = "Folios personalizados",             Description = "Prefijos y formatos de folio configurables",                     IsQuantitative = false, SortOrder = 81 },
+            new() { Id = FeatureIds.AppointmentReminders,    Key = FeatureKey.AppointmentReminders,    Code = "AppointmentReminders",    Name = "Recordatorios de citas",            Description = "Envío automático de recordatorios (WhatsApp / SMS)",             IsQuantitative = false, SortOrder = 82 },
+
+            new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",                IsQuantitative = false, SortOrder = 90 },
+        };
+
+        var existingFeatures = await context.FeatureCatalogs.ToListAsync();
+        var existingByKey = existingFeatures.ToDictionary(f => f.Key);
+
+        foreach (var item in desiredFeatures)
+        {
+            if (existingByKey.TryGetValue(item.Key, out var row))
+            {
+                row.Code = item.Code;
+                row.Name = item.Name;
+                row.Description = item.Description;
+                row.IsQuantitative = item.IsQuantitative;
+                row.ResourceLabel = item.ResourceLabel;
+                row.SortOrder = item.SortOrder;
+            }
+            else
+            {
+                context.FeatureCatalogs.Add(item);
+            }
+        }
+
+        await context.SaveChangesAsync();
+
+        // 2. Plan × Feature matrix — declarative rules from .claude/business-rules-matrix.md.
+        //    (enabled, limit) per (plan, feature). Null limit = unlimited.
+        var planRules = new (int Plan, int Feature, bool Enabled, int? Limit)[]
+        {
+            // CoreHardware — free on every plan.
+            (PlanTypeIds.Free,       FeatureIds.CoreHardware, true, null),
+            (PlanTypeIds.Basic,      FeatureIds.CoreHardware, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.CoreHardware, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.CoreHardware, true, null),
+
+            // MaxProducts — Free baseline = 50; Retail giros override to 500 via BusinessTypeFeature.Limit.
+            (PlanTypeIds.Free,       FeatureIds.MaxProducts, true, 50),
+            (PlanTypeIds.Basic,      FeatureIds.MaxProducts, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.MaxProducts, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxProducts, true, null),
+
+            // MaxUsers — Free = 3 seats.
+            (PlanTypeIds.Free,       FeatureIds.MaxUsers, true, 3),
+            (PlanTypeIds.Basic,      FeatureIds.MaxUsers, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.MaxUsers, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxUsers, true, null),
+
+            // MaxBranches — only Enterprise (Food & Beverage only) unlocks multi-sucursal.
+            (PlanTypeIds.Free,       FeatureIds.MaxBranches, true, 1),
+            (PlanTypeIds.Basic,      FeatureIds.MaxBranches, true, 1),
+            (PlanTypeIds.Pro,        FeatureIds.MaxBranches, true, 1),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxBranches, true, null),
+
+            // MaxCashRegisters — Multi-Caja unlocks at Pro for applicable giros.
+            (PlanTypeIds.Free,       FeatureIds.MaxCashRegisters, true, 1),
+            (PlanTypeIds.Basic,      FeatureIds.MaxCashRegisters, true, 1),
+            (PlanTypeIds.Pro,        FeatureIds.MaxCashRegisters, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxCashRegisters, true, null),
+
+            // CFDI Invoicing — Basic+ for every applicable giro.
+            (PlanTypeIds.Free,       FeatureIds.CfdiInvoicing, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.CfdiInvoicing, true,  null),
+            (PlanTypeIds.Pro,        FeatureIds.CfdiInvoicing, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.CfdiInvoicing, true,  null),
+
+            // KDS Básico (auto-refresh) — Food & Beverage Basic tier.
+            (PlanTypeIds.Free,       FeatureIds.KdsBasic, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.KdsBasic, true,  null),
+            (PlanTypeIds.Pro,        FeatureIds.KdsBasic, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.KdsBasic, true,  null),
+
+            // Realtime KDS (sockets) — Pro+ across giros that support it.
+            (PlanTypeIds.Free,       FeatureIds.RealtimeKds, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.RealtimeKds, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.RealtimeKds, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.RealtimeKds, true,  null),
+
+            // Printed Commanda Tickets — always on for giros with a kitchen.
+            (PlanTypeIds.Free,       FeatureIds.PrintedCommandaTickets, true, null),
+            (PlanTypeIds.Basic,      FeatureIds.PrintedCommandaTickets, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.PrintedCommandaTickets, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.PrintedCommandaTickets, true, null),
+
+            // Table Map / Waiter App / Kiosk — Pro+ for applicable giros.
+            (PlanTypeIds.Free,       FeatureIds.TableMap, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.TableMap, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.TableMap, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.TableMap, true,  null),
+
+            (PlanTypeIds.Free,       FeatureIds.WaiterApp, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.WaiterApp, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.WaiterApp, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.WaiterApp, true,  null),
+
+            (PlanTypeIds.Free,       FeatureIds.SelfServiceKiosk, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.SelfServiceKiosk, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.SelfServiceKiosk, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.SelfServiceKiosk, true,  null),
+
+            // Recipe Inventory — Enterprise only (Food & Beverage).
+            (PlanTypeIds.Free,       FeatureIds.RecipeInventory, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.RecipeInventory, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.RecipeInventory, false, null),
+            (PlanTypeIds.Enterprise, FeatureIds.RecipeInventory, true,  null),
+
+            // Multi-Warehouse Inventory — Pro+ for Retail giros.
+            (PlanTypeIds.Free,       FeatureIds.MultiWarehouseInventory, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.MultiWarehouseInventory, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.MultiWarehouseInventory, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.MultiWarehouseInventory, true,  null),
+
+            // Stock Alerts — Pro+ for Retail giros.
+            (PlanTypeIds.Free,       FeatureIds.StockAlerts, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.StockAlerts, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.StockAlerts, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.StockAlerts, true,  null),
+
+            // Store Credit (fiado) — Basic+ for Retail giros.
+            (PlanTypeIds.Free,       FeatureIds.StoreCredit, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.StoreCredit, true,  null),
+            (PlanTypeIds.Pro,        FeatureIds.StoreCredit, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.StoreCredit, true,  null),
+
+            // Comparative Reports — Pro+ for Retail giros.
+            (PlanTypeIds.Free,       FeatureIds.ComparativeReports, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.ComparativeReports, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.ComparativeReports, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.ComparativeReports, true,  null),
+
+            // Loyalty / CRM — Pro+ for Quick Service giros.
+            (PlanTypeIds.Free,       FeatureIds.LoyaltyCrm, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.LoyaltyCrm, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.LoyaltyCrm, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.LoyaltyCrm, true,  null),
+
+            // Customer Database — Free baseline for Services giros.
+            (PlanTypeIds.Free,       FeatureIds.CustomerDatabase, true, null),
+            (PlanTypeIds.Basic,      FeatureIds.CustomerDatabase, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.CustomerDatabase, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.CustomerDatabase, true, null),
+
+            // Simple Folios — Free baseline for Services giros.
+            (PlanTypeIds.Free,       FeatureIds.SimpleFolios, true, null),
+            (PlanTypeIds.Basic,      FeatureIds.SimpleFolios, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.SimpleFolios, true, null),
+            (PlanTypeIds.Enterprise, FeatureIds.SimpleFolios, true, null),
+
+            // Custom Folios — Pro for Services giros.
+            (PlanTypeIds.Free,       FeatureIds.CustomFolios, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.CustomFolios, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.CustomFolios, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.CustomFolios, true,  null),
+
+            // Appointment Reminders — Pro for Services giros.
+            (PlanTypeIds.Free,       FeatureIds.AppointmentReminders, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.AppointmentReminders, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.AppointmentReminders, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.AppointmentReminders, true,  null),
+
+            // Public API — Enterprise only (Food & Beverage).
+            (PlanTypeIds.Free,       FeatureIds.PublicApi, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.PublicApi, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.PublicApi, false, null),
+            (PlanTypeIds.Enterprise, FeatureIds.PublicApi, true,  null),
+        };
+
+        var existingPlanRows = await context.PlanFeatureMatrices.ToListAsync();
+        var existingPlanByKey = existingPlanRows.ToDictionary(r => (r.PlanTypeId, r.FeatureId));
+
+        foreach (var (planId, featureId, enabled, limit) in planRules)
+        {
+            if (existingPlanByKey.TryGetValue((planId, featureId), out var row))
+            {
+                row.IsEnabled = enabled;
+                row.DefaultLimit = limit;
+            }
+            else
+            {
+                context.PlanFeatureMatrices.Add(new PlanFeatureMatrix
+                {
+                    PlanTypeId = planId,
+                    FeatureId = featureId,
+                    IsEnabled = enabled,
+                    DefaultLimit = limit
+                });
+            }
+        }
+
+        await context.SaveChangesAsync();
+
+        // 3. BusinessType × Feature applicability — the 2D matrix of which giros see which features.
+        //    Category buckets mirror .claude/business-rules-matrix.md sections 1.1–1.4.
+        var foodAndBeverage = new[] { BusinessTypeIds.Restaurant, BusinessTypeIds.Bar };
+        var quickService = new[] { BusinessTypeIds.Cafe, BusinessTypeIds.FoodTruck, BusinessTypeIds.Taqueria };
+        var retail = new[] { BusinessTypeIds.Retail, BusinessTypeIds.Abarrotes, BusinessTypeIds.Ferreteria, BusinessTypeIds.Papeleria, BusinessTypeIds.Farmacia, BusinessTypeIds.General };
+        var services = new[] { BusinessTypeIds.Servicios };
+        var allGiros = foodAndBeverage.Concat(quickService).Concat(retail).Concat(services).ToArray();
+
+        var desiredApplicability = new List<(int BusinessType, int Feature, int? Limit)>();
+
+        void AddAll(int[] giros, int featureId, int? limit = null)
+        {
+            foreach (var giro in giros)
+                desiredApplicability.Add((giro, featureId, limit));
+        }
+
+        // Universal: hardware, limits, CFDI and kitchen printing follow the plan matrix.
+        AddAll(allGiros, FeatureIds.CoreHardware);
+        AddAll(allGiros, FeatureIds.MaxProducts);
+        AddAll(allGiros, FeatureIds.MaxUsers);
+        AddAll(allGiros, FeatureIds.MaxBranches);
+        AddAll(allGiros, FeatureIds.MaxCashRegisters);
+        AddAll(allGiros, FeatureIds.CfdiInvoicing);
+
+        // Retail giros override Free MaxProducts = 50 up to 500.
+        foreach (var giro in retail)
+        {
+            var idx = desiredApplicability.FindIndex(x => x.BusinessType == giro && x.Feature == FeatureIds.MaxProducts);
+            if (idx >= 0)
+                desiredApplicability[idx] = (giro, FeatureIds.MaxProducts, 500);
+        }
+
+        // Food & Beverage specific
+        AddAll(foodAndBeverage, FeatureIds.KdsBasic);
+        AddAll(foodAndBeverage, FeatureIds.RealtimeKds);
+        AddAll(foodAndBeverage, FeatureIds.PrintedCommandaTickets);
+        AddAll(foodAndBeverage, FeatureIds.TableMap);
+        AddAll(foodAndBeverage, FeatureIds.WaiterApp);
+        AddAll(foodAndBeverage, FeatureIds.SelfServiceKiosk);
+        AddAll(foodAndBeverage, FeatureIds.RecipeInventory);
+        AddAll(foodAndBeverage, FeatureIds.PublicApi);
+
+        // Quick Service — shares KDS and kiosk with F&B, adds loyalty.
+        AddAll(quickService, FeatureIds.RealtimeKds);
+        AddAll(quickService, FeatureIds.PrintedCommandaTickets);
+        AddAll(quickService, FeatureIds.SelfServiceKiosk);
+        AddAll(quickService, FeatureIds.LoyaltyCrm);
+
+        // Retail
+        AddAll(retail, FeatureIds.StoreCredit);
+        AddAll(retail, FeatureIds.MultiWarehouseInventory);
+        AddAll(retail, FeatureIds.StockAlerts);
+        AddAll(retail, FeatureIds.ComparativeReports);
+
+        // Specialized Services
+        AddAll(services, FeatureIds.CustomerDatabase);
+        AddAll(services, FeatureIds.SimpleFolios);
+        AddAll(services, FeatureIds.CustomFolios);
+        AddAll(services, FeatureIds.AppointmentReminders);
+
+        var existingGiroRows = await context.BusinessTypeFeatures.ToListAsync();
+        var existingGiroByKey = existingGiroRows.ToDictionary(r => (r.BusinessTypeId, r.FeatureId));
+        var desiredKeys = desiredApplicability.Select(x => (x.BusinessType, x.Feature)).ToHashSet();
+
+        foreach (var (businessType, feature, limit) in desiredApplicability)
+        {
+            if (existingGiroByKey.TryGetValue((businessType, feature), out var row))
+            {
+                row.Limit = limit;
+            }
+            else
+            {
+                context.BusinessTypeFeatures.Add(new BusinessTypeFeature
+                {
+                    BusinessTypeId = businessType,
+                    FeatureId = feature,
+                    Limit = limit
+                });
+            }
+        }
+
+        // Drop rows that are no longer in the desired applicability set so the seed stays authoritative.
+        foreach (var row in existingGiroRows)
+        {
+            if (!desiredKeys.Contains((row.BusinessTypeId, row.FeatureId)))
+                context.BusinessTypeFeatures.Remove(row);
+        }
+
+        await context.SaveChangesAsync();
+
+        // 4. Plan × BusinessType × Feature overrides — exceptions where a specific
+        //    (plan, giro) cross needs to bypass the 2D resolution.
+        //    Quick Service Basic unlocks RealtimeKds per .claude/business-rules-matrix.md §1.2.
+        var desiredOverrides = new (int Plan, int BusinessType, int Feature, bool Enabled)[]
+        {
+            (PlanTypeIds.Basic, BusinessTypeIds.Cafe,      FeatureIds.RealtimeKds, true),
+            (PlanTypeIds.Basic, BusinessTypeIds.FoodTruck, FeatureIds.RealtimeKds, true),
+        };
+
+        var existingOverrides = await context.PlanBusinessTypeFeatureOverrides.ToListAsync();
+        var existingOverrideByKey = existingOverrides
+            .ToDictionary(o => (o.PlanTypeId, o.BusinessTypeId, o.FeatureId));
+        var desiredOverrideKeys = desiredOverrides
+            .Select(x => (x.Plan, x.BusinessType, x.Feature))
+            .ToHashSet();
+
+        foreach (var (planId, businessTypeId, featureId, enabled) in desiredOverrides)
+        {
+            if (existingOverrideByKey.TryGetValue((planId, businessTypeId, featureId), out var row))
+            {
+                row.IsEnabled = enabled;
+            }
+            else
+            {
+                context.PlanBusinessTypeFeatureOverrides.Add(new PlanBusinessTypeFeatureOverride
+                {
+                    PlanTypeId = planId,
+                    BusinessTypeId = businessTypeId,
+                    FeatureId = featureId,
+                    IsEnabled = enabled
+                });
+            }
+        }
+
+        foreach (var row in existingOverrides)
+        {
+            if (!desiredOverrideKeys.Contains((row.PlanTypeId, row.BusinessTypeId, row.FeatureId)))
+                context.PlanBusinessTypeFeatureOverrides.Remove(row);
+        }
+
+        await context.SaveChangesAsync();
+    }
 
     private static async Task UpsertBusinessTypeCatalogsAsync(ApplicationDbContext context)
     {

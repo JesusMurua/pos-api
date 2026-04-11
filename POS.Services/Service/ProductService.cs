@@ -1,5 +1,5 @@
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
-using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -9,10 +9,12 @@ namespace POS.Services.Service;
 public class ProductService : IProductService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
 
-    public ProductService(IUnitOfWork unitOfWork)
+    public ProductService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -174,21 +176,16 @@ public class ProductService : IProductService
     #region Private Helper Methods
 
     /// <summary>
-    /// Throws PlanLimitExceededException if the business is on the Free plan
-    /// and already has the maximum allowed products across all branches.
+    /// Delegates quantitative enforcement to the feature gate service.
+    /// Soft enforcement: product counts are scoped to the branch that owns the new product.
     /// </summary>
     private async Task EnforcePlanProductLimitAsync(int branchId)
     {
         var branch = await _unitOfWork.Branches.GetByIdAsync(branchId);
         if (branch == null) return;
 
-        var business = await _unitOfWork.Business.GetByIdAsync(branch.BusinessId);
-        if (business == null || business.PlanTypeId != PlanTypeIds.Free)
-            return;
-
         var products = await _unitOfWork.Products.GetAsync(p => p.BranchId == branchId);
-        if (products.Count() >= PlanLimits.FreeMaxProducts)
-            throw new PlanLimitExceededException("productos", PlanLimits.FreeMaxProducts, "Free");
+        await _featureGate.EnforceAsync(branch.BusinessId, FeatureKey.MaxProducts, products.Count());
     }
 
     private async Task ValidateBarcodeUniqueAsync(int branchId, string? barcode, int? excludeProductId)

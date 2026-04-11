@@ -1,3 +1,4 @@
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
@@ -12,13 +13,15 @@ namespace POS.Services.Service;
 public class UserService : IUserService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
 
     private static readonly int[] PinRoleIds = { UserRoleIds.Cashier, UserRoleIds.Kitchen, UserRoleIds.Waiter, UserRoleIds.Kiosk };
     private static readonly int[] EmailRoleIds = { UserRoleIds.Owner, UserRoleIds.Manager };
 
-    public UserService(IUnitOfWork unitOfWork)
+    public UserService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -232,18 +235,13 @@ public class UserService : IUserService
     #region Private Helper Methods
 
     /// <summary>
-    /// Throws PlanLimitExceededException if the business is on the Free plan
-    /// and already has the maximum allowed users.
+    /// Delegates quantitative enforcement to the feature gate service.
+    /// Soft enforcement: blocks new POSTs when usage has reached the MaxUsers cap.
     /// </summary>
     private async Task EnforcePlanUserLimitAsync(int businessId)
     {
-        var business = await _unitOfWork.Business.GetByIdAsync(businessId);
-        if (business == null || business.PlanTypeId != PlanTypeIds.Free)
-            return;
-
         var users = await _unitOfWork.Users.GetAsync(u => u.BusinessId == businessId);
-        if (users.Count() >= PlanLimits.FreeMaxUsers)
-            throw new PlanLimitExceededException("usuarios", PlanLimits.FreeMaxUsers, "Free");
+        await _featureGate.EnforceAsync(businessId, FeatureKey.MaxUsers, users.Count());
     }
 
     /// <summary>

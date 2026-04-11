@@ -110,6 +110,12 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderItemTax> OrderItemTaxes { get; set; } = null!;
     public DbSet<BusinessGiro> BusinessGiros { get; set; } = null!;
 
+    // Feature gating matrix
+    public DbSet<FeatureCatalog> FeatureCatalogs { get; set; } = null!;
+    public DbSet<PlanFeatureMatrix> PlanFeatureMatrices { get; set; } = null!;
+    public DbSet<BusinessTypeFeature> BusinessTypeFeatures { get; set; } = null!;
+    public DbSet<PlanBusinessTypeFeatureOverride> PlanBusinessTypeFeatureOverrides { get; set; } = null!;
+
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
     public DbSet<BusinessTypeCatalog> BusinessTypeCatalogs { get; set; } = null!;
@@ -982,6 +988,70 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<PlanTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<BusinessTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+
+        modelBuilder.Entity<FeatureCatalog>(entity =>
+        {
+            entity.HasIndex(f => f.Code).IsUnique();
+            entity.HasIndex(f => f.Key).IsUnique();
+            entity.Property(f => f.Key).HasConversion<int>();
+        });
+
+        modelBuilder.Entity<PlanFeatureMatrix>(entity =>
+        {
+            entity.HasKey(m => new { m.PlanTypeId, m.FeatureId });
+
+            entity.HasOne(m => m.PlanTypeCatalog)
+                .WithMany()
+                .HasForeignKey(m => m.PlanTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.Feature)
+                .WithMany()
+                .HasForeignKey(m => m.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(m => m.FeatureId);
+        });
+
+        modelBuilder.Entity<BusinessTypeFeature>(entity =>
+        {
+            entity.HasKey(b => new { b.BusinessTypeId, b.FeatureId });
+
+            entity.HasOne(b => b.BusinessTypeCatalog)
+                .WithMany()
+                .HasForeignKey(b => b.BusinessTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.Feature)
+                .WithMany()
+                .HasForeignKey(b => b.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(b => b.FeatureId);
+        });
+
+        modelBuilder.Entity<PlanBusinessTypeFeatureOverride>(entity =>
+        {
+            entity.HasKey(o => new { o.PlanTypeId, o.BusinessTypeId, o.FeatureId });
+
+            entity.HasOne(o => o.PlanTypeCatalog)
+                .WithMany()
+                .HasForeignKey(o => o.PlanTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(o => o.BusinessTypeCatalog)
+                .WithMany()
+                .HasForeignKey(o => o.BusinessTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(o => o.Feature)
+                .WithMany()
+                .HasForeignKey(o => o.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(o => new { o.PlanTypeId, o.FeatureId });
+        });
+
         modelBuilder.Entity<ZoneTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<UserRoleCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<PaymentMethodCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
