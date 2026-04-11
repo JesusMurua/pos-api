@@ -388,6 +388,38 @@ public class AuthService : IAuthService
         return await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
     }
 
+    public string GenerateDeviceToken(Device device, Business business, IReadOnlyList<string> features)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var featuresJson = JsonSerializer.Serialize(features);
+
+        // Device tokens intentionally omit userId/roleId so that infrastructure screens
+        // cannot impersonate human operators on HTTP endpoints that enforce role checks.
+        var claims = new List<Claim>
+        {
+            new("type", "device"),
+            new("deviceId", device.Id.ToString()),
+            new("businessId", business.Id.ToString()),
+            new("branchId", device.BranchId.ToString()),
+            new("mode", device.Mode),
+            new("planType", PlanTypeIds.ToCode(business.PlanTypeId)),
+            new("businessType", BusinessTypeIds.ToCode(business.BusinessTypeId)),
+            new("features", featuresJson)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _jwtSettings.Issuer,
+            audience: _jwtSettings.Audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddYears(10),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     private string GenerateToken(
         User user,
         Business business,

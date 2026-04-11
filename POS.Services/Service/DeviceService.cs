@@ -12,12 +12,17 @@ public class DeviceService : IDeviceService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFeatureGateService _featureGate;
+    private readonly IAuthService _authService;
     private static readonly Random _random = new();
 
-    public DeviceService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
+    public DeviceService(
+        IUnitOfWork unitOfWork,
+        IFeatureGateService featureGate,
+        IAuthService authService)
     {
         _unitOfWork = unitOfWork;
         _featureGate = featureGate;
+        _authService = authService;
     }
 
     #region Public API Methods
@@ -161,6 +166,7 @@ public class DeviceService : IDeviceService
 
         var existing = await _unitOfWork.Devices.GetByDeviceUuidAsync(request.DeviceUuid);
 
+        Device device;
         if (existing != null)
         {
             existing.BranchId = request.BranchId;
@@ -169,24 +175,26 @@ public class DeviceService : IDeviceService
             existing.IsActive = true;
             _unitOfWork.Devices.Update(existing);
             await _unitOfWork.SaveChangesAsync();
+            device = existing;
+        }
+        else
+        {
+            device = new Device
+            {
+                BranchId = request.BranchId,
+                DeviceUuid = request.DeviceUuid,
+                Mode = normalizedMode,
+                Name = request.Name,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
 
-            return MapToResponse(existing);
+            await _unitOfWork.Devices.AddAsync(device);
+            await _unitOfWork.SaveChangesAsync();
         }
 
-        var device = new Device
-        {
-            BranchId = request.BranchId,
-            DeviceUuid = request.DeviceUuid,
-            Mode = normalizedMode,
-            Name = request.Name,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _unitOfWork.Devices.AddAsync(device);
-        await _unitOfWork.SaveChangesAsync();
-
-        return MapToResponse(device);
+        var deviceToken = await IssueDeviceTokenAsync(device, branch.BusinessId);
+        return MapToResponse(device, deviceToken);
     }
 
     /// <summary>
@@ -216,7 +224,7 @@ public class DeviceService : IDeviceService
 
     #region Private Helpers
 
-    private static DeviceResponse MapToResponse(Device device)
+    private static DeviceResponse MapToResponse(Device device, string? deviceToken = null)
     {
         return new DeviceResponse
         {
@@ -227,8 +235,23 @@ public class DeviceService : IDeviceService
             IsActive = device.IsActive,
             BranchId = device.BranchId,
             LastSeenAt = device.LastSeenAt,
-            CreatedAt = device.CreatedAt
+            CreatedAt = device.CreatedAt,
+            DeviceToken = deviceToken
         };
+    }
+
+    /// <summary>
+    /// Resolves the business and the enabled feature set and returns a long-lived
+    /// JWT representing the device. Called from registration flows so the device
+    /// can authenticate against HTTP and SignalR without a human session.
+    /// </summary>
+    private async Task<string?> IssueDeviceTokenAsync(Device device, int businessId)
+    {
+        var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+        if (business == null) return null;
+
+        var features = await _featureGate.GetEnabledFeaturesAsync(businessId);
+        return _authService.GenerateDeviceToken(device, business, features);
     }
 
     /// <summary>

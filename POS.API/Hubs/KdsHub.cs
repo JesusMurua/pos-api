@@ -32,8 +32,9 @@ public class KdsHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        // BranchId is taken from the JWT claim — never from the client —
-        // so a compromised device can only subscribe to its own branch.
+        // Accepts both human user JWTs and long-lived device JWTs (type=device).
+        // Only tenant-scoped claims are required; NameIdentifier/roleId are intentionally
+        // not inspected so KDS/kiosk hardware can authenticate without a human session.
         var branchClaim = Context.User?.FindFirst("branchId")?.Value;
         if (!int.TryParse(branchClaim, out var branchId))
         {

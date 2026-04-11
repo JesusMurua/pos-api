@@ -1,3 +1,5 @@
+using POS.Domain.Models;
+
 namespace POS.Services.IService;
 
 /// <summary>
@@ -27,6 +29,15 @@ public interface IAuthService
     /// Returns JWT token so user can immediately enter the app.
     /// </summary>
     Task<AuthResponse> RegisterAsync(RegisterRequest request);
+
+    /// <summary>
+    /// Issues a long-lived JWT that represents a physical device (KDS screen, kiosk)
+    /// rather than a human user. The token carries <c>businessId</c>, <c>branchId</c>,
+    /// <c>deviceId</c>, a <c>type=device</c> discriminator and the resolved feature
+    /// matrix. It has no <c>userId</c> / <c>roleId</c> and its lifetime is measured
+    /// in years so that infrastructure hardware does not require human re-auth.
+    /// </summary>
+    string GenerateDeviceToken(Device device, Business business, IReadOnlyList<string> features);
 }
 
 /// <summary>
