@@ -53,7 +53,12 @@ public class ProductRequest
 
     public List<ProductSizeRequest> Sizes { get; set; } = new();
 
-    public List<ProductExtraRequest> Extras { get; set; } = new();
+    /// <summary>
+    /// Hierarchical modifier groups. Each group defines its own
+    /// selection rules and owns its extras; the server no longer
+    /// accepts a flat extras list.
+    /// </summary>
+    public List<ProductModifierGroupRequest> ModifierGroups { get; set; } = new();
 }
 
 /// <summary>
@@ -69,8 +74,29 @@ public class ProductSizeRequest
 }
 
 /// <summary>
-/// Extra option to attach to a product during create/update.
-/// Remains a flat list until the modifier-group refactor lands.
+/// Modifier group payload. The backend does not trust the client-provided
+/// Id and treats every update as a wholesale replacement of the product's
+/// groups, so Id is intentionally absent here.
+/// </summary>
+public class ProductModifierGroupRequest
+{
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = null!;
+
+    public int SortOrder { get; set; }
+
+    public bool IsRequired { get; set; }
+
+    public int MinSelectable { get; set; }
+
+    public int MaxSelectable { get; set; }
+
+    public List<ProductExtraRequest> Extras { get; set; } = new();
+}
+
+/// <summary>
+/// Extra option to attach to a modifier group during create/update.
 /// </summary>
 public class ProductExtraRequest
 {
@@ -79,4 +105,6 @@ public class ProductExtraRequest
     public string Label { get; set; } = null!;
 
     public int PriceCents { get; set; }
+
+    public int SortOrder { get; set; }
 }

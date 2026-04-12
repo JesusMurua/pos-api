@@ -83,14 +83,14 @@ public class ProductService : IProductService
             });
         }
 
-        // Until the frontend sends grouped payloads, every update collapses
-        // the existing group structure and rebuilds a single default group
-        // from the flat request. Cascade delete cleans up orphaned extras.
+        // Wholesale replacement: clear the existing group tree and rebuild
+        // it from the request. Cascade delete cleans up orphaned extras so
+        // we don't have to chase the old rows by hand.
         existing.ModifierGroups ??= new List<ProductModifierGroup>();
         existing.ModifierGroups.Clear();
-        foreach (var group in ProductMapping.BuildDefaultGroups(request.Extras))
+        foreach (var groupRequest in request.ModifierGroups)
         {
-            existing.ModifierGroups.Add(group);
+            existing.ModifierGroups.Add(groupRequest.ToEntity());
         }
 
         _unitOfWork.Products.Update(existing);

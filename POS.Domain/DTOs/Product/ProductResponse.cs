@@ -46,7 +46,12 @@ public class ProductResponse
 
     public List<ProductSizeResponse> Sizes { get; set; } = new();
 
-    public List<ProductExtraResponse> Extras { get; set; } = new();
+    /// <summary>
+    /// Hierarchical modifier groups attached to this product. Each group
+    /// carries its own selection rules (min/max/required) and owns a list
+    /// of <see cref="ProductExtraResponse"/> items.
+    /// </summary>
+    public List<ProductModifierGroupResponse> ModifierGroups { get; set; } = new();
 
     public List<ProductImageResponse> Images { get; set; } = new();
 }
@@ -64,9 +69,29 @@ public class ProductSizeResponse
 }
 
 /// <summary>
-/// Flat extra option attached to a product. Will become part of a
-/// modifier group in a subsequent phase; currently exposed as a flat list
-/// to preserve the existing frontend contract.
+/// Modifier group owned by a product. Groups are the unit of selection
+/// logic — "pick 1 protein", "up to 3 sauces" — and wrap a list of
+/// individual extras.
+/// </summary>
+public class ProductModifierGroupResponse
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = null!;
+
+    public int SortOrder { get; set; }
+
+    public bool IsRequired { get; set; }
+
+    public int MinSelectable { get; set; }
+
+    public int MaxSelectable { get; set; }
+
+    public List<ProductExtraResponse> Extras { get; set; } = new();
+}
+
+/// <summary>
+/// Single selectable option inside a <see cref="ProductModifierGroupResponse"/>.
 /// </summary>
 public class ProductExtraResponse
 {
@@ -75,6 +100,8 @@ public class ProductExtraResponse
     public string Label { get; set; } = null!;
 
     public int PriceCents { get; set; }
+
+    public int SortOrder { get; set; }
 }
 
 /// <summary>
