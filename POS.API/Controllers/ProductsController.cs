@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.DTOs.Product;
 using POS.Domain.Models;
 using POS.Services.IService;
 
@@ -36,7 +37,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the list of active products.</response>
     [HttpGet]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
-    [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<ProductResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
         var products = await _productService.GetAllActiveAsync(BranchId);
@@ -51,7 +52,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the list of products.</response>
     [HttpGet("public")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<Product>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<ProductResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllPublic([FromQuery] int branchId)
     {
         var products = await _productService.GetAllActiveAsync(branchId);
@@ -67,7 +68,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If no product matches the barcode.</response>
     [HttpGet("by-barcode/{code}")]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByBarcode(string code)
     {
@@ -87,7 +88,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If no product matches the barcode.</response>
     [HttpGet("public/by-barcode/{code}")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByBarcodePublic(string code, [FromQuery] int branchId)
     {
@@ -106,7 +107,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If the product is not found.</response>
     [HttpGet("{id}")]
     [Authorize(Roles = "Owner")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
     {
@@ -117,19 +118,19 @@ public class ProductsController : BaseApiController
     /// <summary>
     /// Creates a new product.
     /// </summary>
-    /// <param name="product">The product data to create.</param>
+    /// <param name="request">The product data to create.</param>
     /// <returns>The created product.</returns>
     /// <response code="201">Returns the created product.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPost]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] Product product)
+    public async Task<IActionResult> Create([FromBody] ProductRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var created = await _productService.CreateAsync(product);
+        var created = await _productService.CreateAsync(request);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -137,21 +138,21 @@ public class ProductsController : BaseApiController
     /// Updates an existing product.
     /// </summary>
     /// <param name="id">The product identifier.</param>
-    /// <param name="product">The updated product data.</param>
+    /// <param name="request">The updated product data.</param>
     /// <returns>The updated product.</returns>
     /// <response code="200">Returns the updated product.</response>
     /// <response code="404">If the product is not found.</response>
     /// <response code="400">If the product data is invalid.</response>
     [HttpPut("{id}")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(int id, [FromBody] Product product)
+    public async Task<IActionResult> Update(int id, [FromBody] ProductRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var updated = await _productService.UpdateAsync(id, product);
+        var updated = await _productService.UpdateAsync(id, request);
         return Ok(updated);
     }
 
@@ -164,7 +165,7 @@ public class ProductsController : BaseApiController
     /// <response code="404">If the product is not found.</response>
     [HttpPatch("{id}/toggle")]
     [Authorize(Roles = "Owner")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Toggle(int id)
     {
@@ -183,43 +184,13 @@ public class ProductsController : BaseApiController
     /// <response code="404">If the product is not found.</response>
     [HttpPost("{id}/stock")]
     [Authorize(Roles = "Owner")]
-    [ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStock(int id, [FromBody] UpdateStockRequest request)
     {
-        var product = await _productService.GetByIdAsync(id);
-        if (product == null)
-            return NotFound(new { message = $"Product with id {id} not found" });
-
-        if (!product.TrackStock)
-            return BadRequest(new { message = "Product does not have stock tracking enabled" });
-
-        var validTypes = new[] { "in", "out", "adjustment" };
-        if (!validTypes.Contains(request.Type?.ToLowerInvariant()))
-            return BadRequest(new { message = "Type must be 'in', 'out', or 'adjustment'" });
-
-        switch (request.Type!.ToLowerInvariant())
-        {
-            case "in":
-                product.CurrentStock += request.Quantity;
-                break;
-            case "out":
-                product.CurrentStock -= request.Quantity;
-                if (product.CurrentStock < 0) product.CurrentStock = 0;
-                break;
-            case "adjustment":
-                product.CurrentStock = request.Quantity;
-                break;
-        }
-
-        if (product.CurrentStock > product.LowStockThreshold)
-            product.IsAvailable = true;
-        if (product.CurrentStock <= 0)
-            product.IsAvailable = false;
-
-        await _productService.UpdateAsync(id, product);
-        return Ok(product);
+        var updated = await _productService.UpdateStockAsync(id, request.Type, request.Quantity);
+        return Ok(updated);
     }
 
     /// <summary>

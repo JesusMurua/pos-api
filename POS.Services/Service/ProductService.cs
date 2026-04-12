@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Product;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -22,75 +23,58 @@ public class ProductService : IProductService
     /// <summary>
     /// Retrieves all active products for a branch, grouped by category with sizes and extras.
     /// </summary>
-    public async Task<IEnumerable<Product>> GetAllActiveAsync(int branchId)
+    public async Task<IEnumerable<ProductResponse>> GetAllActiveAsync(int branchId)
     {
         var categories = await _unitOfWork.Categories.GetActiveBranchCategoriesAsync(branchId);
-        var products = new List<Product>();
+        var responses = new List<ProductResponse>();
 
         foreach (var category in categories)
         {
             var categoryProducts = await _unitOfWork.Products.GetActiveWithExtrasAsync(category.Id);
-            products.AddRange(categoryProducts);
+            responses.AddRange(categoryProducts.Select(p => p.ToResponse()));
         }
 
-        return products;
+        return responses;
     }
 
     /// <summary>
     /// Retrieves a product by its identifier with sizes and extras.
     /// </summary>
-    public async Task<Product> GetByIdAsync(int id)
+    public async Task<ProductResponse> GetByIdAsync(int id)
     {
-        var results = await _unitOfWork.Products.GetAsync(
-            p => p.Id == id,
-            "Sizes,Extras");
-
-        var product = results.FirstOrDefault();
-
-        if (product == null)
-            throw new NotFoundException($"Product with id {id} not found");
-
-        return product;
+        var product = await LoadWithRelationsOrThrowAsync(id);
+        return product.ToResponse();
     }
 
     /// <summary>
     /// Creates a new product.
     /// </summary>
-    public async Task<Product> CreateAsync(Product product)
+    public async Task<ProductResponse> CreateAsync(ProductRequest request)
     {
-        await EnforcePlanProductLimitAsync(product.BranchId);
-        await ValidateBarcodeUniqueAsync(product.BranchId, product.Barcode, null);
-        await _unitOfWork.Products.AddAsync(product);
+        await EnforcePlanProductLimitAsync(request.BranchId);
+        await ValidateBarcodeUniqueAsync(request.BranchId, request.Barcode, null);
+
+        var entity = request.ToEntity();
+        await _unitOfWork.Products.AddAsync(entity);
         await _unitOfWork.SaveChangesAsync();
-        return product;
+
+        return entity.ToResponse();
     }
 
     /// <summary>
     /// Updates an existing product.
     /// </summary>
-    public async Task<Product> UpdateAsync(int id, Product product)
+    public async Task<ProductResponse> UpdateAsync(int id, ProductRequest request)
     {
-        var existing = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);
+        var existing = await LoadWithRelationsOrThrowAsync(id);
 
-        if (existing == null)
-            throw new NotFoundException($"Product with id {id} not found");
+        await ValidateBarcodeUniqueAsync(existing.BranchId, request.Barcode, id);
 
-        await ValidateBarcodeUniqueAsync(existing.BranchId, product.Barcode, id);
+        request.ApplyTo(existing);
 
-        existing.Name = product.Name;
-        existing.PriceCents = product.PriceCents;
-        existing.ImageUrl = product.ImageUrl;
-        existing.Description = product.Description;
-        existing.Barcode = product.Barcode;
-        existing.IsAvailable = product.IsAvailable;
-        existing.IsPopular = product.IsPopular;
-        existing.CategoryId = product.CategoryId;
-        existing.TrackStock = product.TrackStock;
-        existing.CurrentStock = product.CurrentStock;
-        existing.LowStockThreshold = product.LowStockThreshold;
-
+        existing.Sizes ??= new List<ProductSize>();
         existing.Sizes.Clear();
-        foreach (var size in product.Sizes ?? [])
+        foreach (var size in request.Sizes)
         {
             existing.Sizes.Add(new ProductSize
             {
@@ -99,8 +83,9 @@ public class ProductService : IProductService
             });
         }
 
+        existing.Extras ??= new List<ProductExtra>();
         existing.Extras.Clear();
-        foreach (var extra in product.Extras ?? [])
+        foreach (var extra in request.Extras)
         {
             existing.Extras.Add(new ProductExtra
             {
@@ -111,13 +96,14 @@ public class ProductService : IProductService
 
         _unitOfWork.Products.Update(existing);
         await _unitOfWork.SaveChangesAsync();
-        return existing;
+
+        return existing.ToResponse();
     }
 
     /// <summary>
     /// Toggles the active/inactive status of a product.
     /// </summary>
-    public async Task<Product> ToggleActiveAsync(int id)
+    public async Task<ProductResponse> ToggleActiveAsync(int id)
     {
         var product = await _unitOfWork.Products.GetByIdAsync(id);
 
@@ -127,7 +113,48 @@ public class ProductService : IProductService
         product.IsAvailable = !product.IsAvailable;
         _unitOfWork.Products.Update(product);
         await _unitOfWork.SaveChangesAsync();
-        return product;
+
+        return product.ToResponse();
+    }
+
+    /// <summary>
+    /// Applies a stock movement to a tracked product. Mirrors the legacy
+    /// controller logic: "in" adds, "out" subtracts (floored at 0),
+    /// "adjustment" sets the exact value. IsAvailable follows threshold.
+    /// </summary>
+    public async Task<ProductResponse> UpdateStockAsync(int id, string type, decimal quantity)
+    {
+        var product = await LoadWithRelationsOrThrowAsync(id);
+
+        if (!product.TrackStock)
+            throw new ValidationException("Product does not have stock tracking enabled");
+
+        var normalized = type?.ToLowerInvariant();
+        switch (normalized)
+        {
+            case "in":
+                product.CurrentStock += quantity;
+                break;
+            case "out":
+                product.CurrentStock -= quantity;
+                if (product.CurrentStock < 0) product.CurrentStock = 0;
+                break;
+            case "adjustment":
+                product.CurrentStock = quantity;
+                break;
+            default:
+                throw new ValidationException("Type must be 'in', 'out', or 'adjustment'");
+        }
+
+        if (product.CurrentStock > product.LowStockThreshold)
+            product.IsAvailable = true;
+        if (product.CurrentStock <= 0)
+            product.IsAvailable = false;
+
+        _unitOfWork.Products.Update(product);
+        await _unitOfWork.SaveChangesAsync();
+
+        return product.ToResponse();
     }
 
     public async Task AddImageAsync(int productId, ProductImage image)
@@ -166,14 +193,30 @@ public class ProductService : IProductService
     /// <summary>
     /// Gets an available product by barcode within a branch.
     /// </summary>
-    public async Task<Product?> GetByBarcodeAsync(int branchId, string barcode)
+    public async Task<ProductResponse?> GetByBarcodeAsync(int branchId, string barcode)
     {
-        return await _unitOfWork.Products.GetByBarcodeAsync(branchId, barcode);
+        var product = await _unitOfWork.Products.GetByBarcodeAsync(branchId, barcode);
+        return product?.ToResponse();
     }
 
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Loads a product with its Sizes/Extras/Images populated or throws
+    /// <see cref="NotFoundException"/>. Centralised so all entity-side
+    /// reads in the service go through the same include list.
+    /// </summary>
+    private async Task<Product> LoadWithRelationsOrThrowAsync(int id)
+    {
+        var product = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);
+
+        if (product == null)
+            throw new NotFoundException($"Product with id {id} not found");
+
+        return product;
+    }
 
     /// <summary>
     /// Delegates quantitative enforcement to the feature gate service.
