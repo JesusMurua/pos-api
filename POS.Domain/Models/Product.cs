@@ -74,7 +74,7 @@ public partial class Product
 
     public virtual ICollection<ProductSize>? Sizes { get; set; }
 
-    public virtual ICollection<ProductExtra>? Extras { get; set; }
+    public virtual ICollection<ProductModifierGroup>? ModifierGroups { get; set; }
 
     public virtual ICollection<ProductImage>? Images { get; set; }
 

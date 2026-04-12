@@ -68,6 +68,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Category> Categories { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<ProductSize> ProductSizes { get; set; } = null!;
+    public DbSet<ProductModifierGroup> ProductModifierGroups { get; set; } = null!;
     public DbSet<ProductExtra> ProductExtras { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderItem> OrderItems { get; set; } = null!;
@@ -304,9 +305,9 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(s => s.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasMany(p => p.Extras)
-                .WithOne(e => e.Product)
-                .HasForeignKey(e => e.ProductId)
+            entity.HasMany(p => p.ModifierGroups)
+                .WithOne(g => g.Product)
+                .HasForeignKey(g => g.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasMany(p => p.Images)
@@ -333,6 +334,29 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
+        });
+
+        modelBuilder.Entity<ProductModifierGroup>(entity =>
+        {
+            entity.Property(g => g.Name).HasMaxLength(100).IsRequired();
+            entity.Property(g => g.SortOrder).HasDefaultValue(0);
+            entity.Property(g => g.IsRequired).HasDefaultValue(false);
+            entity.Property(g => g.MinSelectable).HasDefaultValue(0);
+            entity.Property(g => g.MaxSelectable).HasDefaultValue(0);
+
+            entity.HasMany(g => g.Extras)
+                .WithOne(e => e.ProductModifierGroup)
+                .HasForeignKey(e => e.ProductModifierGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(g => g.ProductId);
+        });
+
+        modelBuilder.Entity<ProductExtra>(entity =>
+        {
+            entity.Property(e => e.Label).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.HasIndex(e => e.ProductModifierGroupId);
         });
 
         #endregion

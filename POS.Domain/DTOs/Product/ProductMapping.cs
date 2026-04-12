@@ -12,8 +12,34 @@ namespace POS.Domain.DTOs.Product;
 /// </summary>
 public static class ProductMapping
 {
+    /// <summary>
+    /// Default name used when wrapping a flat list of extras into a single
+    /// modifier group. Kept in sync with the migration backfill so the
+    /// default group name is identical whether it was created by the
+    /// migration or by a runtime Create/Update call.
+    /// </summary>
+    public const string DefaultGroupName = "Modificadores";
+
     public static ProductResponse ToResponse(this ProductEntity entity)
     {
+        // Flatten every group's extras into the legacy flat shape so the
+        // Angular frontend keeps receiving the same contract it does today.
+        // Ordering follows group SortOrder first, then extra SortOrder, so
+        // the flattened list remains deterministic across requests.
+        var flatExtras = (entity.ModifierGroups ?? Enumerable.Empty<ProductModifierGroup>())
+            .OrderBy(g => g.SortOrder)
+            .ThenBy(g => g.Id)
+            .SelectMany(g => (g.Extras ?? Enumerable.Empty<ProductExtra>())
+                .OrderBy(e => e.SortOrder)
+                .ThenBy(e => e.Id))
+            .Select(e => new ProductExtraResponse
+            {
+                Id = e.Id,
+                Label = e.Label,
+                PriceCents = e.PriceCents
+            })
+            .ToList();
+
         return new ProductResponse
         {
             Id = entity.Id,
@@ -40,12 +66,7 @@ public static class ProductMapping
                 Label = s.Label,
                 ExtraPriceCents = s.ExtraPriceCents
             }).ToList() ?? new(),
-            Extras = entity.Extras?.Select(e => new ProductExtraResponse
-            {
-                Id = e.Id,
-                Label = e.Label,
-                PriceCents = e.PriceCents
-            }).ToList() ?? new(),
+            Extras = flatExtras,
             Images = entity.Images?.Select(i => new ProductImageResponse
             {
                 Id = i.Id,
@@ -86,12 +107,38 @@ public static class ProductMapping
                 Label = s.Label,
                 ExtraPriceCents = s.ExtraPriceCents
             }).ToList(),
-            Extras = request.Extras.Select(e => new ProductExtra
+            ModifierGroups = BuildDefaultGroups(request.Extras)
+        };
+    }
+
+    /// <summary>
+    /// Wraps a flat list of extras into a single default modifier group.
+    /// The request DTO is still flat to preserve the frontend contract;
+    /// once the UI sends grouped payloads, this method can be retired.
+    /// Returns an empty collection when the request has no extras, so the
+    /// product is simply saved without any modifier group.
+    /// </summary>
+    public static List<ProductModifierGroup> BuildDefaultGroups(IEnumerable<ProductExtraRequest> extras)
+    {
+        var list = extras?.ToList() ?? new List<ProductExtraRequest>();
+        if (list.Count == 0) return new List<ProductModifierGroup>();
+
+        var group = new ProductModifierGroup
+        {
+            Name = DefaultGroupName,
+            SortOrder = 0,
+            IsRequired = false,
+            MinSelectable = 0,
+            MaxSelectable = 99,
+            Extras = list.Select((e, index) => new ProductExtra
             {
                 Label = e.Label,
-                PriceCents = e.PriceCents
+                PriceCents = e.PriceCents,
+                SortOrder = index
             }).ToList()
         };
+
+        return new List<ProductModifierGroup> { group };
     }
 
     /// <summary>

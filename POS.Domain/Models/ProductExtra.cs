@@ -6,7 +6,11 @@ public partial class ProductExtra
 {
     public int Id { get; set; }
 
-    public int ProductId { get; set; }
+    /// <summary>
+    /// FK to the modifier group this extra belongs to. Extras are always
+    /// owned by a group, never by a product directly.
+    /// </summary>
+    public int ProductModifierGroupId { get; set; }
 
     [Required]
     [MaxLength(100)]
@@ -14,5 +18,8 @@ public partial class ProductExtra
 
     public int PriceCents { get; set; }
 
-    public virtual Product? Product { get; set; }
+    /// <summary>Display order inside the owning modifier group.</summary>
+    public int SortOrder { get; set; }
+
+    public virtual ProductModifierGroup? ProductModifierGroup { get; set; }
 }

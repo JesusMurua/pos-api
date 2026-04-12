@@ -229,7 +229,8 @@ public class BranchService : IBranchService
             await _unitOfWork.SaveChangesAsync();
 
             var sourceProducts = await _unitOfWork.Products.GetAsync(
-                p => p.CategoryId == sourceCategory.Id, "Sizes,Extras");
+                p => p.CategoryId == sourceCategory.Id,
+                "Sizes,ModifierGroups.Extras");
 
             foreach (var sourceProduct in sourceProducts)
             {
@@ -249,11 +250,20 @@ public class BranchService : IBranchService
                         Label = s.Label,
                         ExtraPriceCents = s.ExtraPriceCents
                     }).ToList(),
-                    Extras = sourceProduct.Extras?.Select(e => new ProductExtra
+                    ModifierGroups = sourceProduct.ModifierGroups?.Select(g => new ProductModifierGroup
                     {
-                        Label = e.Label,
-                        PriceCents = e.PriceCents
-                    }).ToList()
+                        Name = g.Name,
+                        SortOrder = g.SortOrder,
+                        IsRequired = g.IsRequired,
+                        MinSelectable = g.MinSelectable,
+                        MaxSelectable = g.MaxSelectable,
+                        Extras = g.Extras?.Select(e => new ProductExtra
+                        {
+                            Label = e.Label,
+                            PriceCents = e.PriceCents,
+                            SortOrder = e.SortOrder
+                        }).ToList() ?? new List<ProductExtra>()
+                    }).ToList() ?? new List<ProductModifierGroup>()
                 };
 
                 await _unitOfWork.Products.AddAsync(newProduct);

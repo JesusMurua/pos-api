@@ -15,7 +15,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
         return await _context.Products
             .Where(p => p.CategoryId == categoryId && p.IsAvailable)
             .Include(p => p.Sizes)
-            .Include(p => p.Extras)
+            .Include(p => p.ModifierGroups!)
+                .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
             .ToListAsync();
     }
@@ -24,7 +25,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         return await _context.Products
             .Include(p => p.Sizes)
-            .Include(p => p.Extras)
+            .Include(p => p.ModifierGroups!)
+                .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
             .FirstOrDefaultAsync(p => p.Id == id);
     }
@@ -35,7 +37,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Where(p => p.BranchId == branchId && p.Barcode == barcode && p.IsAvailable)
             .Include(p => p.Category)
             .Include(p => p.Sizes)
-            .Include(p => p.Extras)
+            .Include(p => p.ModifierGroups!)
+                .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
             .FirstOrDefaultAsync();
     }

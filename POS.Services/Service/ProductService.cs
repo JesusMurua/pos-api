@@ -83,15 +83,14 @@ public class ProductService : IProductService
             });
         }
 
-        existing.Extras ??= new List<ProductExtra>();
-        existing.Extras.Clear();
-        foreach (var extra in request.Extras)
+        // Until the frontend sends grouped payloads, every update collapses
+        // the existing group structure and rebuilds a single default group
+        // from the flat request. Cascade delete cleans up orphaned extras.
+        existing.ModifierGroups ??= new List<ProductModifierGroup>();
+        existing.ModifierGroups.Clear();
+        foreach (var group in ProductMapping.BuildDefaultGroups(request.Extras))
         {
-            existing.Extras.Add(new ProductExtra
-            {
-                Label = extra.Label,
-                PriceCents = extra.PriceCents
-            });
+            existing.ModifierGroups.Add(group);
         }
 
         _unitOfWork.Products.Update(existing);
