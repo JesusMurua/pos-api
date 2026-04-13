@@ -50,23 +50,26 @@ public class OrderService : IOrderService
             o => requestIds.Contains(o.Id), "Items,Payments"))
             .ToDictionary(o => o.Id);
 
-        // ── Phase 1b: Validate cash register session ──
-        if (requests.Any(r => !r.CashRegisterSessionId.HasValue))
-            throw new ValidationException(
-                "CASH_SESSION_REQUIRED: Se requiere un turno de caja abierto para procesar órdenes locales.");
-
-        var distinctSessionIds = requests
+        // ── Phase 1b: Resolve valid cash register sessions (graceful degradation) ──
+        // Orders pointing to a missing/closed/wrong-branch session — or no session at all —
+        // are NOT rejected. They are accepted, stripped of the SessionId, and flagged
+        // IsOrphaned so the Backoffice can reconcile them manually against a real shift.
+        var requestedSessionIds = requests
+            .Where(r => r.CashRegisterSessionId.HasValue)
             .Select(r => r.CashRegisterSessionId!.Value)
             .Distinct()
             .ToList();
 
-        foreach (var sessionId in distinctSessionIds)
-        {
-            var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(sessionId);
-            if (session == null || session.BranchId != branchId || session.CashRegisterStatusId != CashRegisterStatus.Open)
-                throw new ValidationException(
-                    "CASH_SESSION_CLOSED: Se requiere un turno de caja abierto para procesar órdenes locales.");
-        }
+        var validSessionIds = requestedSessionIds.Count == 0
+            ? new HashSet<int>()
+            : (await _unitOfWork.CashRegisterSessions.GetAsync(s =>
+                requestedSessionIds.Contains(s.Id)
+                && s.BranchId == branchId
+                && s.CashRegisterStatusId == CashRegisterStatus.Open))
+                .Select(s => s.Id)
+                .ToHashSet();
+
+        bool IsValidSession(int? id) => id.HasValue && validSessionIds.Contains(id.Value);
 
         // ── Phase 2: Classify into inserts vs updates ──
         var ordersToInsert = new List<Order>();
@@ -91,7 +94,17 @@ public class OrderService : IOrderService
                     existingOrder.KitchenStatusId = ParseKitchenStatusId(request.KitchenStatus);
                     existingOrder.TableId = request.TableId;
                     existingOrder.TableName = request.TableName;
-                    existingOrder.CashRegisterSessionId ??= request.CashRegisterSessionId;
+                    // Protective rule: never overwrite a SessionId already set on the persisted order.
+                    // Only fill it in if it's currently null AND the incoming session is valid.
+                    if (existingOrder.CashRegisterSessionId == null && IsValidSession(request.CashRegisterSessionId))
+                    {
+                        existingOrder.CashRegisterSessionId = request.CashRegisterSessionId;
+                        existingOrder.IsOrphaned = false;
+                    }
+                    else if (existingOrder.CashRegisterSessionId == null)
+                    {
+                        existingOrder.IsOrphaned = true;
+                    }
                     existingOrder.CustomerId = request.CustomerId;
                     existingOrder.SyncedAt = DateTime.UtcNow;
 
@@ -119,6 +132,12 @@ public class OrderService : IOrderService
                     var order = MapToOrder(request);
                     order.SyncStatusId = SyncStatusIds.Synced;
                     order.SyncedAt = DateTime.UtcNow;
+
+                    if (!IsValidSession(order.CashRegisterSessionId))
+                    {
+                        order.CashRegisterSessionId = null;
+                        order.IsOrphaned = true;
+                    }
 
                     RecalculateTotals(order);
                     RecalculatePaymentTotals(order);

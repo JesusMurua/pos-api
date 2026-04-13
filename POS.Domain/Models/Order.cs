@@ -86,6 +86,9 @@ public partial class Order
 
     public int? CashRegisterSessionId { get; set; }
 
+    /// <summary>True when the order arrived without a valid open cash register session and must be reconciled manually in the Backoffice.</summary>
+    public bool IsOrphaned { get; set; } = false;
+
     /// <summary>FK to Customer for CRM tracking. Null for anonymous sales.</summary>
     public int? CustomerId { get; set; }
 
