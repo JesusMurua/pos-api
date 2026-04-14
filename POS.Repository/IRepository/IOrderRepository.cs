@@ -99,4 +99,10 @@ public interface IOrderRepository : IGenericRepository<Order>
     /// Uses AsNoTracking + Select for SQL-level projection — no .Include().
     /// </summary>
     Task<List<DashboardRecentOrder>> GetRecentOrdersAsync(int branchId, DateTime date, int limit = 20);
+
+    /// <summary>
+    /// Returns orphaned orders for a branch as flat projections.
+    /// Uses AsNoTracking + Select for SQL-level projection — no .Include().
+    /// </summary>
+    Task<List<OrphanedOrderDto>> GetOrphanedAsync(int branchId);
 }

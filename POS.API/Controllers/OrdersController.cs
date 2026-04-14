@@ -379,6 +379,44 @@ public class OrdersController : BaseApiController
         var result = await _orderService.SplitOrderAsync(id, request.Splits, BranchId);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Lists orphaned orders pending manual reconciliation in the current branch.
+    /// </summary>
+    /// <returns>A list of orphaned orders.</returns>
+    /// <response code="200">Returns the list of orphaned orders.</response>
+    [HttpGet("orphaned")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(IEnumerable<OrphanedOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOrphaned()
+    {
+        var orders = await _orderService.GetOrphanedAsync(BranchId);
+        return Ok(orders);
+    }
+
+    /// <summary>
+    /// Reconciles an orphaned order by attaching it to a CashRegisterSession of the same branch.
+    /// The target session may be open or closed (closed is the typical case for prior-day rescue).
+    /// </summary>
+    /// <param name="id">The order UUID.</param>
+    /// <param name="request">Target session and optional admin note.</param>
+    /// <returns>The reconciled order.</returns>
+    /// <response code="200">Returns the reconciled order.</response>
+    /// <response code="400">If the order is not orphaned or session belongs to another branch.</response>
+    /// <response code="404">If the order or session is not found.</response>
+    [HttpPatch("{id}/reconcile")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(OrphanedOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Reconcile(string id, [FromBody] ReconcileOrderRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userName = User.Identity?.Name ?? "Unknown";
+        var dto = await _orderService.ReconcileAsync(id, BranchId, request.CashRegisterSessionId, request.Note, userName);
+        return Ok(dto);
+    }
 }
 
 /// <summary>

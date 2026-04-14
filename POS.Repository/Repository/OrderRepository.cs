@@ -433,4 +433,52 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             }).ToList()
         }).ToList();
     }
+
+    /// <inheritdoc />
+    public async Task<List<OrphanedOrderDto>> GetOrphanedAsync(int branchId)
+    {
+        var rows = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.BranchId == branchId && o.IsOrphaned)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new
+            {
+                o.Id,
+                o.OrderNumber,
+                o.FolioNumber,
+                o.CreatedAt,
+                o.SyncedAt,
+                o.TotalCents,
+                o.PaidCents,
+                o.IsPaid,
+                o.TableName,
+                o.CustomerId,
+                CustomerFirstName = o.Customer != null ? o.Customer.FirstName : null,
+                CustomerLastName = o.Customer != null ? o.Customer.LastName : null,
+                ItemCount = o.Items!.Sum(i => i.Quantity),
+                PaymentMethods = o.Payments.Select(p => p.Method).ToList(),
+                o.ReconciliationNote
+            })
+            .ToListAsync();
+
+        return rows.Select(o => new OrphanedOrderDto
+        {
+            Id = o.Id,
+            OrderNumber = o.OrderNumber,
+            FolioNumber = o.FolioNumber,
+            CreatedAt = o.CreatedAt,
+            SyncedAt = o.SyncedAt,
+            TotalCents = o.TotalCents,
+            PaidCents = o.PaidCents,
+            IsPaid = o.IsPaid,
+            TableName = o.TableName,
+            CustomerId = o.CustomerId,
+            CustomerName = o.CustomerFirstName == null
+                ? null
+                : (o.CustomerLastName == null ? o.CustomerFirstName : $"{o.CustomerFirstName} {o.CustomerLastName}"),
+            ItemCount = o.ItemCount,
+            PaymentMethods = o.PaymentMethods.Select(m => m.ToString()).Distinct().ToList(),
+            ReconciliationNote = o.ReconciliationNote
+        }).ToList();
+    }
 }

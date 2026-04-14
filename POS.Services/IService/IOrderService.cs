@@ -93,6 +93,19 @@ public interface IOrderService
     /// Cancels the source order after splitting.
     /// </summary>
     Task<SplitResult> SplitOrderAsync(string orderId, List<SplitGroup> splits, int branchId);
+
+    /// <summary>
+    /// Returns orders flagged IsOrphaned for a branch, awaiting manual reconciliation.
+    /// </summary>
+    Task<IEnumerable<OrphanedOrderDto>> GetOrphanedAsync(int branchId);
+
+    /// <summary>
+    /// Attaches an orphaned order to an existing CashRegisterSession of the same branch
+    /// (open or closed), clears IsOrphaned, and stamps audit fields.
+    /// </summary>
+    /// <exception cref="NotFoundException">Order or session not found.</exception>
+    /// <exception cref="ValidationException">Order is not orphaned, or session belongs to another branch.</exception>
+    Task<OrphanedOrderDto> ReconcileAsync(string orderId, int branchId, int targetSessionId, string? note, string reconciledBy);
 }
 
 public class MoveItemsResult
@@ -181,6 +194,15 @@ public class OrderPullItemDto
     public string? SizeName { get; set; }
     public string? Notes { get; set; }
     public List<string> Extras { get; set; } = new();
+}
+
+public class ReconcileOrderRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    public int CashRegisterSessionId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(500)]
+    public string? Note { get; set; }
 }
 
 public class OrderPullPaymentDto

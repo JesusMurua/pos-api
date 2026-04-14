@@ -1189,6 +1189,60 @@ public class OrderService : IOrderService
         };
     }
 
+    /// <inheritdoc />
+    public async Task<IEnumerable<OrphanedOrderDto>> GetOrphanedAsync(int branchId)
+    {
+        return await _unitOfWork.Orders.GetOrphanedAsync(branchId);
+    }
+
+    /// <inheritdoc />
+    public async Task<OrphanedOrderDto> ReconcileAsync(string orderId, int branchId, int targetSessionId, string? note, string reconciledBy)
+    {
+        var order = (await _unitOfWork.Orders.GetAsync(o => o.Id == orderId && o.BranchId == branchId))
+            .FirstOrDefault()
+            ?? throw new NotFoundException($"Order with id {orderId} not found");
+
+        if (!order.IsOrphaned)
+            throw new ValidationException("Order is not orphaned and cannot be reconciled.");
+
+        var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(targetSessionId)
+            ?? throw new NotFoundException($"CashRegisterSession with id {targetSessionId} not found");
+
+        if (session.BranchId != branchId)
+            throw new ValidationException("Target session belongs to a different branch.");
+
+        order.CashRegisterSessionId = targetSessionId;
+        order.IsOrphaned = false;
+        order.ReconciledAt = DateTime.UtcNow;
+        order.ReconciledBy = reconciledBy;
+        order.ReconciliationNote = note;
+
+        _unitOfWork.Orders.Update(order);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ValidationException("The order was modified by another user. Please refresh and try again.");
+        }
+
+        return new OrphanedOrderDto
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            FolioNumber = order.FolioNumber,
+            CreatedAt = order.CreatedAt,
+            SyncedAt = order.SyncedAt,
+            TotalCents = order.TotalCents,
+            PaidCents = order.PaidCents,
+            IsPaid = order.IsPaid,
+            TableName = order.TableName,
+            CustomerId = order.CustomerId,
+            ReconciliationNote = order.ReconciliationNote
+        };
+    }
+
     #endregion
 
     #region Private Helper Methods

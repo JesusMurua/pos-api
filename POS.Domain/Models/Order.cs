@@ -89,6 +89,17 @@ public partial class Order
     /// <summary>True when the order arrived without a valid open cash register session and must be reconciled manually in the Backoffice.</summary>
     public bool IsOrphaned { get; set; } = false;
 
+    /// <summary>Free-text note left by the admin when reconciling an orphaned order.</summary>
+    [MaxLength(500)]
+    public string? ReconciliationNote { get; set; }
+
+    /// <summary>UTC timestamp when the orphaned order was reconciled to a session.</summary>
+    public DateTime? ReconciledAt { get; set; }
+
+    /// <summary>Username of the admin who performed the reconciliation.</summary>
+    [MaxLength(100)]
+    public string? ReconciledBy { get; set; }
+
     /// <summary>FK to Customer for CRM tracking. Null for anonymous sales.</summary>
     public int? CustomerId { get; set; }
 
