@@ -1,13 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
 /// <summary>
 /// Represents a CFDI electronic invoice issued via Facturapi.
 /// Supports both individual invoices (1 order) and global invoices (N orders).
 /// </summary>
-public class Invoice
+public class Invoice : IBranchScoped
 {
     public int Id { get; set; }
 

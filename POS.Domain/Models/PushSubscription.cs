@@ -1,6 +1,8 @@
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public class PushSubscription
+public class PushSubscription : IBranchScoped
 {
     public int Id { get; set; }
     public int UserId { get; set; }

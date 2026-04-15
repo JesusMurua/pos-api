@@ -13,7 +13,9 @@ public static class RepositoryDependencies
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddHttpContextAccessor();
         services.AddSingleton<AuditInterceptor>();
+        services.AddSingleton<BranchInjectionInterceptor>();
 
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"), npgsqlOptions =>
@@ -21,7 +23,9 @@ public static class RepositoryDependencies
                     npgsqlOptions.MaxBatchSize(1);
                     npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
                 })
-                .AddInterceptors(sp.GetRequiredService<AuditInterceptor>()));
+                .AddInterceptors(
+                    sp.GetRequiredService<BranchInjectionInterceptor>(),
+                    sp.GetRequiredService<AuditInterceptor>()));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IProductRepository, ProductRepository>();

@@ -1,11 +1,13 @@
 using System.ComponentModel.DataAnnotations;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
 /// <summary>
 /// Stores payment provider credentials per branch. One config per provider per branch.
 /// </summary>
-public class BranchPaymentConfig
+public class BranchPaymentConfig : IBranchScoped
 {
     public int Id { get; set; }
 

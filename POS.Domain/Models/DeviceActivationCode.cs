@@ -1,6 +1,8 @@
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public class DeviceActivationCode
+public class DeviceActivationCode : IBranchScoped
 {
     public int Id { get; set; }
     public string Code { get; set; } = null!;

@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public class PromotionUsage
+public class PromotionUsage : IBranchScoped
 {
     public int Id { get; set; }
 

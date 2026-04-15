@@ -1,10 +1,12 @@
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
 /// <summary>
 /// Join entity representing the many-to-many relationship between users and branches.
 /// A user can belong to multiple branches; one branch is marked as default for JWT generation.
 /// </summary>
-public class UserBranch
+public class UserBranch : IBranchScoped
 {
     /// <summary>
     /// The user identifier (FK to User).

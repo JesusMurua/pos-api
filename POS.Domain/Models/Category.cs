@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public partial class Category
+public partial class Category : IBranchScoped
 {
     public int Id { get; set; }
 

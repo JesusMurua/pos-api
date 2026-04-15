@@ -3,9 +3,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 using POS.Domain.Enums;
 using POS.Domain.Models.Catalogs;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public partial class Promotion
+public partial class Promotion : IBranchScoped
 {
     public int Id { get; set; }
 

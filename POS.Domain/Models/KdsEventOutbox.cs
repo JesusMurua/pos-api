@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace POS.Domain.Models;
 /// restart between the database commit and the SignalR broadcast cannot drop
 /// the event. A background worker drains this table on a short interval.
 /// </summary>
-public partial class KdsEventOutbox
+public partial class KdsEventOutbox : IBranchScoped
 {
     /// <summary>Primary key.</summary>
     public Guid Id { get; set; } = Guid.NewGuid();

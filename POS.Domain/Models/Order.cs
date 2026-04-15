@@ -3,9 +3,11 @@ using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models.Catalogs;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public partial class Order
+public partial class Order : IBranchScoped
 {
     [Required]
     [MaxLength(36)]

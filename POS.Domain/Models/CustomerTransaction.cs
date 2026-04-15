@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace POS.Domain.Models;
 /// This is the source of truth — Customer.CreditBalanceCents and PointsBalance
 /// are denormalized snapshots that can be recalculated from this ledger.
 /// </summary>
-public class CustomerTransaction
+public class CustomerTransaction : IBranchScoped
 {
     public int Id { get; set; }
 

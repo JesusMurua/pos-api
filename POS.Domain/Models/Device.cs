@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public class Device
+public class Device : IBranchScoped
 {
     public int Id { get; set; }
 

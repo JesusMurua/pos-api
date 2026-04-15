@@ -1,8 +1,10 @@
 using POS.Domain.Enums;
 
+using POS.Domain.Interfaces;
+
 namespace POS.Domain.Models;
 
-public class BranchDeliveryConfig
+public class BranchDeliveryConfig : IBranchScoped
 {
     public int Id { get; set; }
 
