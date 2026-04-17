@@ -45,6 +45,7 @@ public class SubscriptionController : BaseApiController
     /// Creates a Stripe Checkout session and returns the redirect URL.
     /// </summary>
     [HttpPost("checkout")]
+    [Authorize(Roles = "Owner")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Checkout([FromBody] CheckoutRequest request)

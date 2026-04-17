@@ -24,7 +24,8 @@ public class SubscriptionService : ISubscriptionService
 
         if (subscription == null)
         {
-            // No Stripe subscription yet — use the PlanTypeId stored on the Business entity
+            // No Stripe subscription yet — surface the in-app trial stored on the Business entity
+            // so the frontend can decide whether the user is still inside the grace window.
             var business = await _unitOfWork.Business.GetByIdAsync(businessId);
 
             return new SubscriptionStatusDto
@@ -34,7 +35,8 @@ public class SubscriptionService : ISubscriptionService
                 PricingGroup = "General",
                 BillingCycle = "Monthly",
                 IsActive = true,
-                CurrentPeriodEnd = DateTime.UtcNow.AddYears(99)
+                CurrentPeriodEnd = DateTime.UtcNow.AddYears(99),
+                TrialEndsAt = business?.TrialEndsAt
             };
         }
 

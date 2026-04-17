@@ -38,6 +38,26 @@ public class StripeService : IStripeService
 
         var stripeCustomerId = await GetOrCreateStripeCustomerAsync(business);
 
+        // Honor the in-app trial: if the business still has trial days left, hand them
+        // over to Stripe so the customer is billed only after the grace window ends.
+        // Stripe requires TrialPeriodDays >= 1 (we use >= 2 for a 48h safety margin).
+        var subscriptionData = new SessionSubscriptionDataOptions
+        {
+            Metadata = new Dictionary<string, string>
+            {
+                { "businessId", businessId.ToString() }
+            }
+        };
+
+        var remainingTrialDays = business.TrialEndsAt.HasValue
+            ? (int)Math.Floor((business.TrialEndsAt.Value - DateTime.UtcNow).TotalDays)
+            : 0;
+
+        if (remainingTrialDays >= 2)
+        {
+            subscriptionData.TrialPeriodDays = remainingTrialDays;
+        }
+
         var options = new SessionCreateOptions
         {
             Customer = stripeCustomerId,
@@ -52,13 +72,7 @@ public class StripeService : IStripeService
             ],
             SuccessUrl = successUrl,
             CancelUrl = cancelUrl,
-            SubscriptionData = new SessionSubscriptionDataOptions
-            {
-                Metadata = new Dictionary<string, string>
-                {
-                    { "businessId", businessId.ToString() }
-                }
-            },
+            SubscriptionData = subscriptionData,
             Metadata = new Dictionary<string, string>
             {
                 { "businessId", businessId.ToString() }
