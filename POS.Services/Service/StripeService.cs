@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
@@ -19,12 +21,18 @@ public class StripeService : IStripeService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IStripeClient _stripeClient;
     private readonly ILogger<StripeService> _logger;
+    private readonly IConfiguration _configuration;
 
-    public StripeService(IUnitOfWork unitOfWork, IStripeClient stripeClient, ILogger<StripeService> logger)
+    public StripeService(
+        IUnitOfWork unitOfWork,
+        IStripeClient stripeClient,
+        ILogger<StripeService> logger,
+        IConfiguration configuration)
     {
         _unitOfWork = unitOfWork;
         _stripeClient = stripeClient;
         _logger = logger;
+        _configuration = configuration;
     }
 
     #region Public API Methods
@@ -33,8 +41,27 @@ public class StripeService : IStripeService
     public async Task<string> CreateCheckoutSessionAsync(
         int businessId, string priceId, string successUrl, string cancelUrl)
     {
+        // Whitelist: reject any priceId not present in our curated PriceMap.
+        // ResolvePlanType silently returns "Free" for unknowns, so we hit the dictionary directly.
+        if (!StripeConstants.PriceMap.ContainsKey(priceId))
+            throw new BadHttpRequestException("Price ID inválido");
+
+        ValidateRedirectUrl(successUrl, nameof(successUrl));
+        ValidateRedirectUrl(cancelUrl, nameof(cancelUrl));
+
         var business = await _unitOfWork.Business.GetByIdAsync(businessId)
             ?? throw new NotFoundException($"Business with id {businessId} not found");
+
+        // Idempotency: prevent a second concurrent paid subscription for the same business.
+        // Mutations to an existing live sub belong in the Stripe Customer Portal.
+        var existing = await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
+        if (existing != null
+            && (existing.Status == StripeSubscriptionStatus.Active
+                || existing.Status == StripeSubscriptionStatus.Trialing))
+        {
+            throw new BadHttpRequestException(
+                "El negocio ya tiene una suscripción activa. Utilice el portal de cliente para modificarla.");
+        }
 
         var stripeCustomerId = await GetOrCreateStripeCustomerAsync(business);
 
@@ -139,6 +166,30 @@ public class StripeService : IStripeService
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Open-redirect guard: accept only relative URLs or absolute URLs whose origin
+    /// matches one of the configured Cors:Origins entries.
+    /// </summary>
+    private void ValidateRedirectUrl(string url, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            throw new BadHttpRequestException($"{paramName} es requerido");
+
+        if (Uri.TryCreate(url, UriKind.Relative, out _)) return;
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+            throw new BadHttpRequestException($"{paramName} inválido");
+
+        var allowedOrigins = _configuration.GetSection("Cors:Origins").Get<string[]>() ?? Array.Empty<string>();
+        var requestOrigin = $"{parsed.Scheme}://{parsed.Authority}";
+
+        if (!allowedOrigins.Any(o =>
+                string.Equals(o.TrimEnd('/'), requestOrigin, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BadHttpRequestException($"{paramName} apunta a un origen no permitido");
+        }
+    }
 
     private async Task<string> GetOrCreateStripeCustomerAsync(Business business)
     {

@@ -164,7 +164,7 @@ public class StripeEventProcessorWorker : BackgroundService
                 BillingCycle = StripeConstants.ResolveBillingCycle(priceId),
                 PricingGroup = StripeConstants.ResolvePricingGroup(priceId),
                 Status = stripeSub.Status,
-                TrialEndsAt = stripeSub.TrialEnd ?? DateTime.UtcNow,
+                TrialEndsAt = stripeSub.TrialEnd,
                 CurrentPeriodStart = firstItem.CurrentPeriodStart,
                 CurrentPeriodEnd = firstItem.CurrentPeriodEnd,
                 UpdatedAt = DateTime.UtcNow

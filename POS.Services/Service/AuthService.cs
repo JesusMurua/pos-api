@@ -69,7 +69,7 @@ public class AuthService : IAuthService
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
             BusinessTypeId = business.BusinessTypeId,
-            TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
+            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -113,7 +113,7 @@ public class AuthService : IAuthService
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
             BusinessTypeId = business.BusinessTypeId,
-            TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
+            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -166,7 +166,7 @@ public class AuthService : IAuthService
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
             BusinessTypeId = business.BusinessTypeId,
-            TrialEndsAt = subscription?.TrialEndsAt.ToString("o"),
+            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
         };

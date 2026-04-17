@@ -27,7 +27,7 @@ public class Subscription
     /// <summary>active | trialing | past_due | canceled | paused</summary>
     public string Status { get; set; } = null!;
 
-    public DateTime TrialEndsAt { get; set; }
+    public DateTime? TrialEndsAt { get; set; }
     public DateTime CurrentPeriodStart { get; set; }
     public DateTime CurrentPeriodEnd { get; set; }
     public DateTime? CanceledAt { get; set; }
