@@ -21,12 +21,12 @@ public static class DbInitializer
     private const string SeedPasswordHash = "$2a$11$bvzWRKS52z4IaCQp9Mc6T.sazNlm8M2rufyPm82D/Ph9migBYj.aC";
     private const string SeedPinHash = "$2a$11$7cjv37Hi2RKFIasBx1KtIO8muTOKzPQ1pQMnnDACjMwIYpTzGJSci";
 
-    // Seeded BusinessTypeCatalog ids — stable per UpsertBusinessTypeCatalogsAsync order.
+    // Canonical sub-giro identifiers used by seeded test businesses. Match the order
+    // of <see cref="UpsertBusinessTypeCatalogsAsync"/> — do not reshuffle without a migration.
     private const int SubGiroRestaurante = 1;
-    private const int SubGiroCafeteria = 2;
-    private const int SubGiroAbarrotes = 3;
-    private const int SubGiroPapeleria = 4;
-    private const int SubGiroEstetica = 5;
+    private const int SubGiroCafeteria = 7;
+    private const int SubGiroAbarrotes = 10;
+    private const int SubGiroPapeleria = 14;
 
     /// <summary>
     /// Seeds system-level catalogs. Runs in ALL environments.
@@ -598,21 +598,25 @@ public static class DbInitializer
     {
         var desired = new List<MacroCategory>
         {
-            new() { Id = MacroCategoryIds.FoodBeverage, InternalCode = MacroCategoryIds.FoodBeverageCode, PublicName = "Restaurantes y Bares",       Description = "Experiencia de salón con cocina y control de mesas" },
-            new() { Id = MacroCategoryIds.QuickService, InternalCode = MacroCategoryIds.QuickServiceCode, PublicName = "Comida Rápida y Cafés",       Description = "Mostrador ágil con cocina ligera, sin mapa de mesas" },
-            new() { Id = MacroCategoryIds.Retail,       InternalCode = MacroCategoryIds.RetailCode,       PublicName = "Tiendas y Comercios",          Description = "Retail con inventario, fiado y alertas de stock" },
-            new() { Id = MacroCategoryIds.Services,     InternalCode = MacroCategoryIds.ServicesCode,     PublicName = "Servicios Especializados",     Description = "Negocios basados en citas y clientes frecuentes" },
+            new() { Id = MacroCategoryIds.FoodBeverage, InternalCode = "food-beverage", PublicName = "Restaurantes y Bares",       Description = "Experiencia de salón con cocina y control de mesas",   PosExperience = "Restaurant", HasKitchen = true,  HasTables = true  },
+            new() { Id = MacroCategoryIds.QuickService, InternalCode = "quick-service", PublicName = "Comida Rápida y Cafés",       Description = "Mostrador ágil con cocina ligera, sin mapa de mesas",  PosExperience = "Counter",    HasKitchen = true,  HasTables = false },
+            new() { Id = MacroCategoryIds.Retail,       InternalCode = "retail",        PublicName = "Tiendas y Comercios",          Description = "Retail con inventario, fiado y alertas de stock",      PosExperience = "Retail",     HasKitchen = false, HasTables = false },
+            new() { Id = MacroCategoryIds.Services,     InternalCode = "services",      PublicName = "Servicios Especializados",     Description = "Negocios basados en citas y clientes frecuentes",      PosExperience = "Services",   HasKitchen = false, HasTables = false },
         };
 
         var existing = await context.MacroCategories.ToListAsync();
-        var byCode = existing.ToDictionary(e => e.InternalCode);
+        var byId = existing.ToDictionary(e => e.Id);
 
         foreach (var item in desired)
         {
-            if (byCode.TryGetValue(item.InternalCode, out var row))
+            if (byId.TryGetValue(item.Id, out var row))
             {
+                row.InternalCode = item.InternalCode;
                 row.PublicName = item.PublicName;
                 row.Description = item.Description;
+                row.PosExperience = item.PosExperience;
+                row.HasKitchen = item.HasKitchen;
+                row.HasTables = item.HasTables;
             }
             else
             {
@@ -625,28 +629,61 @@ public static class DbInitializer
 
     private static async Task UpsertBusinessTypeCatalogsAsync(ApplicationDbContext context)
     {
+        // Definitive sub-giro catalog — ids are stable and referenced by seed test data.
         var desired = new List<BusinessTypeCatalog>
         {
-            new() { Id = SubGiroRestaurante, Name = "Restaurante", PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
-            new() { Id = SubGiroCafeteria,   Name = "Cafetería",   PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = SubGiroAbarrotes,   Name = "Abarrotes",   PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = SubGiroPapeleria,   Name = "Papelería",   PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = SubGiroEstetica,    Name = "Estética",    PrimaryMacroCategoryId = MacroCategoryIds.Services },
+            // Food & Beverage
+            new() { Id = 1,  Name = "Restaurante",                       PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 2,  Name = "Bar / Cantina",                     PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 3,  Name = "Sports Bar / Wings",                PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+
+            // Quick Service
+            new() { Id = 4,  Name = "Taquería",                          PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 5,  Name = "Dogos",                             PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 6,  Name = "Hamburguesas",                      PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 7,  Name = "Cafetería",                         PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 8,  Name = "Paletería / Nevería",               PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 9,  Name = "Panadería / Repostería",            PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+
+            // Retail
+            new() { Id = 10, Name = "Abarrotes / Miscelánea",            PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 11, Name = "Expendio / Depósito de Cerveza",    PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 12, Name = "Refaccionaria / Autopartes",        PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 13, Name = "Ferretería",                        PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 14, Name = "Papelería",                         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 15, Name = "Farmacia",                          PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 16, Name = "Boutique / Ropa y Calzado",         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+
+            // Services
+            new() { Id = 17, Name = "Estética / Barbería",               PrimaryMacroCategoryId = MacroCategoryIds.Services },
+            new() { Id = 18, Name = "Taller Mecánico",                   PrimaryMacroCategoryId = MacroCategoryIds.Services },
+            new() { Id = 19, Name = "Consultorio / Clínica",             PrimaryMacroCategoryId = MacroCategoryIds.Services },
+            new() { Id = 20, Name = "Gimnasio / Deportes",               PrimaryMacroCategoryId = MacroCategoryIds.Services },
         };
 
         var existing = await context.BusinessTypeCatalogs.ToListAsync();
-        var byName = existing.ToDictionary(e => e.Name);
+        var byId = existing.ToDictionary(e => e.Id);
+        var desiredIds = desired.Select(d => d.Id).ToHashSet();
 
         foreach (var item in desired)
         {
-            if (byName.TryGetValue(item.Name, out var row))
+            if (byId.TryGetValue(item.Id, out var row))
             {
+                row.Name = item.Name;
                 row.PrimaryMacroCategoryId = item.PrimaryMacroCategoryId;
             }
             else
             {
                 context.BusinessTypeCatalogs.Add(item);
             }
+        }
+
+        // Drop legacy rows that are no longer in the definitive catalog so no business
+        // can hold an FK to a retired sub-giro.
+        foreach (var row in existing)
+        {
+            if (!desiredIds.Contains(row.Id))
+                context.BusinessTypeCatalogs.Remove(row);
         }
 
         await context.SaveChangesAsync();

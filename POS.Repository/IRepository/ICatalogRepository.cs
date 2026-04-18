@@ -6,6 +6,7 @@ public interface ICatalogRepository
 {
     Task<IEnumerable<PlanTypeCatalog>> GetPlanTypesAsync();
     Task<IEnumerable<BusinessTypeCatalog>> GetBusinessTypesAsync();
+    Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync();
     Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync();
     Task<IEnumerable<UserRoleCatalog>> GetUserRolesAsync();
     Task<IEnumerable<PaymentMethodCatalog>> GetPaymentMethodsAsync();

@@ -19,4 +19,17 @@ public class MacroCategory
 
     [MaxLength(300)]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Frontend POS experience variant rendered for businesses under this macro
+    /// ("Restaurant", "Counter", "Retail", "Services").
+    /// </summary>
+    [Required, MaxLength(30)]
+    public string PosExperience { get; set; } = string.Empty;
+
+    /// <summary>Whether this macro drives a kitchen-centric workflow (KDS, commandas).</summary>
+    public bool HasKitchen { get; set; }
+
+    /// <summary>Whether this macro drives a table/dine-in workflow (table map, waiter app).</summary>
+    public bool HasTables { get; set; }
 }

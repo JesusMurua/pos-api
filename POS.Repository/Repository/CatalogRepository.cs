@@ -19,6 +19,9 @@ public class CatalogRepository : ICatalogRepository
     public async Task<IEnumerable<BusinessTypeCatalog>> GetBusinessTypesAsync() =>
         await _context.BusinessTypeCatalogs.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
 
+    public async Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync() =>
+        await _context.MacroCategories.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+
     public async Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync() =>
         await _context.ZoneTypeCatalogs.AsNoTracking().OrderBy(x => x.SortOrder).ToListAsync();
 

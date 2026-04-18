@@ -32,6 +32,9 @@ public class CatalogService : ICatalogService
     public async Task<IEnumerable<BusinessTypeCatalog>> GetBusinessTypesAsync() =>
         await _unitOfWork.Catalog.GetBusinessTypesAsync();
 
+    public async Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync() =>
+        await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+
     public async Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync() =>
         await _unitOfWork.Catalog.GetZoneTypesAsync();
 

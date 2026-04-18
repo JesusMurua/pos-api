@@ -10,6 +10,7 @@ using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
+using POS.Domain.Models.Catalogs;
 using POS.Domain.Settings;
 using POS.Repository;
 using POS.Services.IService;
@@ -56,8 +57,9 @@ public class AuthService : IAuthService
         // Single Source of Truth: Business.PlanTypeId is kept in sync by the Stripe worker.
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, features);
+        var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, macroCode, features);
 
         return new AuthResponse
         {
@@ -100,8 +102,9 @@ public class AuthService : IAuthService
 
         var subscription = await ResolveSubscriptionAsync(matchedUser.BusinessId);
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, features);
+        var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, macroCode, features);
 
         return new AuthResponse
         {
@@ -153,8 +156,9 @@ public class AuthService : IAuthService
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
+        var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, branchId, branches, expiration, planType, features);
+        var token = GenerateToken(user, business, branchId, branches, expiration, planType, macroCode, features);
 
         return new AuthResponse
         {
@@ -208,8 +212,12 @@ public class AuthService : IAuthService
         var primaryCatalog = matchedCatalogs.First(c => c.Id == giroIds.First(id => matchedCatalogs.Any(m => m.Id == id)));
         var primaryMacroCategoryId = primaryCatalog.PrimaryMacroCategoryId;
 
-        var hasKitchen = MacroCategoryIds.HasKitchen(primaryMacroCategoryId);
-        var hasTables = MacroCategoryIds.HasTables(primaryMacroCategoryId);
+        var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+        var primaryMacro = macros.FirstOrDefault(m => m.Id == primaryMacroCategoryId)
+            ?? throw new ValidationException("Macro category linked to the selected giro does not exist");
+
+        var hasKitchen = primaryMacro.HasKitchen;
+        var hasTables = primaryMacro.HasTables;
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
@@ -268,7 +276,7 @@ public class AuthService : IAuthService
         };
 
         // Default zones
-        var zones = BuildDefaultZones(branch, primaryMacroCategoryId);
+        var zones = BuildDefaultZones(branch, primaryMacro);
 
         // Default category so the POS frontend doesn't crash on empty state
         var defaultCategory = new Category
@@ -322,7 +330,7 @@ public class AuthService : IAuthService
         // gate service sees the fresh BusinessGiros rows.
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), features);
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), primaryMacro.InternalCode, features);
 
         // Fire-and-forget: welcome email — never blocks the response
         _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
@@ -386,6 +394,12 @@ public class AuthService : IAuthService
         return await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
     }
 
+    private async Task<string> ResolveMacroCodeAsync(int primaryMacroCategoryId)
+    {
+        var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+        return macros.FirstOrDefault(m => m.Id == primaryMacroCategoryId)?.InternalCode ?? string.Empty;
+    }
+
     public string GenerateDeviceToken(Device device, Business business, IReadOnlyList<string> features)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
@@ -395,6 +409,7 @@ public class AuthService : IAuthService
 
         // Device tokens intentionally omit userId/roleId so that infrastructure screens
         // cannot impersonate human operators on HTTP endpoints that enforce role checks.
+        var macroCode = business.PrimaryMacroCategory?.InternalCode ?? string.Empty;
         var claims = new List<Claim>
         {
             new("type", "device"),
@@ -403,7 +418,7 @@ public class AuthService : IAuthService
             new("branchId", device.BranchId.ToString()),
             new("mode", device.Mode),
             new("planType", PlanTypeIds.ToCode(business.PlanTypeId)),
-            new("macroCategory", MacroCategoryIds.ToCode(business.PrimaryMacroCategoryId)),
+            new("macroCategory", macroCode),
             new("features", featuresJson)
         };
 
@@ -425,6 +440,7 @@ public class AuthService : IAuthService
         List<BranchSummary> branches,
         TimeSpan expiration,
         string planType,
+        string macroCategoryCode,
         IReadOnlyList<string> features)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
@@ -444,7 +460,7 @@ public class AuthService : IAuthService
             new("branchId", branchId.ToString()),
             new("branches", branchesJson),
             new("planType", planType),
-            new("macroCategory", MacroCategoryIds.ToCode(business.PrimaryMacroCategoryId)),
+            new("macroCategory", macroCategoryCode),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
             new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower()),
             new("features", featuresJson)
@@ -474,11 +490,11 @@ public class AuthService : IAuthService
 
     /// <summary>
     /// Builds default zone entities (not persisted yet) using navigation properties.
-    /// Only Food &amp; Beverage gets salon/terrace/bar zones; other macros start empty.
+    /// Only table-centric macros get salon/terrace/bar zones; other macros start empty.
     /// </summary>
-    private static List<Zone> BuildDefaultZones(Branch branch, int primaryMacroCategoryId)
+    private static List<Zone> BuildDefaultZones(Branch branch, MacroCategory macro)
     {
-        if (primaryMacroCategoryId != MacroCategoryIds.FoodBeverage)
+        if (!macro.HasTables)
             return [];
 
         return new List<Zone>

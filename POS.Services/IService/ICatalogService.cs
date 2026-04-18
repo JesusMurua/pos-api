@@ -12,6 +12,7 @@ public interface ICatalogService
     Task<IEnumerable<PaymentMethodCatalog>> GetPaymentMethodsAsync();
     Task<IEnumerable<DeviceModeCatalog>> GetDeviceModesAsync();
     Task<IEnumerable<BusinessTypeCatalog>> GetBusinessTypesAsync();
+    Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync();
     Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync();
     Task<IEnumerable<PlanTypeCatalog>> GetPlanTypesAsync();
 }

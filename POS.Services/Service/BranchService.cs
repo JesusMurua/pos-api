@@ -1,5 +1,4 @@
 using POS.Domain.Exceptions;
-using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.PartialModels;
 using POS.Repository;
@@ -111,6 +110,8 @@ public class BranchService : IBranchService
             throw new NotFoundException($"Branch with id {branchId} not found");
 
         var macroId = branch.Business!.PrimaryMacroCategoryId;
+        var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+        var macro = macros.FirstOrDefault(m => m.Id == macroId);
 
         return new BranchConfigDto
         {
@@ -127,7 +128,7 @@ public class BranchService : IBranchService
             FolioCounter = branch.FolioCounter,
             PlanTypeId = branch.Business.PlanTypeId,
             PrimaryMacroCategoryId = macroId,
-            PosExperience = MacroCategoryIds.PosExperience(macroId)
+            PosExperience = macro?.PosExperience ?? string.Empty
         };
     }
 
