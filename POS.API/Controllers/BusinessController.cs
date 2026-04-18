@@ -85,6 +85,23 @@ public class BusinessController : BaseApiController
     }
 
     /// <summary>
+    /// Returns the current giro configuration (macro, sub-giro set, custom description)
+    /// so the frontend can rehydrate onboarding state after a reload or back navigation.
+    /// </summary>
+    /// <returns>The current <see cref="BusinessGiroResponse"/> for the authenticated business.</returns>
+    /// <response code="200">Returns the current giro configuration.</response>
+    /// <response code="404">If the business is not found.</response>
+    [HttpGet("giro")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(BusinessGiroResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetGiro()
+    {
+        var giro = await _businessService.GetGiroAsync(BusinessId);
+        return Ok(giro);
+    }
+
+    /// <summary>
     /// Replaces the business's macro category, sub-giro set and optional custom description.
     /// </summary>
     /// <param name="request">Macro category, list of sub-giro ids and optional description.</param>

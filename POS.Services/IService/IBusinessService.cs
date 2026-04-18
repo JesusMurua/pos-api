@@ -29,4 +29,20 @@ public interface IBusinessService
     /// Deletes all existing <see cref="BusinessGiro"/> rows and inserts the new ones.
     /// </summary>
     Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription);
+
+    /// <summary>
+    /// Returns the business's current macro category, sub-giro set and optional custom description.
+    /// Used by the frontend to rehydrate onboarding state after a reload or "back" navigation.
+    /// </summary>
+    Task<BusinessGiroResponse> GetGiroAsync(int businessId);
+}
+
+/// <summary>
+/// Current giro configuration for a business — shape returned by GET /api/business/giro.
+/// </summary>
+public class BusinessGiroResponse
+{
+    public int PrimaryMacroCategoryId { get; set; }
+    public List<int> BusinessTypeIds { get; set; } = new();
+    public string? CustomGiroDescription { get; set; }
 }

@@ -117,5 +117,23 @@ public class BusinessService : IBusinessService
         return business;
     }
 
+    /// <inheritdoc />
+    public async Task<BusinessGiroResponse> GetGiroAsync(int businessId)
+    {
+        var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");
+        var business = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Business with id {businessId} not found");
+
+        return new BusinessGiroResponse
+        {
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
+            BusinessTypeIds = business.BusinessGiros
+                .Select(bg => bg.BusinessTypeId)
+                .OrderBy(id => id)
+                .ToList(),
+            CustomGiroDescription = business.CustomGiroDescription
+        };
+    }
+
     #endregion
 }
