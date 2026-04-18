@@ -195,36 +195,17 @@ public class AuthService : IAuthService
         var isPaidPlan = planTypeId is PlanTypeIds.Basic or PlanTypeIds.Pro or PlanTypeIds.Enterprise;
         DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
 
-        // Resolve sub-giro IDs (BusinessTypeCatalog rows) — require at least one.
-        var giroIds = request.BusinessTypeIds?.Where(id => id > 0).Distinct().ToList()
-            ?? new List<int>();
-
-        if (giroIds.Count == 0)
-            throw new ValidationException("Debe seleccionar al menos un giro");
-
-        var allCatalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
-        var matchedCatalogs = allCatalogs.Where(c => giroIds.Contains(c.Id)).ToList();
-
-        if (matchedCatalogs.Count == 0)
-            throw new ValidationException("Giros seleccionados no existen en el catálogo");
-
-        // Primary macro = macro of the first sub-giro the user selected (preserves intent).
-        var primaryCatalog = matchedCatalogs.First(c => c.Id == giroIds.First(id => matchedCatalogs.Any(m => m.Id == id)));
-        var primaryMacroCategoryId = primaryCatalog.PrimaryMacroCategoryId;
-
+        // Resolve macro category — sub-giros and CustomGiroDescription are captured
+        // later via PUT /api/business/giro once the user reaches onboarding step 2.
         var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
-        var primaryMacro = macros.FirstOrDefault(m => m.Id == primaryMacroCategoryId)
-            ?? throw new ValidationException("Macro category linked to the selected giro does not exist");
-
-        var hasKitchen = primaryMacro.HasKitchen;
-        var hasTables = primaryMacro.HasTables;
+        var primaryMacro = macros.FirstOrDefault(m => m.Id == request.PrimaryMacroCategoryId)
+            ?? throw new ValidationException("PrimaryMacroCategoryId inválido");
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
             Name = request.BusinessName,
-            PrimaryMacroCategoryId = primaryMacroCategoryId,
-            CustomGiroDescription = request.CustomGiroDescription,
+            PrimaryMacroCategoryId = primaryMacro.Id,
             PlanTypeId = planTypeId,
             CountryCode = request.CountryCode ?? "MX",
             TrialEndsAt = trialEndsAt,
@@ -235,23 +216,14 @@ public class AuthService : IAuthService
             CreatedAt = DateTime.UtcNow
         };
 
-        foreach (var catalog in matchedCatalogs)
-        {
-            business.BusinessGiros.Add(new BusinessGiro
-            {
-                Business = business,
-                BusinessTypeId = catalog.Id
-            });
-        }
-
         var branch = new Branch
         {
             Business = business,
             Name = $"{request.BusinessName} Principal",
             IsMatrix = true,
             IsActive = true,
-            HasKitchen = hasKitchen,
-            HasTables = hasTables,
+            HasKitchen = primaryMacro.HasKitchen,
+            HasTables = primaryMacro.HasTables,
             FolioPrefix = request.FolioPrefix,
             FolioCounter = 0,
             CreatedAt = DateTime.UtcNow
@@ -303,7 +275,7 @@ public class AuthService : IAuthService
                 await _unitOfWork.Zones.AddRangeAsync(zones);
 
             // Default table so table-service businesses have at least one
-            if (hasTables)
+            if (primaryMacro.HasTables)
             {
                 var defaultTable = new RestaurantTable
                 {

@@ -41,7 +41,8 @@ public interface IAuthService
 }
 
 /// <summary>
-/// Request for public registration.
+/// Request for public registration. Only the macro category is captured at this stage —
+/// sub-giros and <c>CustomGiroDescription</c> are assigned later during onboarding.
 /// </summary>
 public class RegisterRequest
 {
@@ -50,13 +51,9 @@ public class RegisterRequest
     public string Email { get; set; } = null!;
     public string Password { get; set; } = null!;
 
-    /// <summary>
-    /// List of sub-giro ids (BusinessTypeCatalog.Id) chosen during registration.
-    /// At least one is required; the first entry drives the primary macro category.
-    /// </summary>
-    public List<int>? BusinessTypeIds { get; set; }
+    /// <summary>Macro category id (1-4) that drives POS experience and plan rules.</summary>
+    public int PrimaryMacroCategoryId { get; set; }
 
-    public string? CustomGiroDescription { get; set; }
     public int? PlanTypeId { get; set; }
     public string? FolioPrefix { get; set; }
     public string? CountryCode { get; set; }

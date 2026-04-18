@@ -55,18 +55,13 @@ public class RegisterApiRequest
     public string Password { get; set; } = null!;
 
     /// <summary>
-    /// List of sub-giro catalog IDs (BusinessTypeCatalog.Id) chosen at registration.
-    /// At least one is required; the first entry drives the primary macro category.
+    /// Macro category chosen at registration — drives POS experience, plan rules and pricing.
+    /// Sub-giros and <c>CustomGiroDescription</c> are captured later during onboarding via
+    /// <c>PUT /api/business/giro</c>.
     /// </summary>
     [Required]
-    [MinLength(1)]
-    public List<int> BusinessTypeIds { get; set; } = new();
-
-    /// <summary>
-    /// Optional description when the user selects "Otro" or a non-catalog giro.
-    /// </summary>
-    [MaxLength(100)]
-    public string? CustomGiroDescription { get; set; }
+    [Range(1, 4)]
+    public int PrimaryMacroCategoryId { get; set; }
 
     public int? PlanTypeId { get; set; }
 

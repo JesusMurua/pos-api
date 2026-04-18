@@ -108,8 +108,7 @@ public class AuthController : ControllerBase
                 OwnerName = request.OwnerName,
                 Email = request.Email,
                 Password = request.Password,
-                BusinessTypeIds = request.BusinessTypeIds,
-                CustomGiroDescription = request.CustomGiroDescription,
+                PrimaryMacroCategoryId = request.PrimaryMacroCategoryId,
                 PlanTypeId = request.PlanTypeId,
                 FolioPrefix = request.FolioPrefix,
                 CountryCode = request.CountryCode
