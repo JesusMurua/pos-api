@@ -54,16 +54,16 @@ public class RegisterApiRequest
     [MinLength(8)]
     public string Password { get; set; } = null!;
 
-    public int? BusinessTypeId { get; set; }
-
     /// <summary>
-    /// List of business type catalog IDs for multi-giro support.
-    /// Takes precedence over BusinessTypeId when provided.
+    /// List of sub-giro catalog IDs (BusinessTypeCatalog.Id) chosen at registration.
+    /// At least one is required; the first entry drives the primary macro category.
     /// </summary>
-    public List<int>? BusinessTypeIds { get; set; }
+    [Required]
+    [MinLength(1)]
+    public List<int> BusinessTypeIds { get; set; } = new();
 
     /// <summary>
-    /// Optional description when the user selects "Otra tienda" or a custom giro.
+    /// Optional description when the user selects "Otro" or a non-catalog giro.
     /// </summary>
     [MaxLength(100)]
     public string? CustomGiroDescription { get; set; }

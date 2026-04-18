@@ -1,10 +1,10 @@
-using System.ComponentModel.DataAnnotations;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
 /// <summary>
-/// Junction entity linking a Business to one or more BusinessTypeCatalog entries (multi-giro).
+/// Junction entity linking a <see cref="Business"/> to one or more
+/// <see cref="BusinessTypeCatalog"/> sub-giros (N:M identity list).
 /// </summary>
 public class BusinessGiro
 {
@@ -12,14 +12,8 @@ public class BusinessGiro
 
     public int BusinessId { get; set; }
 
-    /// <summary>FK to BusinessTypeCatalog.Id.</summary>
+    /// <summary>FK to <see cref="BusinessTypeCatalog"/>.Id.</summary>
     public int BusinessTypeId { get; set; }
-
-    /// <summary>
-    /// Optional user-defined description when the giro is "Otra tienda" or needs clarification.
-    /// </summary>
-    [MaxLength(100)]
-    public string? CustomDescription { get; set; }
 
     public Business Business { get; set; } = null!;
 

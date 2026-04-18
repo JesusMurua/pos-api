@@ -49,8 +49,13 @@ public class RegisterRequest
     public string OwnerName { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string Password { get; set; } = null!;
-    public int? BusinessTypeId { get; set; }
+
+    /// <summary>
+    /// List of sub-giro ids (BusinessTypeCatalog.Id) chosen during registration.
+    /// At least one is required; the first entry drives the primary macro category.
+    /// </summary>
     public List<int>? BusinessTypeIds { get; set; }
+
     public string? CustomGiroDescription { get; set; }
     public int? PlanTypeId { get; set; }
     public string? FolioPrefix { get; set; }
@@ -78,7 +83,10 @@ public class AuthResponse
     public List<BranchSummary> Branches { get; set; } = new();
 
     public int PlanTypeId { get; set; }
-    public int BusinessTypeId { get; set; }
+
+    /// <summary>Drives POS experience, plan rules and Stripe pricing group.</summary>
+    public int PrimaryMacroCategoryId { get; set; }
+
     public string? TrialEndsAt { get; set; }
     public string? SubscriptionStatus { get; set; }
     public bool OnboardingCompleted { get; set; }

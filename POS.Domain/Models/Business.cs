@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models.Catalogs;
 
@@ -13,8 +12,12 @@ public partial class Business
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    /// <summary>FK to BusinessTypeCatalog.Id. Legacy — new registrations use BusinessGiros instead.</summary>
-    public int BusinessTypeId { get; set; } = BusinessTypeIds.General;
+    /// <summary>FK to <see cref="MacroCategory"/>.Id. Drives POS experience, plan/feature gating and pricing.</summary>
+    public int PrimaryMacroCategoryId { get; set; } = MacroCategoryIds.Retail;
+
+    /// <summary>Free-text clarification when the user picks "Otro" or a non-catalog giro.</summary>
+    [MaxLength(100)]
+    public string? CustomGiroDescription { get; set; }
 
     /// <summary>FK to PlanTypeCatalog.Id (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>
     public int PlanTypeId { get; set; } = PlanTypeIds.Free;
@@ -78,7 +81,7 @@ public partial class Business
 
     #endregion
 
-    public BusinessTypeCatalog? BusinessTypeCatalog { get; set; }
+    public MacroCategory? PrimaryMacroCategory { get; set; }
 
     public PlanTypeCatalog? PlanTypeCatalog { get; set; }
 

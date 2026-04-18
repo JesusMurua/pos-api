@@ -68,7 +68,7 @@ public class AuthService : IAuthService
             CurrentBranchId = currentBranchId,
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
-            BusinessTypeId = business.BusinessTypeId,
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
             TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -112,7 +112,7 @@ public class AuthService : IAuthService
             CurrentBranchId = currentBranchId,
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
-            BusinessTypeId = business.BusinessTypeId,
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
             TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -165,7 +165,7 @@ public class AuthService : IAuthService
             CurrentBranchId = branchId,
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
-            BusinessTypeId = business.BusinessTypeId,
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
             TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
             SubscriptionStatus = subscription?.Status,
             OnboardingCompleted = business.OnboardingCompleted
@@ -191,30 +191,32 @@ public class AuthService : IAuthService
         var isPaidPlan = planTypeId is PlanTypeIds.Basic or PlanTypeIds.Pro or PlanTypeIds.Enterprise;
         DateTime? trialEndsAt = isPaidPlan ? DateTime.UtcNow.AddDays(14) : null;
 
-        // ── Resolve giro IDs: prefer BusinessTypeIds array, fallback to single BusinessTypeId ──
-        var giroIds = request.BusinessTypeIds?.Where(id => id > 0).Distinct().ToList();
-        if (giroIds == null || giroIds.Count == 0)
-        {
-            giroIds = new List<int> { request.BusinessTypeId ?? BusinessTypeIds.General };
-        }
+        // Resolve sub-giro IDs (BusinessTypeCatalog rows) — require at least one.
+        var giroIds = request.BusinessTypeIds?.Where(id => id > 0).Distinct().ToList()
+            ?? new List<int>();
 
-        // Lookup catalog entries to derive HasKitchen / HasTables
+        if (giroIds.Count == 0)
+            throw new ValidationException("Debe seleccionar al menos un giro");
+
         var allCatalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
         var matchedCatalogs = allCatalogs.Where(c => giroIds.Contains(c.Id)).ToList();
 
-        var hasKitchen = matchedCatalogs.Any(c => c.HasKitchen);
-        var hasTables = matchedCatalogs.Any(c => c.HasTables);
+        if (matchedCatalogs.Count == 0)
+            throw new ValidationException("Giros seleccionados no existen en el catálogo");
 
-        // Primary = first ID the user selected (preserve user's intent, not DB order)
-        var primaryBusinessTypeId = matchedCatalogs.Any()
-            ? giroIds.First(id => matchedCatalogs.Any(c => c.Id == id))
-            : BusinessTypeIds.General;
+        // Primary macro = macro of the first sub-giro the user selected (preserves intent).
+        var primaryCatalog = matchedCatalogs.First(c => c.Id == giroIds.First(id => matchedCatalogs.Any(m => m.Id == id)));
+        var primaryMacroCategoryId = primaryCatalog.PrimaryMacroCategoryId;
+
+        var hasKitchen = MacroCategoryIds.HasKitchen(primaryMacroCategoryId);
+        var hasTables = MacroCategoryIds.HasTables(primaryMacroCategoryId);
 
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
             Name = request.BusinessName,
-            BusinessTypeId = primaryBusinessTypeId,
+            PrimaryMacroCategoryId = primaryMacroCategoryId,
+            CustomGiroDescription = request.CustomGiroDescription,
             PlanTypeId = planTypeId,
             CountryCode = request.CountryCode ?? "MX",
             TrialEndsAt = trialEndsAt,
@@ -225,16 +227,12 @@ public class AuthService : IAuthService
             CreatedAt = DateTime.UtcNow
         };
 
-        // Build BusinessGiro junction rows
         foreach (var catalog in matchedCatalogs)
         {
             business.BusinessGiros.Add(new BusinessGiro
             {
                 Business = business,
-                BusinessTypeId = catalog.Id,
-                CustomDescription = string.Equals(catalog.Code, "General", StringComparison.OrdinalIgnoreCase)
-                    ? request.CustomGiroDescription
-                    : null
+                BusinessTypeId = catalog.Id
             });
         }
 
@@ -270,7 +268,7 @@ public class AuthService : IAuthService
         };
 
         // Default zones
-        var zones = BuildDefaultZones(branch, primaryBusinessTypeId);
+        var zones = BuildDefaultZones(branch, primaryMacroCategoryId);
 
         // Default category so the POS frontend doesn't crash on empty state
         var defaultCategory = new Category
@@ -338,7 +336,7 @@ public class AuthService : IAuthService
             CurrentBranchId = branch.Id,
             Branches = branches,
             PlanTypeId = business.PlanTypeId,
-            BusinessTypeId = business.BusinessTypeId,
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
             OnboardingCompleted = business.OnboardingCompleted
         };
@@ -405,7 +403,7 @@ public class AuthService : IAuthService
             new("branchId", device.BranchId.ToString()),
             new("mode", device.Mode),
             new("planType", PlanTypeIds.ToCode(business.PlanTypeId)),
-            new("businessType", BusinessTypeIds.ToCode(business.BusinessTypeId)),
+            new("macroCategory", MacroCategoryIds.ToCode(business.PrimaryMacroCategoryId)),
             new("features", featuresJson)
         };
 
@@ -446,7 +444,7 @@ public class AuthService : IAuthService
             new("branchId", branchId.ToString()),
             new("branches", branchesJson),
             new("planType", planType),
-            new("businessType", BusinessTypeIds.ToCode(business.BusinessTypeId)),
+            new("macroCategory", MacroCategoryIds.ToCode(business.PrimaryMacroCategoryId)),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
             new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower()),
             new("features", featuresJson)
@@ -476,25 +474,19 @@ public class AuthService : IAuthService
 
     /// <summary>
     /// Builds default zone entities (not persisted yet) using navigation properties.
+    /// Only Food &amp; Beverage gets salon/terrace/bar zones; other macros start empty.
     /// </summary>
-    private static List<Zone> BuildDefaultZones(Branch branch, int businessTypeId)
+    private static List<Zone> BuildDefaultZones(Branch branch, int primaryMacroCategoryId)
     {
-        if (businessTypeId is BusinessTypeIds.Retail or BusinessTypeIds.FoodTruck or BusinessTypeIds.General
-            or BusinessTypeIds.Abarrotes or BusinessTypeIds.Ferreteria or BusinessTypeIds.Papeleria
-            or BusinessTypeIds.Farmacia or BusinessTypeIds.Servicios)
+        if (primaryMacroCategoryId != MacroCategoryIds.FoodBeverage)
             return [];
 
-        var zones = new List<Zone>
+        return new List<Zone>
         {
-            new() { Branch = branch, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true }
+            new() { Branch = branch, Name = "Salón", Type = ZoneType.Salon, SortOrder = 1, IsActive = true },
+            new() { Branch = branch, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true },
+            new() { Branch = branch, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false }
         };
-
-        if (businessTypeId == BusinessTypeIds.Bar)
-            zones.Add(new Zone { Branch = branch, Name = "Barra", Type = ZoneType.BarSeats, SortOrder = 2, IsActive = true });
-
-        zones.Add(new Zone { Branch = branch, Name = "Terraza", Type = ZoneType.Other, SortOrder = 3, IsActive = false });
-
-        return zones;
     }
 
     #endregion

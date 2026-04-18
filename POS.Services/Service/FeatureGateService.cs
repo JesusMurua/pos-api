@@ -86,8 +86,7 @@ public class FeatureGateService : IFeatureGateService
             {
                 b.Id,
                 b.PlanTypeId,
-                b.BusinessTypeId,
-                GiroIds = b.BusinessGiros.Select(bg => bg.BusinessTypeId).ToList()
+                b.PrimaryMacroCategoryId
             })
             .FirstOrDefaultAsync();
 
@@ -96,23 +95,21 @@ public class FeatureGateService : IFeatureGateService
             return BusinessFeatureSnapshot.Empty(PlanTypeIds.ToCode(PlanTypeIds.Free));
         }
 
-        var activeGiroIds = business.GiroIds.Count > 0
-            ? business.GiroIds
-            : new List<int> { business.BusinessTypeId };
+        var macroCategoryId = business.PrimaryMacroCategoryId;
 
         var planRows = await _context.Set<PlanFeatureMatrix>()
             .AsNoTracking()
             .Where(m => m.PlanTypeId == business.PlanTypeId)
             .ToListAsync();
 
-        var giroRows = await _context.Set<BusinessTypeFeature>()
+        var macroRows = await _context.Set<BusinessTypeFeature>()
             .AsNoTracking()
-            .Where(b => activeGiroIds.Contains(b.BusinessTypeId))
+            .Where(b => b.MacroCategoryId == macroCategoryId)
             .ToListAsync();
 
         var overrideRows = await _context.Set<PlanBusinessTypeFeatureOverride>()
             .AsNoTracking()
-            .Where(o => o.PlanTypeId == business.PlanTypeId && activeGiroIds.Contains(o.BusinessTypeId))
+            .Where(o => o.PlanTypeId == business.PlanTypeId && o.MacroCategoryId == macroCategoryId)
             .ToListAsync();
 
         var features = await _context.Set<FeatureCatalog>()
@@ -120,17 +117,8 @@ public class FeatureGateService : IFeatureGateService
             .ToListAsync();
 
         var planByFeatureId = planRows.ToDictionary(r => r.FeatureId);
-
-        // Per-feature, per-giro applicability + optional limit override.
-        var giroApplicability = giroRows
-            .GroupBy(r => r.FeatureId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.ToDictionary(r => r.BusinessTypeId, r => r.Limit));
-
-        // Per-feature, per-giro absolute enablement override (wins over 2D resolution).
-        var overrideByKey = overrideRows
-            .ToDictionary(o => (o.FeatureId, o.BusinessTypeId), o => o.IsEnabled);
+        var macroApplicability = macroRows.ToDictionary(r => r.FeatureId, r => r.Limit);
+        var overrideByFeatureId = overrideRows.ToDictionary(o => o.FeatureId, o => o.IsEnabled);
 
         var entries = new Dictionary<FeatureKey, FeatureEntry>(features.Count);
         var resourceLabels = new Dictionary<FeatureKey, string?>(features.Count);
@@ -138,31 +126,19 @@ public class FeatureGateService : IFeatureGateService
         foreach (var feature in features)
         {
             var planEnabled = planByFeatureId.TryGetValue(feature.Id, out var planRow) && planRow.IsEnabled;
-            giroApplicability.TryGetValue(feature.Id, out var applicableGiros);
+            var applicable = macroApplicability.TryGetValue(feature.Id, out var macroLimit);
 
-            var isEnabled = false;
-            foreach (var giroId in activeGiroIds)
+            bool isEnabled;
+            if (overrideByFeatureId.TryGetValue(feature.Id, out var overrideEnabled))
             {
-                bool giroEnabled;
-                if (overrideByKey.TryGetValue((feature.Id, giroId), out var overrideEnabled))
-                {
-                    giroEnabled = overrideEnabled;
-                }
-                else
-                {
-                    var applicable = applicableGiros?.ContainsKey(giroId) ?? false;
-                    giroEnabled = applicable && planEnabled;
-                }
-
-                if (giroEnabled)
-                {
-                    isEnabled = true;
-                    break;
-                }
+                isEnabled = overrideEnabled;
+            }
+            else
+            {
+                isEnabled = applicable && planEnabled;
             }
 
-            var limitOverrides = applicableGiros?.Values.ToList();
-            var limit = ResolveLimit(planRow?.DefaultLimit, limitOverrides);
+            var limit = ResolveLimit(planRow?.DefaultLimit, applicable ? macroLimit : null);
 
             entries[feature.Key] = new FeatureEntry(isEnabled, limit);
             resourceLabels[feature.Key] = feature.ResourceLabel;
@@ -174,15 +150,11 @@ public class FeatureGateService : IFeatureGateService
             ResourceLabels: resourceLabels);
     }
 
-    private static int? ResolveLimit(int? planDefault, List<int?>? overrides)
+    private static int? ResolveLimit(int? planDefault, int? macroOverride)
     {
         if (planDefault == null) return null;
-        if (overrides == null || overrides.Count == 0) return planDefault;
-
-        var validOverrides = overrides.Where(o => o.HasValue).Select(o => o!.Value).ToList();
-        if (validOverrides.Count == 0) return planDefault;
-
-        return Math.Max(planDefault.Value, validOverrides.Max());
+        if (macroOverride == null) return planDefault;
+        return Math.Max(planDefault.Value, macroOverride.Value);
     }
 
     private static string CacheKey(int businessId) => $"FeatureGate::{businessId}";

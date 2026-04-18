@@ -23,4 +23,10 @@ public interface IBusinessService
     /// Updates an existing business.
     /// </summary>
     Task<Business> UpdateAsync(Business business);
+
+    /// <summary>
+    /// Replaces the macro category, custom description and full sub-giro set for a business.
+    /// Deletes all existing <see cref="BusinessGiro"/> rows and inserts the new ones.
+    /// </summary>
+    Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription);
 }

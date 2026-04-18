@@ -110,6 +110,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductTax> ProductTaxes { get; set; } = null!;
     public DbSet<OrderItemTax> OrderItemTaxes { get; set; } = null!;
     public DbSet<BusinessGiro> BusinessGiros { get; set; } = null!;
+    public DbSet<MacroCategory> MacroCategories { get; set; } = null!;
 
     // Feature gating matrix
     public DbSet<FeatureCatalog> FeatureCatalogs { get; set; } = null!;
@@ -147,9 +148,9 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Business>(entity =>
         {
-            entity.HasOne(b => b.BusinessTypeCatalog)
+            entity.HasOne(b => b.PrimaryMacroCategory)
                 .WithMany()
-                .HasForeignKey(b => b.BusinessTypeId)
+                .HasForeignKey(b => b.PrimaryMacroCategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(b => b.PlanTypeCatalog)
@@ -164,6 +165,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(b => b.LegalName).HasMaxLength(300);
             entity.Property(b => b.FacturapiOrganizationId).HasMaxLength(50);
             entity.Property(b => b.CountryCode).HasMaxLength(2).HasDefaultValue("MX");
+            entity.Property(b => b.CustomGiroDescription).HasMaxLength(100);
 
             entity.HasMany(b => b.Branches)
                 .WithOne(br => br.Business)
@@ -192,12 +194,29 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasIndex(bg => new { bg.BusinessId, bg.BusinessTypeId }).IsUnique();
 
-            entity.Property(bg => bg.CustomDescription).HasMaxLength(100);
-
             entity.HasOne(bg => bg.BusinessTypeCatalog)
                 .WithMany()
                 .HasForeignKey(bg => bg.BusinessTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<MacroCategory>(entity =>
+        {
+            entity.HasIndex(m => m.InternalCode).IsUnique();
+            entity.Property(m => m.InternalCode).HasMaxLength(30);
+            entity.Property(m => m.PublicName).HasMaxLength(100);
+            entity.Property(m => m.Description).HasMaxLength(300);
+        });
+
+        modelBuilder.Entity<BusinessTypeCatalog>(entity =>
+        {
+            entity.HasOne(c => c.PrimaryMacroCategory)
+                .WithMany()
+                .HasForeignKey(c => c.PrimaryMacroCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(c => c.Name).HasMaxLength(100);
+            entity.HasIndex(c => c.Name).IsUnique();
         });
 
         #endregion
@@ -1011,7 +1030,6 @@ public class ApplicationDbContext : DbContext
         #region System Catalogs Configuration
 
         modelBuilder.Entity<PlanTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
-        modelBuilder.Entity<BusinessTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
 
         modelBuilder.Entity<FeatureCatalog>(entity =>
         {
@@ -1039,11 +1057,11 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<BusinessTypeFeature>(entity =>
         {
-            entity.HasKey(b => new { b.BusinessTypeId, b.FeatureId });
+            entity.HasKey(b => new { b.MacroCategoryId, b.FeatureId });
 
-            entity.HasOne(b => b.BusinessTypeCatalog)
+            entity.HasOne(b => b.MacroCategory)
                 .WithMany()
-                .HasForeignKey(b => b.BusinessTypeId)
+                .HasForeignKey(b => b.MacroCategoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(b => b.Feature)
@@ -1056,16 +1074,16 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<PlanBusinessTypeFeatureOverride>(entity =>
         {
-            entity.HasKey(o => new { o.PlanTypeId, o.BusinessTypeId, o.FeatureId });
+            entity.HasKey(o => new { o.PlanTypeId, o.MacroCategoryId, o.FeatureId });
 
             entity.HasOne(o => o.PlanTypeCatalog)
                 .WithMany()
                 .HasForeignKey(o => o.PlanTypeId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(o => o.BusinessTypeCatalog)
+            entity.HasOne(o => o.MacroCategory)
                 .WithMany()
-                .HasForeignKey(o => o.BusinessTypeId)
+                .HasForeignKey(o => o.MacroCategoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(o => o.Feature)
@@ -1152,7 +1170,7 @@ public class ApplicationDbContext : DbContext
         {
             Id = 1,
             Name = "POS Táctil Demo",
-            BusinessTypeId = BusinessTypeIds.Restaurant,
+            PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage,
             PlanTypeId = PlanTypeIds.Basic,
             IsActive = true,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)

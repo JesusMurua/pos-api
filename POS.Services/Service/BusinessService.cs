@@ -70,13 +70,50 @@ public class BusinessService : IBusinessService
 
     /// <summary>
     /// Updates an existing business. Invalidates the feature gate cache because
-    /// BusinessTypeId / PlanTypeId changes shift the resolved matrix.
+    /// PrimaryMacroCategoryId / PlanTypeId changes shift the resolved matrix.
     /// </summary>
     public async Task<Business> UpdateAsync(Business business)
     {
         _unitOfWork.Business.Update(business);
         await _unitOfWork.SaveChangesAsync();
         _featureGate.Invalidate(business.Id);
+        return business;
+    }
+
+    /// <inheritdoc />
+    public async Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription)
+    {
+        if (businessTypeIds == null || businessTypeIds.Count == 0)
+            throw new ValidationException("Debe seleccionar al menos un giro");
+
+        var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");
+        var business = results.FirstOrDefault()
+            ?? throw new NotFoundException($"Business with id {businessId} not found");
+
+        var catalogs = (await _unitOfWork.Catalog.GetBusinessTypesAsync()).ToList();
+        var distinctIds = businessTypeIds.Distinct().ToList();
+        var matched = catalogs.Where(c => distinctIds.Contains(c.Id)).ToList();
+
+        if (matched.Count != distinctIds.Count)
+            throw new ValidationException("Uno o más giros seleccionados no existen en el catálogo");
+
+        business.PrimaryMacroCategoryId = primaryMacroCategoryId;
+        business.CustomGiroDescription = customGiroDescription;
+
+        // Replace the full sub-giro set via navigation; EF diffs the collection.
+        business.BusinessGiros.Clear();
+        foreach (var id in distinctIds)
+        {
+            business.BusinessGiros.Add(new BusinessGiro
+            {
+                BusinessId = businessId,
+                BusinessTypeId = id
+            });
+        }
+
+        _unitOfWork.Business.Update(business);
+        await _unitOfWork.SaveChangesAsync();
+        _featureGate.Invalidate(businessId);
         return business;
     }
 

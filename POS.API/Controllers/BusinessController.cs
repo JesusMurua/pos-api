@@ -85,25 +85,39 @@ public class BusinessController : BaseApiController
     }
 
     /// <summary>
-    /// Updates the business type (giro).
+    /// Replaces the business's macro category, sub-giro set and optional custom description.
     /// </summary>
-    /// <param name="request">The new business type.</param>
-    /// <returns>Success acknowledgement.</returns>
-    /// <response code="200">Business type updated.</response>
-    /// <response code="400">If the type is invalid.</response>
-    [HttpPut("type")]
+    /// <param name="request">Macro category, list of sub-giro ids and optional description.</param>
+    /// <returns>Resolved macro category and sub-giro identifiers.</returns>
+    /// <response code="200">Giro configuration updated.</response>
+    /// <response code="400">If validation fails.</response>
+    [HttpPut("giro")]
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> UpdateType([FromBody] UpdateBusinessTypeRequest request)
+    public async Task<IActionResult> UpdateGiro([FromBody] UpdateBusinessGiroRequest request)
     {
-        if (request.BusinessTypeId <= 0)
-            return BadRequest(new { message = "Invalid business type" });
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var business = await _businessService.GetByIdAsync(BusinessId);
-        business.BusinessTypeId = request.BusinessTypeId;
-        await _businessService.UpdateAsync(business);
-        return Ok(new { message = "Business type updated", businessTypeId = request.BusinessTypeId });
+        if (request.PrimaryMacroCategoryId <= 0)
+            return BadRequest(new { message = "PrimaryMacroCategoryId inválido" });
+
+        if (request.BusinessTypeIds == null || request.BusinessTypeIds.Count == 0)
+            return BadRequest(new { message = "Debe seleccionar al menos un giro" });
+
+        var updated = await _businessService.UpdateGiroAsync(
+            BusinessId,
+            request.PrimaryMacroCategoryId,
+            request.BusinessTypeIds,
+            request.CustomGiroDescription);
+
+        return Ok(new
+        {
+            message = "Giro configuration updated",
+            primaryMacroCategoryId = updated.PrimaryMacroCategoryId,
+            businessTypeIds = request.BusinessTypeIds,
+            customGiroDescription = updated.CustomGiroDescription
+        });
     }
 
     /// <summary>
@@ -218,11 +232,22 @@ public class BusinessController : BaseApiController
 }
 
 /// <summary>
-/// Request body for updating business type.
+/// Request body for replacing the business's macro category and sub-giro set.
 /// </summary>
-public class UpdateBusinessTypeRequest
+public class UpdateBusinessGiroRequest
 {
-    public int BusinessTypeId { get; set; }
+    /// <summary>Target <see cref="POS.Domain.Models.Catalogs.MacroCategory"/>.Id that will drive POS/plan rules.</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public int PrimaryMacroCategoryId { get; set; }
+
+    /// <summary>Full replacement set of sub-giro ids (BusinessTypeCatalog.Id). Must contain at least one.</summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MinLength(1)]
+    public List<int> BusinessTypeIds { get; set; } = new();
+
+    /// <summary>Free-text clarification when the user picks "Otro" or a non-catalog giro.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string? CustomGiroDescription { get; set; }
 }
 
 /// <summary>

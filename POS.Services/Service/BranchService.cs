@@ -110,14 +110,13 @@ public class BranchService : IBranchService
         if (branch == null)
             throw new NotFoundException($"Branch with id {branchId} not found");
 
-        var catalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
-        var catalog = catalogs.FirstOrDefault(c => c.Id == branch.Business!.BusinessTypeId);
+        var macroId = branch.Business!.PrimaryMacroCategoryId;
 
         return new BranchConfigDto
         {
             Id = branch.Id,
             BusinessId = branch.BusinessId,
-            BusinessName = branch.Business!.Name,
+            BusinessName = branch.Business.Name,
             BranchName = branch.Name,
             LocationName = branch.LocationName,
             HasKitchen = branch.HasKitchen,
@@ -127,8 +126,8 @@ public class BranchService : IBranchService
             FolioFormat = branch.FolioFormat,
             FolioCounter = branch.FolioCounter,
             PlanTypeId = branch.Business.PlanTypeId,
-            BusinessTypeId = branch.Business.BusinessTypeId,
-            PosExperience = catalog?.PosExperience ?? "Quick"
+            PrimaryMacroCategoryId = macroId,
+            PosExperience = MacroCategoryIds.PosExperience(macroId)
         };
     }
 

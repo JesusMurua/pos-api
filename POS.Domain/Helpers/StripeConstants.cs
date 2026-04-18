@@ -70,16 +70,11 @@ public static class StripeConstants
     }
 
     /// <summary>
-    /// Resolves the pricing group based on the business type.
-    /// Restaurant/Bar → Restaurant, Cafe/FoodTruck/Taqueria → Standard, everything else → General.
+    /// Resolves the Stripe pricing group from the business's <see cref="MacroCategoryIds"/>.
+    /// Food &amp; Beverage → Restaurant, Quick Service → Standard, everything else → General.
     /// </summary>
-    public static string GetPricingGroup(string businessType) =>
-        businessType switch
-        {
-            "Restaurant" or "Bar" => "Restaurant",
-            "Cafe" or "FoodTruck" or "Taqueria" => "Standard",
-            _ => "General"
-        };
+    public static string GetPricingGroup(int primaryMacroCategoryId) =>
+        MacroCategoryIds.PricingGroup(primaryMacroCategoryId);
 
     /// <summary>
     /// Maps Stripe Price IDs to (PlanType, BillingCycle, PricingGroup) tuples.
