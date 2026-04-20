@@ -373,9 +373,18 @@ public class CashRegisterService : ICashRegisterService
     /// <summary>
     /// Gets cash register session history for a date range.
     /// </summary>
-    public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to)
+    public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateOnly from, DateOnly to)
     {
-        return await _unitOfWork.CashRegisterSessions.GetHistoryAsync(branchId, from, to);
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
+
+        // Align cash-register day boundaries with orders/reports (BDD-013):
+        // compute startUtc from the `from` local midnight, endUtc from the
+        // `to` local end-of-day so the range is half-open [startUtc, endUtc).
+        var (startUtc, _) = TimeZoneHelper.GetUtcRangeForLocalDate(from, branch.TimeZoneId);
+        var (_, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(to, branch.TimeZoneId);
+
+        return await _unitOfWork.CashRegisterSessions.GetHistoryAsync(branchId, startUtc, endUtc);
     }
 
     #endregion

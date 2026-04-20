@@ -6,5 +6,10 @@ public interface ICashRegisterSessionRepository : IGenericRepository<CashRegiste
 {
     Task<CashRegisterSession?> GetOpenSessionAsync(int branchId);
     Task<CashRegisterSession?> GetOpenSessionByRegisterAsync(int registerId);
-    Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to);
+    /// <summary>
+    /// Returns cash register sessions whose <c>OpenedAt</c> falls in the half-open
+    /// UTC range <c>[startUtc, endUtc)</c>. Both bounds must carry
+    /// <see cref="DateTimeKind.Utc"/>.
+    /// </summary>
+    Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime startUtc, DateTime endUtc);
 }

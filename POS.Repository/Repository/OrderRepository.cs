@@ -12,29 +12,44 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
     }
 
-    public async Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateTime date)
+    #region Day / Range Queries
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.Orders
-            .Where(o => o.BranchId == branchId && o.CreatedAt.Date == date.Date)
+            .Where(o => o.BranchId == branchId
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .Include(o => o.Items)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Order>> GetPendingSyncAsync()
+    /// <inheritdoc />
+    public async Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.Orders
-            .Where(o => o.SyncStatusId == SyncStatusIds.Pending)
+            .Where(o => o.BranchId == branchId
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc
+                     && o.SyncStatusId != SyncStatusIds.Failed)
             .Include(o => o.Items)
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateTime date)
+    #endregion
+
+    #region Misc Queries (unchanged semantics)
+
+    public async Task<IEnumerable<Order>> GetPendingSyncAsync()
     {
         return await _context.Orders
-            .Where(o => o.BranchId == branchId
-                && o.CreatedAt.Date == date.Date
-                && o.SyncStatusId != SyncStatusIds.Failed)
+            .Where(o => o.SyncStatusId == SyncStatusIds.Pending)
             .Include(o => o.Items)
             .ToListAsync();
     }
@@ -71,18 +86,20 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 && o.ExternalOrderId == externalOrderId);
     }
 
-    // ──────────────────────────────────────────
-    // BDD-006b: High-performance report projections
-    // ──────────────────────────────────────────
+    #endregion
+
+    #region BDD-006b: High-performance report projections
 
     /// <inheritdoc />
-    public async Task<List<OrderDailyMetricRow>> GetDailyMetricsAsync(int branchId, DateTime from, DateTime to)
+    public async Task<List<OrderDailyMetricRow>> GetDailyMetricsAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
-                     && o.CreatedAt.Date >= from.Date
-                     && o.CreatedAt.Date <= to.Date)
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .GroupBy(o => new { o.CreatedAt.Date, IsCancelled = o.CancellationReason != null })
             .Select(g => new OrderDailyMetricRow
             {
@@ -96,13 +113,15 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     /// <inheritdoc />
-    public async Task<List<PaymentMethodTotalRow>> GetPaymentTotalsAsync(int branchId, DateTime from, DateTime to)
+    public async Task<List<PaymentMethodTotalRow>> GetPaymentTotalsAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.OrderPayments
             .AsNoTracking()
             .Where(p => p.Order.BranchId == branchId
-                     && p.Order.CreatedAt.Date >= from.Date
-                     && p.Order.CreatedAt.Date <= to.Date
+                     && p.Order.CreatedAt >= startUtc
+                     && p.Order.CreatedAt < endUtc
                      && p.Order.CancellationReason == null)
             .GroupBy(p => p.Method)
             .Select(g => new PaymentMethodTotalRow
@@ -114,13 +133,15 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     /// <inheritdoc />
-    public async Task<List<TopProduct>> GetTopProductsAsync(int branchId, DateTime from, DateTime to, int top = 10)
+    public async Task<List<TopProduct>> GetTopProductsAsync(int branchId, DateTime startUtc, DateTime endUtc, int top = 10)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.OrderItems
             .AsNoTracking()
             .Where(i => i.Order!.BranchId == branchId
-                     && i.Order.CreatedAt.Date >= from.Date
-                     && i.Order.CreatedAt.Date <= to.Date
+                     && i.Order.CreatedAt >= startUtc
+                     && i.Order.CreatedAt < endUtc
                      && i.Order.CancellationReason == null)
             .GroupBy(i => i.ProductName)
             .Select(g => new TopProduct
@@ -135,13 +156,15 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     /// <inheritdoc />
-    public async Task<List<OrderReportRow>> GetFlatOrderRowsAsync(int branchId, DateTime from, DateTime to)
+    public async Task<List<OrderReportRow>> GetFlatOrderRowsAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         var rows = await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
-                     && o.CreatedAt.Date >= from.Date
-                     && o.CreatedAt.Date <= to.Date)
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .OrderByDescending(o => o.CreatedAt)
             .Select(o => new
             {
@@ -169,13 +192,15 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     /// <inheritdoc />
-    public async Task<List<FiscalCsvRow>> GetFlatOrdersForCsvAsync(int branchId, DateTime from, DateTime to)
+    public async Task<List<FiscalCsvRow>> GetFlatOrdersForCsvAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         var rows = await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
-                     && o.CreatedAt.Date >= from.Date
-                     && o.CreatedAt.Date <= to.Date)
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .OrderByDescending(o => o.CreatedAt)
             .Select(o => new
             {
@@ -199,18 +224,17 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     /// <inheritdoc />
     public async Task<List<SalesPointDto>> GetSalesOverTimeAsync(
-        int branchId, DateTime from, DateTime to, string granularity)
+        int branchId, DateTime startUtc, DateTime endUtc, string granularity)
     {
-        var fromDate = from.Date;
-        var toDate = to.Date;
+        EnsureUtcRange(startUtc, endUtc);
 
         var baseQuery = _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
                      && o.IsPaid
                      && o.CancellationReason == null
-                     && o.CreatedAt >= fromDate
-                     && o.CreatedAt < toDate.AddDays(1));
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc);
 
         switch (granularity?.ToLowerInvariant())
         {
@@ -275,18 +299,17 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     /// <inheritdoc />
     public async Task<List<TopProductDto>> GetTopProductsBIAsync(
-        int branchId, DateTime from, DateTime to, int top = 10)
+        int branchId, DateTime startUtc, DateTime endUtc, int top = 10)
     {
-        var fromDate = from.Date;
-        var toDate = to.Date;
+        EnsureUtcRange(startUtc, endUtc);
 
         return await _context.OrderItems
             .AsNoTracking()
             .Where(i => i.Order!.BranchId == branchId
                      && i.Order.IsPaid
                      && i.Order.CancellationReason == null
-                     && i.Order.CreatedAt >= fromDate
-                     && i.Order.CreatedAt < toDate.AddDays(1))
+                     && i.Order.CreatedAt >= startUtc
+                     && i.Order.CreatedAt < endUtc)
             .GroupBy(i => i.ProductName)
             .Select(g => new TopProductDto
             {
@@ -301,18 +324,17 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     /// <inheritdoc />
     public async Task<List<PaymentMethodSalesDto>> GetSalesByPaymentMethodAsync(
-        int branchId, DateTime from, DateTime to)
+        int branchId, DateTime startUtc, DateTime endUtc)
     {
-        var fromDate = from.Date;
-        var toDate = to.Date;
+        EnsureUtcRange(startUtc, endUtc);
 
         var rawPayments = await _context.OrderPayments
             .AsNoTracking()
             .Where(p => p.Order.BranchId == branchId
                      && p.Order.IsPaid
                      && p.Order.CancellationReason == null
-                     && p.Order.CreatedAt >= fromDate
-                     && p.Order.CreatedAt < toDate.AddDays(1))
+                     && p.Order.CreatedAt >= startUtc
+                     && p.Order.CreatedAt < endUtc)
             .GroupBy(p => new { p.Method, p.PaymentProvider })
             .Select(g => new
             {
@@ -335,18 +357,17 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     /// <inheritdoc />
     public async Task<List<DetailedSalesCsvRow>> GetDetailedSalesCsvRowsAsync(
-        int branchId, DateTime from, DateTime to)
+        int branchId, DateTime startUtc, DateTime endUtc)
     {
-        var fromDate = from.Date;
-        var toDate = to.Date;
+        EnsureUtcRange(startUtc, endUtc);
 
         var rows = await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
                      && o.IsPaid
                      && o.CancellationReason == null
-                     && o.CreatedAt >= fromDate
-                     && o.CreatedAt < toDate.AddDays(1))
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .OrderByDescending(o => o.CreatedAt)
             .Select(o => new
             {
@@ -372,17 +393,20 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         }).ToList();
     }
 
-    // ──────────────────────────────────────────
-    // AUDIT-001 P0: Dashboard projections
-    // ──────────────────────────────────────────
+    #endregion
+
+    #region AUDIT-001 P0: Dashboard projections
 
     /// <inheritdoc />
-    public async Task<List<CancellationReasonRow>> GetCancellationsByReasonAsync(int branchId, DateTime date)
+    public async Task<List<CancellationReasonRow>> GetCancellationsByReasonAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
-                     && o.CreatedAt.Date == date.Date
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc
                      && o.CancellationReason != null)
             .GroupBy(o => o.CancellationReason!)
             .Select(g => new CancellationReasonRow
@@ -396,12 +420,15 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     /// <inheritdoc />
-    public async Task<List<DashboardRecentOrder>> GetRecentOrdersAsync(int branchId, DateTime date, int limit = 20)
+    public async Task<List<DashboardRecentOrder>> GetRecentOrdersAsync(int branchId, DateTime startUtc, DateTime endUtc, int limit = 20)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         var rows = await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
-                     && o.CreatedAt.Date == date.Date)
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc)
             .OrderByDescending(o => o.CreatedAt)
             .Take(limit)
             .Select(o => new
@@ -481,4 +508,26 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             ReconciliationNote = o.ReconciliationNote
         }).ToList();
     }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Defensive guard (BDD-013 VR-002). Rejects any non-UTC bound and collapsed
+    /// ranges so a future caller that bypasses the service layer cannot re-introduce
+    /// the <c>Npgsql Kind=Unspecified</c> class of 500 errors, nor silently return
+    /// zero rows from a range where <c>startUtc &gt;= endUtc</c>.
+    /// </summary>
+    private static void EnsureUtcRange(DateTime startUtc, DateTime endUtc)
+    {
+        if (startUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("startUtc must have DateTimeKind.Utc", nameof(startUtc));
+        if (endUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("endUtc must have DateTimeKind.Utc", nameof(endUtc));
+        if (endUtc <= startUtc)
+            throw new ArgumentException("endUtc must be strictly greater than startUtc", nameof(endUtc));
+    }
+
+    #endregion
 }

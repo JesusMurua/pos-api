@@ -44,6 +44,15 @@ public partial class Branch
     [MaxLength(5)]
     public string? FiscalZipCode { get; set; }
 
+    /// <summary>
+    /// IANA timezone identifier owned by the branch (e.g. <c>America/Mexico_City</c>).
+    /// Drives all server-side per-day boundary math for reports, KPIs and daily queries.
+    /// Non-nullable — defaults to <c>America/Mexico_City</c> at the entity and column level.
+    /// </summary>
+    [Required]
+    [MaxLength(50)]
+    public string TimeZoneId { get; set; } = "America/Mexico_City";
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual Business? Business { get; set; }

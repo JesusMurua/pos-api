@@ -142,7 +142,8 @@ public class AuthController : ControllerBase
                 PrimaryMacroCategoryId = request.PrimaryMacroCategoryId,
                 PlanTypeId = request.PlanTypeId,
                 FolioPrefix = request.FolioPrefix,
-                CountryCode = request.CountryCode
+                CountryCode = request.CountryCode,
+                TimeZoneId = request.TimeZoneId
             });
             return Ok(response);
         }

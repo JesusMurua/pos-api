@@ -77,6 +77,13 @@ public class RegisterRequest
     public int? PlanTypeId { get; set; }
     public string? FolioPrefix { get; set; }
     public string? CountryCode { get; set; }
+
+    /// <summary>
+    /// IANA timezone identifier for the matrix branch. Validated and persisted
+    /// by <see cref="IAuthService.RegisterAsync"/>. Unknown values raise
+    /// <see cref="POS.Domain.Exceptions.ValidationException"/>.
+    /// </summary>
+    public string? TimeZoneId { get; set; }
 }
 
 /// <summary>

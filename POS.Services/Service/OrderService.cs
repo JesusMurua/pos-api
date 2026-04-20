@@ -616,17 +616,36 @@ public class OrderService : IOrderService
     /// <summary>
     /// Retrieves orders for a branch on a specific date.
     /// </summary>
-    public async Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateTime date)
+    public async Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateOnly localDate)
     {
-        return await _unitOfWork.Orders.GetByBranchAndDateAsync(branchId, date);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, localDate, localDate);
+        return await _unitOfWork.Orders.GetByBranchAndDateAsync(branchId, startUtc, endUtc);
     }
 
     /// <summary>
     /// Retrieves order data for daily KPI summary.
     /// </summary>
-    public async Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateTime date)
+    public async Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateOnly localDate)
     {
-        return await _unitOfWork.Orders.GetDailySummaryAsync(branchId, date);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, localDate, localDate);
+        return await _unitOfWork.Orders.GetDailySummaryAsync(branchId, startUtc, endUtc);
+    }
+
+    /// <summary>
+    /// Resolves the UTC range that covers the inclusive local-calendar span
+    /// <c>[from, to]</c> in the branch's persistent timezone. Single-day queries
+    /// pass <c>from == to</c>. Raises <see cref="NotFoundException"/> when the
+    /// branch row does not exist (defensive — auth should prevent this).
+    /// </summary>
+    private async Task<(DateTime startUtc, DateTime endUtc)> ResolveUtcRangeAsync(
+        int branchId, DateOnly from, DateOnly to)
+    {
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
+
+        var (startUtc, _) = TimeZoneHelper.GetUtcRangeForLocalDate(from, branch.TimeZoneId);
+        var (_, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(to, branch.TimeZoneId);
+        return (startUtc, endUtc);
     }
 
     /// <summary>

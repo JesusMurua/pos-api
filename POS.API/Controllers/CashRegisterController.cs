@@ -198,8 +198,8 @@ public class CashRegisterController : BaseApiController
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(IEnumerable<CashRegisterSession>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         var sessions = await _cashRegisterService.GetHistoryAsync(BranchId, from, to);
         return Ok(sessions);

@@ -16,14 +16,16 @@ public interface IOrderService
     Task<SyncResult> SyncOrdersAsync(IEnumerable<SyncOrderRequest> orders, int branchId);
 
     /// <summary>
-    /// Retrieves orders for a branch on a specific date.
+    /// Retrieves orders for a branch on a given local calendar day. The branch's
+    /// persistent <c>TimeZoneId</c> drives the UTC range computation.
     /// </summary>
-    Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateTime date);
+    Task<IEnumerable<Order>> GetByBranchAndDateAsync(int branchId, DateOnly localDate);
 
     /// <summary>
-    /// Retrieves order data for daily KPI summary.
+    /// Retrieves order data for daily KPI summary on a given local calendar day.
+    /// The branch's persistent <c>TimeZoneId</c> drives the UTC range computation.
     /// </summary>
-    Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateTime date);
+    Task<IEnumerable<Order>> GetDailySummaryAsync(int branchId, DateOnly localDate);
 
     /// <summary>
     /// Gets the last order number for a branch. Returns 0 if no orders exist.

@@ -33,4 +33,37 @@ public static class TimeZoneHelper
             return TimeZoneInfo.FindSystemTimeZoneById(DefaultTimeZone);
         }
     }
+
+    /// <summary>
+    /// Returns the half-open UTC range <c>[startUtc, endUtc)</c> that covers the
+    /// local calendar day <paramref name="localDate"/> in <paramref name="ianaTimeZone"/>.
+    /// Both outputs carry <see cref="DateTimeKind.Utc"/> so they can be passed safely
+    /// to Npgsql-backed queries against <c>timestamptz</c> columns.
+    /// </summary>
+    /// <remarks>
+    /// Anchors at local midnight and adds 24 wall-clock hours for the end. This
+    /// means DST-transition days naturally yield a 23-hour span (spring-forward)
+    /// or a 25-hour span (fall-back); midnight is neither invalid nor ambiguous
+    /// in IANA zones of interest, so no DST resolution policy is required.
+    /// </remarks>
+    public static (DateTime startUtc, DateTime endUtc) GetUtcRangeForLocalDate(
+        DateOnly localDate,
+        string ianaTimeZone)
+    {
+        var tz = GetTimeZoneInfo(ianaTimeZone);
+
+        var localStart = new DateTime(
+            localDate.Year, localDate.Month, localDate.Day,
+            0, 0, 0, DateTimeKind.Unspecified);
+        var localEnd = localStart.AddDays(1);
+
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, tz);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(localEnd, tz);
+
+        if (endUtc <= startUtc)
+            throw new InvalidOperationException(
+                $"UTC range collapsed for {localDate:yyyy-MM-dd} in {ianaTimeZone}.");
+
+        return (startUtc, endUtc);
+    }
 }

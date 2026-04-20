@@ -116,6 +116,17 @@ namespace POS.Repository.Migrations
                 column: "CustomGiroDescription",
                 value: null);
 
+            // Seed the minimum MacroCategory row needed to satisfy the FKs added
+            // below. Business seed id=1 and existing BusinessTypeCatalogs rows
+            // carry PrimaryMacroCategoryId=1 (inherited from their old SortOrder
+            // value). Without this row the next AddForeignKey calls violate
+            // FK_Businesses_MacroCategories_PrimaryMacroCategoryId.
+            migrationBuilder.Sql("""
+                INSERT INTO "MacroCategories" ("Id", "InternalCode", "PublicName", "Description")
+                VALUES (1, 'FoodBeverage', 'Alimentos y Bebidas', NULL)
+                ON CONFLICT ("Id") DO NOTHING;
+                """);
+
             migrationBuilder.CreateIndex(
                 name: "IX_BusinessTypeCatalogs_Name",
                 table: "BusinessTypeCatalogs",

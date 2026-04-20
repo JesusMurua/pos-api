@@ -72,4 +72,11 @@ public class RegisterApiRequest
     /// <summary>ISO 3166-1 alpha-2 country code. Defaults to "MX" if not provided.</summary>
     [MaxLength(2)]
     public string? CountryCode { get; set; }
+
+    /// <summary>
+    /// IANA timezone identifier for the matrix branch (e.g. <c>America/Mexico_City</c>).
+    /// When null, empty or unresolvable, falls back to <c>America/Mexico_City</c>.
+    /// </summary>
+    [MaxLength(50)]
+    public string? TimeZoneId { get; set; }
 }

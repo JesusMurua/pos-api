@@ -64,9 +64,12 @@ public interface ICashRegisterService
     Task<CashMovement> AddMovementAsync(int branchId, AddMovementRequest request, int? cashRegisterId = null);
 
     /// <summary>
-    /// Gets cash register session history for a date range.
+    /// Gets cash register session history for an inclusive local calendar date
+    /// range <c>[from, to]</c>. The branch's persistent <c>TimeZoneId</c> is used
+    /// to compute the underlying UTC bounds, aligning cash-register day boundaries
+    /// with those of orders and reports.
     /// </summary>
-    Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to);
+    Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateOnly from, DateOnly to);
 
     #endregion
 }

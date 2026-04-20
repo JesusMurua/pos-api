@@ -54,7 +54,7 @@ public class OrdersController : BaseApiController
     [HttpGet]
     [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByBranchAndDate([FromQuery] DateTime date)
+    public async Task<IActionResult> GetByBranchAndDate([FromQuery] DateOnly date)
     {
         var orders = await _orderService.GetByBranchAndDateAsync(BranchId, date);
         return Ok(orders);
@@ -69,7 +69,7 @@ public class OrdersController : BaseApiController
     [HttpGet("summary")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDailySummary([FromQuery] DateTime date)
+    public async Task<IActionResult> GetDailySummary([FromQuery] DateOnly date)
     {
         var orders = await _orderService.GetDailySummaryAsync(BranchId, date);
         return Ok(orders);
@@ -238,7 +238,7 @@ public class OrdersController : BaseApiController
 
         await _orderService.AddPaymentAsync(id, BranchId, payment);
 
-        var order = (await _orderService.GetByBranchAndDateAsync(BranchId, DateTime.UtcNow))
+        var order = (await _orderService.GetByBranchAndDateAsync(BranchId, DateOnly.FromDateTime(DateTime.UtcNow)))
             .FirstOrDefault(o => o.Id == id);
 
         return Ok(new

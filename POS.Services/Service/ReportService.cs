@@ -1,5 +1,7 @@
 using ClosedXML.Excel;
 using POS.Domain.Enums;
+using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -27,12 +29,14 @@ public class ReportService : IReportService
     /// Gets report summary data for a date range.
     /// Uses SQL-level aggregation via repository projections — no .Include() or entity tracking.
     /// </summary>
-    public async Task<ReportSummary> GetSummaryAsync(int branchId, DateTime from, DateTime to)
+    public async Task<ReportSummary> GetSummaryAsync(int branchId, DateOnly from, DateOnly to)
     {
-        var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, from, to);
-        var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, from, to);
-        var topProducts = await _unitOfWork.Orders.GetTopProductsAsync(branchId, from, to);
-        var orderRows = await _unitOfWork.Orders.GetFlatOrderRowsAsync(branchId, from, to);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, from, to);
+
+        var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, startUtc, endUtc);
+        var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, startUtc, endUtc);
+        var topProducts = await _unitOfWork.Orders.GetTopProductsAsync(branchId, startUtc, endUtc);
+        var orderRows = await _unitOfWork.Orders.GetFlatOrderRowsAsync(branchId, startUtc, endUtc);
 
         var completedMetrics = dailyMetrics.Where(m => !m.IsCancelled).ToList();
         var cancelledMetrics = dailyMetrics.Where(m => m.IsCancelled).ToList();
@@ -64,8 +68,8 @@ public class ReportService : IReportService
 
         return new ReportSummary
         {
-            From = from,
-            To = to,
+            From = from.ToDateTime(TimeOnly.MinValue),
+            To = to.ToDateTime(TimeOnly.MinValue),
             TotalOrders = totalOrders,
             CancelledOrders = cancelledOrders,
             CompletedOrders = completedOrders,
@@ -83,7 +87,7 @@ public class ReportService : IReportService
     /// <summary>
     /// Generates Excel report as byte array.
     /// </summary>
-    public async Task<byte[]> GenerateExcelAsync(int branchId, DateTime from, DateTime to)
+    public async Task<byte[]> GenerateExcelAsync(int branchId, DateOnly from, DateOnly to)
     {
         var summary = await GetSummaryAsync(branchId, from, to);
 
@@ -101,7 +105,7 @@ public class ReportService : IReportService
     /// <summary>
     /// Generates PDF report as byte array.
     /// </summary>
-    public async Task<byte[]> GeneratePdfAsync(int branchId, DateTime from, DateTime to)
+    public async Task<byte[]> GeneratePdfAsync(int branchId, DateOnly from, DateOnly to)
     {
         var summary = await GetSummaryAsync(branchId, from, to);
 
@@ -126,9 +130,10 @@ public class ReportService : IReportService
     /// Generates a fiscal CSV export with invoice status for each order.
     /// Uses SQL-level projection via repository — no .Include() or entity tracking.
     /// </summary>
-    public async Task<byte[]> GenerateFiscalCsvAsync(int branchId, DateTime from, DateTime to)
+    public async Task<byte[]> GenerateFiscalCsvAsync(int branchId, DateOnly from, DateOnly to)
     {
-        var rows = await _unitOfWork.Orders.GetFlatOrdersForCsvAsync(branchId, from, to);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, from, to);
+        var rows = await _unitOfWork.Orders.GetFlatOrdersForCsvAsync(branchId, startUtc, endUtc);
 
         using var stream = new MemoryStream();
         using var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(true));
@@ -162,11 +167,13 @@ public class ReportService : IReportService
     /// Only paid, non-cancelled orders are included.
     /// </summary>
     public async Task<DashboardChartsDto> GetDashboardChartsAsync(
-        int branchId, DateTime from, DateTime to, string granularity)
+        int branchId, DateOnly from, DateOnly to, string granularity)
     {
-        var salesOverTime = await _unitOfWork.Orders.GetSalesOverTimeAsync(branchId, from, to, granularity);
-        var topProducts = await _unitOfWork.Orders.GetTopProductsBIAsync(branchId, from, to);
-        var salesByPaymentMethod = await _unitOfWork.Orders.GetSalesByPaymentMethodAsync(branchId, from, to);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, from, to);
+
+        var salesOverTime = await _unitOfWork.Orders.GetSalesOverTimeAsync(branchId, startUtc, endUtc, granularity);
+        var topProducts = await _unitOfWork.Orders.GetTopProductsBIAsync(branchId, startUtc, endUtc);
+        var salesByPaymentMethod = await _unitOfWork.Orders.GetSalesByPaymentMethodAsync(branchId, startUtc, endUtc);
 
         return new DashboardChartsDto
         {
@@ -182,9 +189,10 @@ public class ReportService : IReportService
     /// Delegates to repository projection for SQL-level optimization.
     /// Only paid, non-cancelled orders are included.
     /// </summary>
-    public async Task<string> GetDetailedSalesCsvAsync(int branchId, DateTime from, DateTime to)
+    public async Task<string> GetDetailedSalesCsvAsync(int branchId, DateOnly from, DateOnly to)
     {
-        var rows = await _unitOfWork.Orders.GetDetailedSalesCsvRowsAsync(branchId, from, to);
+        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, from, to);
+        var rows = await _unitOfWork.Orders.GetDetailedSalesCsvRowsAsync(branchId, startUtc, endUtc);
 
         var sb = new System.Text.StringBuilder();
         sb.Append('\uFEFF'); // BOM — ensures Excel opens the file with correct encoding
@@ -506,6 +514,21 @@ public class ReportService : IReportService
     private static string FormatMoney(int cents)
     {
         return $"${cents / 100m:N2}";
+    }
+
+    /// <summary>
+    /// Resolves the inclusive local range <c>[from, to]</c> into a half-open UTC
+    /// window <c>[startUtc, endUtc)</c> using the branch's persistent timezone.
+    /// </summary>
+    private async Task<(DateTime startUtc, DateTime endUtc)> ResolveUtcRangeAsync(
+        int branchId, DateOnly from, DateOnly to)
+    {
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
+
+        var (startUtc, _) = TimeZoneHelper.GetUtcRangeForLocalDate(from, branch.TimeZoneId);
+        var (_, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(to, branch.TimeZoneId);
+        return (startUtc, endUtc);
     }
 
     #endregion

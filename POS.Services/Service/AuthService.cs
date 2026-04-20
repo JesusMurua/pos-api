@@ -194,6 +194,11 @@ public class AuthService : IAuthService
         var primaryMacro = macros.FirstOrDefault(m => m.Id == request.PrimaryMacroCategoryId)
             ?? throw new ValidationException("PrimaryMacroCategoryId inválido");
 
+        // Resolve timezone. Empty/null → column default. Non-empty but unresolvable
+        // → reject so the DB never holds an opaque string that will silently
+        // fall back in every per-day query.
+        var resolvedTimeZoneId = ResolveTimeZoneId(request.TimeZoneId);
+
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
@@ -219,6 +224,7 @@ public class AuthService : IAuthService
             HasTables = primaryMacro.HasTables,
             FolioPrefix = request.FolioPrefix,
             FolioCounter = 0,
+            TimeZoneId = resolvedTimeZoneId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -499,6 +505,29 @@ public class AuthService : IAuthService
         CurrentOnboardingStep = business.CurrentOnboardingStep,
         OnboardingStatusId = business.OnboardingStatusId
     };
+
+    /// <summary>
+    /// Normalizes and validates an incoming IANA timezone identifier. Null or
+    /// empty collapses to the default (<c>America/Mexico_City</c>); any other
+    /// value must resolve via <see cref="TimeZoneInfo.FindSystemTimeZoneById"/>
+    /// or the call raises <see cref="ValidationException"/> (VR-001).
+    /// </summary>
+    private static string ResolveTimeZoneId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return TimeZoneHelper.DefaultTimeZone;
+
+        try
+        {
+            TimeZoneInfo.FindSystemTimeZoneById(raw);
+            return raw;
+        }
+        catch
+        {
+            throw new ValidationException(
+                "TimeZoneId is not a valid IANA timezone identifier");
+        }
+    }
 
     private static readonly Regex PasswordComplexityRegex = new(
         @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$",

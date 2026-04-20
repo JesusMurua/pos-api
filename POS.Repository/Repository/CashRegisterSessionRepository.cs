@@ -27,14 +27,32 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
             .FirstOrDefaultAsync();
     }
 
-    public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime from, DateTime to)
+    public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime startUtc, DateTime endUtc)
     {
+        EnsureUtcRange(startUtc, endUtc);
+
         return await _context.CashRegisterSessions
             .Where(s => s.BranchId == branchId
-                && s.OpenedAt >= from
-                && s.OpenedAt <= to)
+                && s.OpenedAt >= startUtc
+                && s.OpenedAt < endUtc)
             .Include(s => s.Movements)
             .OrderByDescending(s => s.OpenedAt)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// Defensive guard (BDD-013 VR-002/VR-003). Rejects non-UTC bounds or
+    /// collapsed ranges so a future caller that bypasses the service layer
+    /// cannot re-introduce <c>Npgsql Kind=Unspecified</c> errors nor silently
+    /// return zero rows from a range where <c>startUtc &gt;= endUtc</c>.
+    /// </summary>
+    private static void EnsureUtcRange(DateTime startUtc, DateTime endUtc)
+    {
+        if (startUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("startUtc must have DateTimeKind.Utc", nameof(startUtc));
+        if (endUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("endUtc must have DateTimeKind.Utc", nameof(endUtc));
+        if (endUtc <= startUtc)
+            throw new ArgumentException("endUtc must be strictly greater than startUtc", nameof(endUtc));
     }
 }

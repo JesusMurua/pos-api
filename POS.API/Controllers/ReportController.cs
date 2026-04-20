@@ -34,8 +34,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(ReportSummary), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetSummary(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         var summary = await _reportService.GetSummaryAsync(BranchId, from, to);
         return Ok(summary);
@@ -55,8 +55,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportExcel(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         var bytes = await _reportService.GenerateExcelAsync(BranchId, from, to);
 
@@ -80,8 +80,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportPdf(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         var bytes = await _reportService.GeneratePdfAsync(BranchId, from, to);
 
@@ -106,8 +106,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportFiscalCsv(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         var bytes = await _reportService.GenerateFiscalCsvAsync(BranchId, from, to);
 
@@ -138,8 +138,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(DashboardChartsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetDashboardCharts(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to,
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
         [FromQuery] string granularity = "day")
     {
         try
@@ -169,8 +169,8 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ExportDetailedSalesCsv(
-        [FromQuery] DateTime from,
-        [FromQuery] DateTime to)
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to)
     {
         try
         {

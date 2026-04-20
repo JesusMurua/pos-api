@@ -253,6 +253,13 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(b => b.IsMatrix).HasDefaultValue(false);
             entity.Property(b => b.HasDelivery).HasDefaultValue(false);
+
+            // Defense in depth: column-level default ensures raw SQL inserts that
+            // omit TimeZoneId still land with a valid IANA identifier.
+            entity.Property(b => b.TimeZoneId)
+                .HasMaxLength(50)
+                .HasDefaultValue("America/Mexico_City")
+                .IsRequired();
         });
 
         #endregion
@@ -1185,6 +1192,7 @@ public class ApplicationDbContext : DbContext
             PinHash = "$2a$11$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
             IsMatrix = true,
             IsActive = true,
+            TimeZoneId = "America/Mexico_City",
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 

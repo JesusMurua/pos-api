@@ -32,6 +32,10 @@ namespace POS.Repository.Migrations
                        (3, 'Bogo', '2x1', 3), (4, 'Bundle', 'Paquete', 4),
                        (5, 'OrderDiscount', 'Descuento en orden', 5), (6, 'FreeProduct', 'Producto gratis', 6)
                 ON CONFLICT ("Id") DO NOTHING;
+
+                INSERT INTO "BusinessTypeCatalogs" ("Id", "Code", "Name", "HasKitchen", "HasTables", "SortOrder", "PosExperience")
+                VALUES (1, 'Restaurant', 'Restaurante', true, true, 1, 'TableService')
+                ON CONFLICT ("Id") DO NOTHING;
                 """);
 
             // ═══════════════════════════════════════════════════════════════

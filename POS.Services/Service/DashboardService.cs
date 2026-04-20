@@ -1,4 +1,6 @@
 using POS.Domain.Enums;
+using POS.Domain.Exceptions;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
@@ -15,19 +17,21 @@ public class DashboardService : IDashboardService
     }
 
     /// <summary>
-    /// Returns dashboard summary for a specific date.
+    /// Returns dashboard summary for a specific local calendar day.
     /// Uses SQL-level aggregation via repository projections — no .Include() or entity tracking.
     /// </summary>
-    public async Task<DashboardSummaryDto> GetSummaryAsync(int branchId, DateTime date)
+    public async Task<DashboardSummaryDto> GetSummaryAsync(int branchId, DateOnly localDate)
     {
-        var from = date.Date;
-        var to = date.Date;
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
 
-        var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, from, to);
-        var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, from, to);
-        var topProducts = await _unitOfWork.Orders.GetTopProductsAsync(branchId, from, to, top: 5);
-        var cancellationReasons = await _unitOfWork.Orders.GetCancellationsByReasonAsync(branchId, date);
-        var recentOrders = await _unitOfWork.Orders.GetRecentOrdersAsync(branchId, date);
+        var (startUtc, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(localDate, branch.TimeZoneId);
+
+        var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, startUtc, endUtc);
+        var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, startUtc, endUtc);
+        var topProducts = await _unitOfWork.Orders.GetTopProductsAsync(branchId, startUtc, endUtc, top: 5);
+        var cancellationReasons = await _unitOfWork.Orders.GetCancellationsByReasonAsync(branchId, startUtc, endUtc);
+        var recentOrders = await _unitOfWork.Orders.GetRecentOrdersAsync(branchId, startUtc, endUtc);
 
         var completedMetrics = dailyMetrics.Where(m => !m.IsCancelled).ToList();
         var cancelledMetrics = dailyMetrics.Where(m => m.IsCancelled).ToList();
@@ -53,7 +57,7 @@ public class DashboardService : IDashboardService
 
         return new DashboardSummaryDto
         {
-            Date = date.Date,
+            Date = localDate.ToDateTime(TimeOnly.MinValue),
             Sales = new DashboardSales
             {
                 TotalCents = totalCents,
