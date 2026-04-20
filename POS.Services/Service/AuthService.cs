@@ -19,6 +19,9 @@ namespace POS.Services.Service;
 
 public class AuthService : IAuthService
 {
+    private const string SessionTypeEmail = "email";
+    private const string SessionTypePin = "pin";
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
@@ -59,22 +62,9 @@ public class AuthService : IAuthService
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
         var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, macroCode, features);
+        var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, macroCode, features, SessionTypeEmail);
 
-        return new AuthResponse
-        {
-            Token = token,
-            RoleId = user.RoleId,
-            Name = user.Name,
-            BusinessId = user.BusinessId,
-            CurrentBranchId = currentBranchId,
-            Branches = branches,
-            PlanTypeId = business.PlanTypeId,
-            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
-            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
-            SubscriptionStatus = subscription?.Status,
-            OnboardingCompleted = business.OnboardingCompleted
-        };
+        return BuildAuthResponse(token, user, business, currentBranchId, branches, subscription);
     }
 
     /// <summary>
@@ -104,28 +94,15 @@ public class AuthService : IAuthService
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
         var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, macroCode, features);
+        var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, macroCode, features, SessionTypePin);
 
-        return new AuthResponse
-        {
-            Token = token,
-            RoleId = matchedUser.RoleId,
-            Name = matchedUser.Name,
-            BusinessId = matchedUser.BusinessId,
-            CurrentBranchId = currentBranchId,
-            Branches = branches,
-            PlanTypeId = business.PlanTypeId,
-            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
-            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
-            SubscriptionStatus = subscription?.Status,
-            OnboardingCompleted = business.OnboardingCompleted
-        };
+        return BuildAuthResponse(token, matchedUser, business, currentBranchId, branches, subscription);
     }
 
     /// <summary>
     /// Switches the authenticated user to a different branch and returns a new JWT.
     /// </summary>
-    public async Task<AuthResponse> SwitchBranchAsync(int userId, int branchId)
+    public async Task<AuthResponse> SwitchBranchAsync(int userId, int branchId, string? sessionType)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(userId);
         if (user == null || !user.IsActive)
@@ -138,9 +115,7 @@ public class AuthService : IAuthService
         if (branch.BusinessId != user.BusinessId)
             throw new UnauthorizedException("Branch does not belong to the user's business");
 
-        var isAdminRole = user.RoleId == UserRoleIds.Owner || user.RoleId == UserRoleIds.Manager;
-
-        if (!isAdminRole)
+        if (!UserRoleIds.IsAdminRole(user.RoleId))
         {
             var userBranches = await _unitOfWork.UserBranches.GetByUserIdAsync(userId);
             if (!userBranches.Any(ub => ub.BranchId == branchId))
@@ -150,30 +125,48 @@ public class AuthService : IAuthService
         var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (_, branches) = await ResolveBranchesAsync(user);
 
-        var expiration = isAdminRole
-            ? TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays)
-            : TimeSpan.FromHours(_jwtSettings.PinExpirationHours);
+        var validatedSessionType = ValidateSessionType(sessionType);
+        var expiration = ResolveExpiration(validatedSessionType);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
         var planType = PlanTypeIds.ToCode(business!.PlanTypeId);
         var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, branchId, branches, expiration, planType, macroCode, features);
+        var token = GenerateToken(user, business, branchId, branches, expiration, planType, macroCode, features, validatedSessionType);
 
-        return new AuthResponse
-        {
-            Token = token,
-            RoleId = user.RoleId,
-            Name = user.Name,
-            BusinessId = user.BusinessId,
-            CurrentBranchId = branchId,
-            Branches = branches,
-            PlanTypeId = business.PlanTypeId,
-            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
-            TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
-            SubscriptionStatus = subscription?.Status,
-            OnboardingCompleted = business.OnboardingCompleted
-        };
+        return BuildAuthResponse(token, user, business, branchId, branches, subscription);
+    }
+
+    /// <summary>
+    /// Rehydrates the current session from the database and returns a freshly minted
+    /// JWT plus an up-to-date <see cref="AuthResponse"/>. The new token inherits the
+    /// same <paramref name="sessionType"/> as the incoming token.
+    /// </summary>
+    public async Task<AuthResponse> GetSessionAsync(int userId, string? sessionType)
+    {
+        // Validate sessionType up-front so legacy or tampered tokens are rejected
+        // before we spend DB round-trips on rehydrating a session we will not issue.
+        var validatedSessionType = ValidateSessionType(sessionType);
+
+        var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        if (user == null || !user.IsActive)
+            throw new UnauthorizedException("User is no longer active");
+
+        var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
+        if (business == null || !business.IsActive)
+            throw new UnauthorizedException("Business is no longer active");
+
+        var (currentBranchId, branches) = await ResolveBranchesAsync(user);
+
+        var expiration = ResolveExpiration(validatedSessionType);
+
+        var subscription = await ResolveSubscriptionAsync(user.BusinessId);
+        var planType = PlanTypeIds.ToCode(business.PlanTypeId);
+        var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
+        var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
+        var token = GenerateToken(user, business, currentBranchId, branches, expiration, planType, macroCode, features, validatedSessionType);
+
+        return BuildAuthResponse(token, user, business, currentBranchId, branches, subscription);
     }
 
     /// <summary>
@@ -302,7 +295,7 @@ public class AuthService : IAuthService
         // gate service sees the fresh BusinessGiros rows.
         var branches = new List<BranchSummary> { new() { Id = branch.Id, Name = branch.Name } };
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
-        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), primaryMacro.InternalCode, features);
+        var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), primaryMacro.InternalCode, features, SessionTypeEmail);
 
         // Fire-and-forget: welcome email — never blocks the response
         _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
@@ -318,7 +311,9 @@ public class AuthService : IAuthService
             PlanTypeId = business.PlanTypeId,
             PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
             TrialEndsAt = business.TrialEndsAt?.ToString("o"),
-            OnboardingCompleted = business.OnboardingCompleted
+            OnboardingCompleted = business.OnboardingCompleted,
+            CurrentOnboardingStep = business.CurrentOnboardingStep,
+            OnboardingStatusId = business.OnboardingStatusId
         };
     }
 
@@ -413,7 +408,8 @@ public class AuthService : IAuthService
         TimeSpan expiration,
         string planType,
         string macroCategoryCode,
-        IReadOnlyList<string> features)
+        IReadOnlyList<string> features,
+        string sessionType)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -435,7 +431,8 @@ public class AuthService : IAuthService
             new("macroCategory", macroCategoryCode),
             new("trialEndsAt", business.TrialEndsAt?.ToString("o") ?? ""),
             new("onboardingCompleted", business.OnboardingCompleted.ToString().ToLower()),
-            new("features", featuresJson)
+            new("features", featuresJson),
+            new("sessionType", sessionType)
         };
 
         var token = new JwtSecurityToken(
@@ -448,6 +445,60 @@ public class AuthService : IAuthService
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    /// <summary>
+    /// Strictly validates <paramref name="sessionType"/> against the canonical
+    /// whitelist (<c>email</c> / <c>pin</c>). Any other value — including null,
+    /// empty, or unknown — raises <see cref="UnauthorizedException"/> so legacy
+    /// or forged tokens without a valid session-type claim are rejected at the
+    /// service boundary. No graceful-fallback path exists.
+    /// </summary>
+    /// <exception cref="UnauthorizedException">
+    /// Thrown when the claim is missing or not one of the allowed values.
+    /// </exception>
+    private static string ValidateSessionType(string? sessionType) => sessionType switch
+    {
+        SessionTypeEmail => SessionTypeEmail,
+        SessionTypePin => SessionTypePin,
+        _ => throw new UnauthorizedException("Missing or invalid sessionType claim")
+    };
+
+    /// <summary>
+    /// Resolves token lifetime from <paramref name="sessionType"/>. PIN sessions
+    /// are always bounded to <c>PinExpirationHours</c> even when the underlying
+    /// user has an admin role — a PIN session cannot upgrade itself.
+    /// </summary>
+    private TimeSpan ResolveExpiration(string sessionType) => sessionType == SessionTypePin
+        ? TimeSpan.FromHours(_jwtSettings.PinExpirationHours)
+        : TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays);
+
+    /// <summary>
+    /// Builds the outgoing <see cref="AuthResponse"/> from a freshly issued token
+    /// and the resolved user / business / subscription graph. Centralizes DTO
+    /// population so every login flow surfaces the same set of fields.
+    /// </summary>
+    private static AuthResponse BuildAuthResponse(
+        string token,
+        User user,
+        Business business,
+        int currentBranchId,
+        List<BranchSummary> branches,
+        Subscription? subscription) => new()
+    {
+        Token = token,
+        RoleId = user.RoleId,
+        Name = user.Name,
+        BusinessId = user.BusinessId,
+        CurrentBranchId = currentBranchId,
+        Branches = branches,
+        PlanTypeId = business.PlanTypeId,
+        PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
+        TrialEndsAt = subscription?.TrialEndsAt?.ToString("o"),
+        SubscriptionStatus = subscription?.Status,
+        OnboardingCompleted = business.OnboardingCompleted,
+        CurrentOnboardingStep = business.CurrentOnboardingStep,
+        OnboardingStatusId = business.OnboardingStatusId
+    };
 
     private static readonly Regex PasswordComplexityRegex = new(
         @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$",

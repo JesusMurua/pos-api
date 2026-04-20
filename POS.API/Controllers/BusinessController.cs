@@ -208,7 +208,8 @@ public class BusinessController : BaseApiController
         business.OnboardingStatusId = 3;
         await _businessService.UpdateAsync(business);
 
-        var response = await _authService.SwitchBranchAsync(UserId, BranchId);
+        var sessionType = User.FindFirst("sessionType")?.Value;
+        var response = await _authService.SwitchBranchAsync(UserId, BranchId, sessionType);
         return Ok(response);
     }
 

@@ -78,7 +78,38 @@ public class AuthController : ControllerBase
         if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
             return Unauthorized();
 
-        var response = await _authService.SwitchBranchAsync(userId, request.BranchId);
+        var sessionType = User.FindFirst("sessionType")?.Value;
+        var response = await _authService.SwitchBranchAsync(userId, request.BranchId, sessionType);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Rehydrates the current session from the database and returns a freshly minted
+    /// JWT plus an up-to-date <see cref="AuthResponse"/>. The SPA calls this on boot
+    /// and after onboarding completion to break out of stale-token redirect loops.
+    /// Device tokens (those carrying <c>type=device</c>) are rejected with 401 because
+    /// they have no user identity to rehydrate.
+    /// </summary>
+    /// <returns>A fresh JWT and the current session state.</returns>
+    /// <response code="200">Returns the rehydrated session.</response>
+    /// <response code="401">If the token is missing, is a device token, lacks a valid <c>sessionType</c> claim, or the user/business is no longer active.</response>
+    [HttpGet("me")]
+    [Authorize]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Me()
+    {
+        // Reject device tokens outright — they have no userId to rehydrate from.
+        if (User.FindFirst("type")?.Value == "device")
+            return Unauthorized();
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            return Unauthorized();
+
+        var sessionType = User.FindFirst("sessionType")?.Value;
+
+        var response = await _authService.GetSessionAsync(userId, sessionType);
         return Ok(response);
     }
 

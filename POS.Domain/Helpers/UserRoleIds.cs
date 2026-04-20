@@ -38,4 +38,11 @@ public static class UserRoleIds
         Host => "Host",
         _ => "Cashier"
     };
+
+    /// <summary>
+    /// True when the role has full Back Office access (Owner or Manager). Legacy
+    /// DB rows tagged as "Admin" are still id=2 and therefore map to Manager,
+    /// so this helper is the single source of truth for admin-level checks.
+    /// </summary>
+    public static bool IsAdminRole(int roleId) => roleId == Owner || roleId == Manager;
 }

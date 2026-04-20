@@ -28,7 +28,7 @@ public class TableController : BaseApiController
     /// <returns>A list of tables.</returns>
     /// <response code="200">Returns the list of tables.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen,Host")]
     [ProducesResponseType(typeof(IEnumerable<RestaurantTable>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranch([FromQuery] bool includeInactive = false)
     {
@@ -43,7 +43,7 @@ public class TableController : BaseApiController
     /// <returns>A list of table statuses with display info.</returns>
     /// <response code="200">Returns the list of table statuses.</response>
     [HttpGet("status")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter,Kitchen,Host")]
     [ProducesResponseType(typeof(IEnumerable<TableStatusDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTableStatuses()
     {
