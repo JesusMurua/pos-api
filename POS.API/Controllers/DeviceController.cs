@@ -35,7 +35,7 @@ public class DeviceController : BaseApiController
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var response = await _deviceService.GenerateActivationCodeAsync(
-            BusinessId, request.BranchId, request.Mode, UserId);
+            BusinessId, request.BranchId, request.Mode, request.Name, UserId);
         return Ok(response);
     }
 
@@ -79,7 +79,9 @@ public class DeviceController : BaseApiController
 }
 
 /// <summary>
-/// Request body for generating an activation code.
+/// Request body for generating an activation code. The code acts as a pre-configured
+/// "package" — the Admin chooses Branch, Mode, and Name at generation time so the
+/// fresh terminal auto-configures without further prompts.
 /// </summary>
 public class GenerateCodeRequest
 {
@@ -88,6 +90,15 @@ public class GenerateCodeRequest
 
     [Required]
     public string Mode { get; set; } = null!;
+
+    /// <summary>
+    /// Human-readable device label chosen by the Admin (e.g. "Caja 1", "KDS Cocina").
+    /// Copied into <c>Device.Name</c> on registration so the operator never has to
+    /// re-enter it at the terminal.
+    /// </summary>
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = null!;
 }
 
 /// <summary>

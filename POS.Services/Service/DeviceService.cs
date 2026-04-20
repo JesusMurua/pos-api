@@ -32,12 +32,16 @@ public class DeviceService : IDeviceService
     /// Retries on collision (up to 10 attempts).
     /// </summary>
     public async Task<GenerateCodeResponse> GenerateActivationCodeAsync(
-        int businessId, int branchId, string mode, int createdBy)
+        int businessId, int branchId, string mode, string name, int createdBy)
     {
         var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
         var normalizedMode = mode.ToLowerInvariant();
         if (!validModes.Contains(normalizedMode))
             throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
+
+        var trimmedName = name?.Trim();
+        if (string.IsNullOrEmpty(trimmedName))
+            throw new ValidationException("Name is required");
 
         await EnforceDeviceModeGateAsync(businessId, normalizedMode);
 
@@ -59,7 +63,8 @@ public class DeviceService : IDeviceService
             Code = code,
             BusinessId = businessId,
             BranchId = branchId,
-            Mode = mode.ToLowerInvariant(),
+            Mode = normalizedMode,
+            Name = trimmedName,
             CreatedBy = createdBy,
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddHours(24),
@@ -104,7 +109,8 @@ public class DeviceService : IDeviceService
             BranchId = activation.BranchId,
             Mode = activation.Mode,
             BusinessName = activation.Business.Name,
-            BranchName = activation.Branch.Name
+            BranchName = activation.Branch.Name,
+            Name = activation.Name
         };
     }
 
