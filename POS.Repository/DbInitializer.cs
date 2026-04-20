@@ -710,6 +710,7 @@ public static class DbInitializer
             new() { Id = FeatureIds.TableMap,                Key = FeatureKey.TableMap,                Code = "TableMap",                Name = "Mapa de mesas",                     Description = "Layout visual de mesas y asignación de órdenes",               IsQuantitative = false, SortOrder = 40 },
             new() { Id = FeatureIds.WaiterApp,               Key = FeatureKey.WaiterApp,               Code = "WaiterApp",               Name = "App de meseros",                    Description = "Aplicación móvil para toma de órdenes en mesa",                IsQuantitative = false, SortOrder = 41 },
             new() { Id = FeatureIds.KioskMode,               Key = FeatureKey.KioskMode,               Code = "KioskMode",                Name = "Modo kiosco",                       Description = "Modo kiosco de autoservicio para clientes",                    IsQuantitative = false, SortOrder = 42 },
+            new() { Id = FeatureIds.TableService,            Key = FeatureKey.TableService,            Code = "TableService",            Name = "Servicio en mesa",                  Description = "Operación con mesas: órdenes sentados y gestión de estado de mesa", IsQuantitative = false, SortOrder = 43 },
 
             new() { Id = FeatureIds.RecipeInventory,         Key = FeatureKey.RecipeInventory,         Code = "RecipeInventory",         Name = "Inventario con recetas",            Description = "Descuento de ingredientes por receta y control de mermas",     IsQuantitative = false, SortOrder = 50 },
             new() { Id = FeatureIds.MultiWarehouseInventory, Key = FeatureKey.MultiWarehouseInventory, Code = "MultiWarehouseInventory", Name = "Inventario multi-bodega",           Description = "Control de inventario en múltiples bodegas",                   IsQuantitative = false, SortOrder = 51 },
@@ -728,6 +729,8 @@ public static class DbInitializer
 
             new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",              IsQuantitative = false, SortOrder = 90 },
             new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",          IsQuantitative = false, SortOrder = 91 },
+            new() { Id = FeatureIds.ProviderPayments,        Key = FeatureKey.ProviderPayments,        Code = "ProviderPayments",        Name = "Proveedores de pago externos",      Description = "Integración con procesadores de pago (Clip, MercadoPago) y flujos de intent + webhook", IsQuantitative = false, SortOrder = 100 },
+            new() { Id = FeatureIds.DeliveryPlatforms,       Key = FeatureKey.DeliveryPlatforms,       Code = "DeliveryPlatforms",       Name = "Plataformas de delivery",           Description = "Integración con plataformas de reparto (UberEats, Rappi, DidiFood) con ingesta de webhooks", IsQuantitative = false, SortOrder = 110 },
         };
 
         var existingFeatures = await context.FeatureCatalogs.ToListAsync();
@@ -879,6 +882,25 @@ public static class DbInitializer
             (PlanTypeIds.Basic,      FeatureIds.AdvancedReports, false, null),
             (PlanTypeIds.Pro,        FeatureIds.AdvancedReports, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.AdvancedReports, true,  null),
+
+            // BDD-015 — settings matrix enforcement feature keys.
+            // TableService is enabled from Basic+; the per-macro applicability table
+            // below restricts it to restaurant-style macros (FoodBeverage, QuickService)
+            // so retail/services businesses never see the toggle.
+            (PlanTypeIds.Free,       FeatureIds.TableService, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.TableService, true,  null),
+            (PlanTypeIds.Pro,        FeatureIds.TableService, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.TableService, true,  null),
+
+            (PlanTypeIds.Free,       FeatureIds.ProviderPayments, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.ProviderPayments, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.ProviderPayments, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.ProviderPayments, true,  null),
+
+            (PlanTypeIds.Free,       FeatureIds.DeliveryPlatforms, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.DeliveryPlatforms, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.DeliveryPlatforms, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.DeliveryPlatforms, true,  null),
         };
 
         var existingPlanRows = await context.PlanFeatureMatrices.ToListAsync();
@@ -957,6 +979,18 @@ public static class DbInitializer
         AddAll(services, FeatureIds.SimpleFolios);
         AddAll(services, FeatureIds.CustomFolios);
         AddAll(services, FeatureIds.AppointmentReminders);
+
+        // BDD-015 applicability:
+        // TableService — only where seated service exists (restaurant-style macros).
+        // ProviderPayments — every macro (digital payments are universal).
+        // DeliveryPlatforms — only where delivery is a typical operation.
+        AddAll(foodAndBeverage, FeatureIds.TableService);
+        AddAll(quickService,    FeatureIds.TableService);
+
+        AddAll(allMacros, FeatureIds.ProviderPayments);
+
+        AddAll(foodAndBeverage, FeatureIds.DeliveryPlatforms);
+        AddAll(quickService,    FeatureIds.DeliveryPlatforms);
 
         var existingMacroRows = await context.BusinessTypeFeatures.ToListAsync();
         var existingMacroByKey = existingMacroRows.ToDictionary(r => (r.MacroCategoryId, r.FeatureId));

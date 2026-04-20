@@ -19,4 +19,11 @@ public class BranchConfigDto
     public int PlanTypeId { get; set; }
     public int PrimaryMacroCategoryId { get; set; }
     public string PosExperience { get; set; } = null!;
+
+    /// <summary>
+    /// IANA timezone identifier owned by the branch (added by BDD-015 to close the
+    /// loop with BDD-013). Drives server-side per-day boundary math and timezone-aware
+    /// UI rendering.
+    /// </summary>
+    public string TimeZoneId { get; set; } = "America/Mexico_City";
 }

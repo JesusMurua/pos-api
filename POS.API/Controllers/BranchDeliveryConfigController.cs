@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.API.Filters;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -45,8 +46,10 @@ public class BranchDeliveryConfigController : BaseApiController
     /// <response code="400">If validation fails.</response>
     [HttpPut]
     [Authorize(Roles = "Owner")]
+    [RequiresFeature(FeatureKey.DeliveryPlatforms)]
     [ProducesResponseType(typeof(BranchDeliveryConfigDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Upsert(int branchId, [FromBody] UpsertDeliveryConfigRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -73,9 +76,11 @@ public class BranchDeliveryConfigController : BaseApiController
     /// <response code="404">If the config is not found.</response>
     [HttpDelete("{platform}")]
     [Authorize(Roles = "Owner")]
+    [RequiresFeature(FeatureKey.DeliveryPlatforms)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Delete(int branchId, string platform)
     {
         if (!Enum.TryParse<OrderSource>(platform, true, out var parsedPlatform)

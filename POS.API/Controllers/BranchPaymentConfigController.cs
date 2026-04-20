@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using POS.API.Filters;
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -50,8 +52,10 @@ public class BranchPaymentConfigController : BaseApiController
     /// </summary>
     [HttpPost]
     [Authorize(Roles = "Owner,Manager")]
+    [RequiresFeature(FeatureKey.ProviderPayments)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Create([FromBody] BranchPaymentConfigRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -95,9 +99,11 @@ public class BranchPaymentConfigController : BaseApiController
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Roles = "Owner,Manager")]
+    [RequiresFeature(FeatureKey.ProviderPayments)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Update(int id, [FromBody] BranchPaymentConfigRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

@@ -1,3 +1,4 @@
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -118,6 +119,29 @@ public class BusinessService : IBusinessService
     }
 
     /// <inheritdoc />
+    public async Task<Business> UpdateFiscalConfigAsync(
+        int businessId, string? rfc, string? taxRegime, string? legalName, bool invoicingEnabled)
+    {
+        var business = await GetByIdAsync(businessId);
+
+        // Transition gate (BDD-015 FR-004): only the false→true transition on
+        // InvoicingEnabled requires CfdiInvoicing. Disabling or leaving it as-is
+        // always proceeds so operators can clean state regardless of plan.
+        if (invoicingEnabled && !business.InvoicingEnabled)
+            await _featureGate.EnforceAsync(businessId, FeatureKey.CfdiInvoicing);
+
+        business.Rfc = rfc?.Trim().ToUpperInvariant();
+        business.TaxRegime = taxRegime;
+        business.LegalName = legalName;
+        business.InvoicingEnabled = invoicingEnabled;
+
+        _unitOfWork.Business.Update(business);
+        await _unitOfWork.SaveChangesAsync();
+        _featureGate.Invalidate(businessId);
+        return business;
+    }
+
+    /// <inheritdoc />
     public async Task<BusinessGiroResponse> GetGiroAsync(int businessId)
     {
         var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");
@@ -127,7 +151,7 @@ public class BusinessService : IBusinessService
         return new BusinessGiroResponse
         {
             PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
-            BusinessTypeIds = business.BusinessGiros
+            SubGiroIds = business.BusinessGiros
                 .Select(bg => bg.BusinessTypeId)
                 .OrderBy(id => id)
                 .ToList(),

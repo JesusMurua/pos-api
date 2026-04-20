@@ -2,7 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace POS.API.Models;
 
-public class UpdateConfigRequest
+/// <summary>
+/// Admin-wide branch update (Name, location, kitchen/tables flags).
+/// Consumed by <c>PUT /api/branch/{id}</c>. When either <c>HasKitchen</c> or
+/// <c>HasTables</c> transitions from <c>false → true</c>, <c>BranchService</c>
+/// runs the matching feature gate (<c>KdsBasic</c> / <c>TableService</c>) and
+/// may return <c>402 Payment Required</c>.
+/// </summary>
+public class UpdateBranchRequest
 {
     [Required]
     [MaxLength(100)]
@@ -12,7 +19,23 @@ public class UpdateConfigRequest
     public string? LocationName { get; set; }
 
     public bool? HasKitchen { get; set; }
+
     public bool? HasTables { get; set; }
+}
+
+/// <summary>
+/// Runtime-level branch config update (Name and location only). Consumed by
+/// <c>PUT /api/branch/{id}/config</c>. Kitchen/tables toggles are explicitly
+/// NOT accepted here — use <c>PATCH /api/branch/{id}/settings</c> instead.
+/// </summary>
+public class UpdateBranchConfigRequest
+{
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = null!;
+
+    [MaxLength(200)]
+    public string? LocationName { get; set; }
 }
 
 public class VerifyPinRequest
@@ -63,4 +86,13 @@ public class CreateBusinessRequest
 
     [Required]
     public int PlanTypeId { get; set; }
+
+    /// <summary>
+    /// Macro category id (1-4) that drives POS experience, plan rules and Stripe pricing.
+    /// Hardened by BDD-015 — the endpoint used to default silently to Retail; now required
+    /// to match the invariant already enforced by <c>/api/auth/register</c>.
+    /// </summary>
+    [Required]
+    [Range(1, 4)]
+    public int PrimaryMacroCategoryId { get; set; }
 }

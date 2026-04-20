@@ -77,7 +77,8 @@ public class BusinessController : BaseApiController
         var business = new Business
         {
             Name = request.Name,
-            PlanTypeId = request.PlanTypeId
+            PlanTypeId = request.PlanTypeId,
+            PrimaryMacroCategoryId = request.PrimaryMacroCategoryId
         };
 
         var created = await _businessService.CreateAsync(business, UserId);
@@ -119,20 +120,20 @@ public class BusinessController : BaseApiController
         if (request.PrimaryMacroCategoryId <= 0)
             return BadRequest(new { message = "PrimaryMacroCategoryId inválido" });
 
-        if (request.BusinessTypeIds == null || request.BusinessTypeIds.Count == 0)
+        if (request.SubGiroIds == null || request.SubGiroIds.Count == 0)
             return BadRequest(new { message = "Debe seleccionar al menos un giro" });
 
         var updated = await _businessService.UpdateGiroAsync(
             BusinessId,
             request.PrimaryMacroCategoryId,
-            request.BusinessTypeIds,
+            request.SubGiroIds,
             request.CustomGiroDescription);
 
         return Ok(new
         {
             message = "Giro configuration updated",
             primaryMacroCategoryId = updated.PrimaryMacroCategoryId,
-            businessTypeIds = request.BusinessTypeIds,
+            subGiroIds = request.SubGiroIds,
             customGiroDescription = updated.CustomGiroDescription
         });
     }
@@ -148,18 +149,18 @@ public class BusinessController : BaseApiController
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> UpdateFiscalConfig([FromBody] UpdateFiscalConfigRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var business = await _businessService.GetByIdAsync(BusinessId);
-
-        business.Rfc = request.Rfc?.Trim().ToUpperInvariant();
-        business.TaxRegime = request.TaxRegime;
-        business.LegalName = request.LegalName;
-        business.InvoicingEnabled = request.InvoicingEnabled;
-
-        await _businessService.UpdateAsync(business);
+        // Service handles the CfdiInvoicing transition gate (BDD-015 FR-004).
+        var business = await _businessService.UpdateFiscalConfigAsync(
+            BusinessId,
+            request.Rfc,
+            request.TaxRegime,
+            request.LegalName,
+            request.InvoicingEnabled);
 
         return Ok(new
         {
@@ -258,10 +259,15 @@ public class UpdateBusinessGiroRequest
     [System.ComponentModel.DataAnnotations.Required]
     public int PrimaryMacroCategoryId { get; set; }
 
-    /// <summary>Full replacement set of sub-giro ids (BusinessTypeCatalog.Id). Must contain at least one.</summary>
+    /// <summary>
+    /// Full replacement set of sub-giro ids (<c>BusinessTypeCatalog.Id</c>). Must
+    /// contain at least one. Renamed from <c>BusinessTypeIds</c> by BDD-015 to
+    /// reflect the post-refactor domain language where <c>BusinessTypeCatalog</c>
+    /// rows represent sub-giros, not macro categories.
+    /// </summary>
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.MinLength(1)]
-    public List<int> BusinessTypeIds { get; set; } = new();
+    public List<int> SubGiroIds { get; set; } = new();
 
     /// <summary>Free-text clarification when the user picks "Otro" or a non-catalog giro.</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(100)]

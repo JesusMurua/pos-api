@@ -79,7 +79,8 @@ public class BranchController : BaseApiController
     [ProducesResponseType(typeof(Branch), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateConfigRequest request)
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateBranchRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
@@ -173,7 +174,7 @@ public class BranchController : BaseApiController
     [ProducesResponseType(typeof(Branch), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> UpdateConfig(int id, [FromBody] UpdateConfigRequest request)
+    public async Task<IActionResult> UpdateConfig(int id, [FromBody] UpdateBranchConfigRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
@@ -259,12 +260,15 @@ public class BranchController : BaseApiController
     [Authorize(Roles = "Owner,Manager")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> UpdateSettings(int id, [FromBody] BranchSettingsRequest request)
     {
         var branch = await _branchService.GetConfigAsync(id);
-        branch.HasKitchen = request.HasKitchen;
-        branch.HasTables = request.HasTables;
-        await _branchService.UpdateAsync(id, branch);
+
+        // Delegate to UpdateAsync so per-flag feature gates (BDD-015) run
+        // before any DB write. Kitchen/tables flips on plans missing the
+        // matching feature raise PlanLimitExceededException → 402.
+        await _branchService.UpdateAsync(id, branch, request.HasKitchen, request.HasTables);
 
         return Ok(new { message = "Branch settings updated" });
     }

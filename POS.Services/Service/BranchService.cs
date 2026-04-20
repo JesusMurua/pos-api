@@ -1,3 +1,4 @@
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Domain.PartialModels;
@@ -9,10 +10,12 @@ namespace POS.Services.Service;
 public class BranchService : IBranchService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
 
-    public BranchService(IUnitOfWork unitOfWork)
+    public BranchService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
     }
 
     #region Public API Methods
@@ -61,7 +64,13 @@ public class BranchService : IBranchService
     }
 
     /// <summary>
-    /// Updates an existing branch's name and location.
+    /// Updates an existing branch's name and location, optionally flipping kitchen
+    /// and tables flags. Per BDD-015, enabling either flag (transition to true)
+    /// requires the matching feature — <see cref="FeatureKey.KdsBasic"/> for
+    /// <paramref name="hasKitchen"/>, <see cref="FeatureKey.TableService"/> for
+    /// <paramref name="hasTables"/>. Disabling or leaving them untouched requires
+    /// no check. All gate enforcement runs before any DB write so partial state
+    /// never leaks when only one of two requested flips is feature-unavailable.
     /// </summary>
     public async Task<Branch> UpdateAsync(int id, Branch branch, bool? hasKitchen = null, bool? hasTables = null)
     {
@@ -72,6 +81,11 @@ public class BranchService : IBranchService
 
         if (existing.BusinessId != branch.BusinessId)
             throw new ValidationException("Branch does not belong to the specified business");
+
+        if (hasKitchen == true && !existing.HasKitchen)
+            await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.KdsBasic);
+        if (hasTables == true && !existing.HasTables)
+            await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.TableService);
 
         existing.Name = branch.Name;
         existing.LocationName = branch.LocationName;
@@ -128,7 +142,8 @@ public class BranchService : IBranchService
             FolioCounter = branch.FolioCounter,
             PlanTypeId = branch.Business.PlanTypeId,
             PrimaryMacroCategoryId = macroId,
-            PosExperience = macro?.PosExperience ?? string.Empty
+            PosExperience = macro?.PosExperience ?? string.Empty,
+            TimeZoneId = branch.TimeZoneId
         };
     }
 

@@ -27,6 +27,7 @@ public enum FeatureKey
     TableMap = 40,
     WaiterApp = 41,
     KioskMode = 42,
+    TableService = 43,
 
     // Inventory
     RecipeInventory = 50,
@@ -49,5 +50,11 @@ public enum FeatureKey
 
     // Platform
     PublicApi = 90,
-    MultiBranch = 91
+    MultiBranch = 91,
+
+    // Payments — external provider integrations (Clip, MercadoPago).
+    ProviderPayments = 100,
+
+    // Logistics — external delivery platform integrations (UberEats, Rappi, DidiFood).
+    DeliveryPlatforms = 110
 }
