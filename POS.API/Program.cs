@@ -4,7 +4,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using POS.API.Filters;
 using POS.API.Hubs;
 using POS.API.Middleware;
 using POS.API.Workers;
@@ -67,7 +69,12 @@ builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
 
 // Add services to the container.
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        // BDD-014: close the 10-year device token loophole by gating every MVC
+        // action against Device.IsActive when the JWT carries type=device.
+        options.Filters.Add<DeviceActiveAuthorizationFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -84,7 +91,12 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddMemoryCache();
 
-builder.Services.AddSignalR();
+// BDD-014: apply the same IsActive gate to SignalR hubs — shares the
+// IDeviceAuthorizationService (and its IMemoryCache) with the MVC filter.
+builder.Services.AddSignalR(options =>
+{
+    options.AddFilter<DeviceActiveHubFilter>();
+});
 
 // JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;

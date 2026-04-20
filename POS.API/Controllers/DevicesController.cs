@@ -87,4 +87,81 @@ public class DevicesController : BaseApiController
 
         return Ok(device);
     }
+
+    /// <summary>
+    /// Lists all devices for the caller's business, optionally narrowed to a
+    /// specific branch. Scoped by the caller's <c>BusinessId</c> claim —
+    /// cross-business ids yield an empty array, never a 403.
+    /// </summary>
+    /// <param name="branchId">Optional branch id to filter by.</param>
+    /// <returns>Array of device projections with <c>BranchName</c> included.</returns>
+    /// <response code="200">Returns the list of devices.</response>
+    [HttpGet]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(IReadOnlyList<DeviceListItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List([FromQuery] int? branchId = null)
+    {
+        var devices = await _deviceService.ListForBusinessAsync(BusinessId, branchId);
+        return Ok(devices);
+    }
+
+    /// <summary>
+    /// Flips the <c>IsActive</c> flag on a device and invalidates the auth
+    /// cache so the revocation propagates on the next device request.
+    /// </summary>
+    /// <param name="id">Device id.</param>
+    /// <response code="200">Returns the new active status.</response>
+    /// <response code="404">Device does not exist or belongs to another business.</response>
+    [HttpPatch("{id}/toggle-active")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(ToggleActiveResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleActive(int id)
+    {
+        try
+        {
+            var result = await _deviceService.ToggleActiveAsync(id, BusinessId);
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Partial update of a device. Accepts any subset of <c>{ name, branchId }</c>.
+    /// An empty body is rejected with 400. Cross-tenant <c>BranchId</c> values
+    /// are rejected with 400 (branch id is body input); cross-tenant device ids
+    /// are rejected with 404 (device id is an enumerable path param).
+    /// </summary>
+    /// <param name="id">Device id.</param>
+    /// <param name="request">Partial update payload.</param>
+    /// <returns>The updated device in list-projection shape.</returns>
+    /// <response code="200">Returns the updated device.</response>
+    /// <response code="400">If the body is empty or validation fails.</response>
+    /// <response code="404">Device does not exist or belongs to another business.</response>
+    [HttpPatch("{id}")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(DeviceListItemResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateDeviceRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            var updated = await _deviceService.UpdateDeviceAsync(id, BusinessId, request);
+            return Ok(updated);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (ValidationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }

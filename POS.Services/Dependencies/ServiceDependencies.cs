@@ -24,6 +24,7 @@ public static class ServiceDependencies
         services.AddScoped<IInventoryService, InventoryService>();
         services.AddScoped<IPushNotificationService, PushNotificationService>();
         services.AddScoped<IDeviceService, DeviceService>();
+        services.AddScoped<IDeviceAuthorizationService, DeviceAuthorizationService>();
         services.AddHttpClient<IStorageService, SupabaseStorageService>();
         services.AddHttpClient<IEmailService, EmailService>();
         services.AddScoped<IPromotionService, PromotionService>();
