@@ -955,29 +955,29 @@ public static class DbInitializer
         if (idx >= 0)
             desiredApplicability[idx] = (MacroCategoryIds.Retail, FeatureIds.MaxProducts, 500);
 
-        AddAll(foodAndBeverage, FeatureIds.KdsBasic);
+        AddAll(foodAndBeverage.Concat(quickService).ToArray(), FeatureIds.KdsBasic);
         AddAll(foodAndBeverage, FeatureIds.RealtimeKds);
         AddAll(foodAndBeverage, FeatureIds.PrintedCommandaTickets);
         AddAll(foodAndBeverage, FeatureIds.TableMap);
         AddAll(foodAndBeverage, FeatureIds.WaiterApp);
         AddAll(foodAndBeverage, FeatureIds.KioskMode);
         AddAll(foodAndBeverage, FeatureIds.RecipeInventory);
-        AddAll(foodAndBeverage, FeatureIds.PublicApi);
-        AddAll(foodAndBeverage, FeatureIds.MultiBranch);
+        AddAll(allMacros, FeatureIds.PublicApi);
+        AddAll(allMacros, FeatureIds.MultiBranch);
 
         AddAll(quickService, FeatureIds.RealtimeKds);
         AddAll(quickService, FeatureIds.PrintedCommandaTickets);
         AddAll(quickService, FeatureIds.KioskMode);
-        AddAll(quickService, FeatureIds.LoyaltyCrm);
+        AddAll(foodAndBeverage.Concat(quickService).ToArray(), FeatureIds.LoyaltyCrm);
 
-        AddAll(retail, FeatureIds.StoreCredit);
-        AddAll(retail, FeatureIds.MultiWarehouseInventory);
-        AddAll(retail, FeatureIds.StockAlerts);
+        AddAll(allMacros, FeatureIds.StoreCredit);
+        AddAll(allMacros, FeatureIds.MultiWarehouseInventory);
+        AddAll(allMacros, FeatureIds.StockAlerts);
         AddAll(retail, FeatureIds.ComparativeReports);
 
-        AddAll(services, FeatureIds.CustomerDatabase);
-        AddAll(services, FeatureIds.SimpleFolios);
-        AddAll(services, FeatureIds.CustomFolios);
+        AddAll(allMacros, FeatureIds.CustomerDatabase);
+        AddAll(allMacros, FeatureIds.SimpleFolios);
+        AddAll(allMacros, FeatureIds.CustomFolios);
         AddAll(services, FeatureIds.AppointmentReminders);
 
         // BDD-015 applicability:
