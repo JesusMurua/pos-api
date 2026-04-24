@@ -120,9 +120,6 @@ public class BusinessController : BaseApiController
         if (request.PrimaryMacroCategoryId <= 0)
             return BadRequest(new { message = "PrimaryMacroCategoryId inválido" });
 
-        if (request.SubGiroIds == null || request.SubGiroIds.Count == 0)
-            return BadRequest(new { message = "Debe seleccionar al menos un giro" });
-
         var updated = await _businessService.UpdateGiroAsync(
             BusinessId,
             request.PrimaryMacroCategoryId,
@@ -253,25 +250,38 @@ public class BusinessController : BaseApiController
 /// <summary>
 /// Request body for replacing the business's macro category and sub-giro set.
 /// </summary>
-public class UpdateBusinessGiroRequest
+public class UpdateBusinessGiroRequest : System.ComponentModel.DataAnnotations.IValidatableObject
 {
     /// <summary>Target <see cref="POS.Domain.Models.Catalogs.MacroCategory"/>.Id that will drive POS/plan rules.</summary>
     [System.ComponentModel.DataAnnotations.Required]
     public int PrimaryMacroCategoryId { get; set; }
 
     /// <summary>
-    /// Full replacement set of sub-giro ids (<c>BusinessTypeCatalog.Id</c>). Must
-    /// contain at least one. Renamed from <c>BusinessTypeIds</c> by BDD-015 to
-    /// reflect the post-refactor domain language where <c>BusinessTypeCatalog</c>
-    /// rows represent sub-giros, not macro categories.
+    /// Full replacement set of sub-giro ids (<c>BusinessTypeCatalog.Id</c>). May be
+    /// empty when the user picks the "Otra" option and provides
+    /// <see cref="CustomGiroDescription"/> instead. Renamed from <c>BusinessTypeIds</c>
+    /// by BDD-015 to reflect the post-refactor domain language where
+    /// <c>BusinessTypeCatalog</c> rows represent sub-giros, not macro categories.
     /// </summary>
     [System.ComponentModel.DataAnnotations.Required]
-    [System.ComponentModel.DataAnnotations.MinLength(1)]
     public List<int> SubGiroIds { get; set; } = new();
 
     /// <summary>Free-text clarification when the user picks "Otro" or a non-catalog giro.</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(100)]
     public string? CustomGiroDescription { get; set; }
+
+    /// <inheritdoc />
+    public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
+        System.ComponentModel.DataAnnotations.ValidationContext validationContext)
+    {
+        if ((SubGiroIds == null || SubGiroIds.Count == 0) &&
+            string.IsNullOrWhiteSpace(CustomGiroDescription))
+        {
+            yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                "Debe seleccionar al menos un sub-giro o proporcionar una descripción personalizada.",
+                new[] { nameof(SubGiroIds), nameof(CustomGiroDescription) });
+        }
+    }
 }
 
 /// <summary>

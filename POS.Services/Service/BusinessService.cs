@@ -84,15 +84,19 @@ public class BusinessService : IBusinessService
     /// <inheritdoc />
     public async Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription)
     {
-        if (businessTypeIds == null || businessTypeIds.Count == 0)
-            throw new ValidationException("Debe seleccionar al menos un giro");
+        if ((businessTypeIds == null || businessTypeIds.Count == 0) &&
+            string.IsNullOrWhiteSpace(customGiroDescription))
+        {
+            throw new ValidationException(
+                "Debe seleccionar al menos un sub-giro o proporcionar una descripción personalizada");
+        }
 
         var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");
         var business = results.FirstOrDefault()
             ?? throw new NotFoundException($"Business with id {businessId} not found");
 
         var catalogs = (await _unitOfWork.Catalog.GetBusinessTypesAsync()).ToList();
-        var distinctIds = businessTypeIds.Distinct().ToList();
+        var distinctIds = (businessTypeIds ?? Array.Empty<int>()).Distinct().ToList();
         var matched = catalogs.Where(c => distinctIds.Contains(c.Id)).ToList();
 
         if (matched.Count != distinctIds.Count)
