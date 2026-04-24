@@ -46,4 +46,14 @@ public class CatalogController : ControllerBase
     [HttpGet("plan-types")]
     public async Task<IActionResult> GetPlanTypes() =>
         Ok(await _catalogService.GetPlanTypesAsync());
+
+    /// <summary>
+    /// Returns every subscription plan with the list of features it enables.
+    /// Single source of truth for the frontend — replaces any hardcoded
+    /// PLAN_CATALOG on the client. Feature <c>code</c> values match the
+    /// JWT <c>features</c> claim verbatim.
+    /// </summary>
+    [HttpGet("plans")]
+    public async Task<IActionResult> GetPlanCatalog() =>
+        Ok(await _catalogService.GetPlanCatalogAsync());
 }

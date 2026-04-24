@@ -16,4 +16,8 @@ public interface ICatalogRepository
     Task<IEnumerable<PromotionTypeCatalog>> GetPromotionTypesAsync();
     Task<IEnumerable<PromotionScopeCatalog>> GetPromotionScopesAsync();
     Task<IEnumerable<OrderSyncStatusCatalog>> GetOrderSyncStatusesAsync();
+
+    Task<IEnumerable<FeatureCatalog>> GetFeatureCatalogsAsync();
+    Task<IEnumerable<PlanFeatureMatrix>> GetPlanFeatureMatricesAsync();
+    Task<IEnumerable<BusinessTypeFeature>> GetBusinessTypeFeaturesAsync();
 }

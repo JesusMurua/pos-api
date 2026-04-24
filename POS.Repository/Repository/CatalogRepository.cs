@@ -48,4 +48,13 @@ public class CatalogRepository : ICatalogRepository
 
     public async Task<IEnumerable<OrderSyncStatusCatalog>> GetOrderSyncStatusesAsync() =>
         await _context.OrderSyncStatusCatalogs.AsNoTracking().ToListAsync();
+
+    public async Task<IEnumerable<FeatureCatalog>> GetFeatureCatalogsAsync() =>
+        await _context.FeatureCatalogs.AsNoTracking().OrderBy(x => x.SortOrder).ToListAsync();
+
+    public async Task<IEnumerable<PlanFeatureMatrix>> GetPlanFeatureMatricesAsync() =>
+        await _context.PlanFeatureMatrices.AsNoTracking().ToListAsync();
+
+    public async Task<IEnumerable<BusinessTypeFeature>> GetBusinessTypeFeaturesAsync() =>
+        await _context.BusinessTypeFeatures.AsNoTracking().ToListAsync();
 }

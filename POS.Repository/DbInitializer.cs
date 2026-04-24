@@ -33,16 +33,37 @@ public static class DbInitializer
     /// </summary>
     public static async Task SeedSystemDataAsync(ApplicationDbContext context)
     {
-        if (!await context.PlanTypeCatalogs.AnyAsync())
+        // Upsert so pricing changes on desired rows propagate to DBs seeded before
+        // the pricing columns were introduced (existing Dev / Staging environments).
+        var desiredPlans = new[]
         {
-            context.PlanTypeCatalogs.AddRange(
-                new PlanTypeCatalog { Id = 1, Code = "Free", Name = "Gratis", SortOrder = 0 },
-                new PlanTypeCatalog { Id = 2, Code = "Basic", Name = "Básico", SortOrder = 1 },
-                new PlanTypeCatalog { Id = 3, Code = "Pro", Name = "Pro", SortOrder = 2 },
-                new PlanTypeCatalog { Id = 4, Code = "Enterprise", Name = "Enterprise", SortOrder = 3 }
-            );
-            await context.SaveChangesAsync();
+            new PlanTypeCatalog { Id = 1, Code = "Free",       Name = "Gratis",     SortOrder = 0, MonthlyPrice = 0m,   Currency = "MXN" },
+            new PlanTypeCatalog { Id = 2, Code = "Basic",      Name = "Básico",     SortOrder = 1, MonthlyPrice = 149m, Currency = "MXN" },
+            new PlanTypeCatalog { Id = 3, Code = "Pro",        Name = "Pro",        SortOrder = 2, MonthlyPrice = 349m, Currency = "MXN" },
+            // Enterprise stays unpriced until sales confirms a public number.
+            new PlanTypeCatalog { Id = 4, Code = "Enterprise", Name = "Enterprise", SortOrder = 3, MonthlyPrice = null, Currency = "MXN" }
+        };
+
+        var existingPlans = await context.PlanTypeCatalogs.ToListAsync();
+        var existingById = existingPlans.ToDictionary(p => p.Id);
+
+        foreach (var desired in desiredPlans)
+        {
+            if (existingById.TryGetValue(desired.Id, out var row))
+            {
+                row.Code = desired.Code;
+                row.Name = desired.Name;
+                row.SortOrder = desired.SortOrder;
+                row.MonthlyPrice = desired.MonthlyPrice;
+                row.Currency = desired.Currency;
+            }
+            else
+            {
+                context.PlanTypeCatalogs.Add(desired);
+            }
         }
+
+        await context.SaveChangesAsync();
 
         await UpsertMacroCategoriesAsync(context);
         await UpsertBusinessTypeCatalogsAsync(context);
