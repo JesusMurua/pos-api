@@ -504,6 +504,12 @@ public class OrderService : IOrderService
                 order.CustomerId!.Value, order.TotalCents, order.Id, order.BranchId, "SyncEngine");
         }
 
+        // ── Phase 5e: Apply membership extensions for vertical-aware products ──
+        // Reads Product.Metadata JSON for "MembershipDurationDays" and extends the
+        // customer's MembershipValidUntil. Drives the Gym/Fitness vertical without
+        // adding strict membership columns to Product.
+        await ApplyMembershipExtensionsAsync(ordersToInsert);
+
         // ── Phase 6: Batch inventory deduction ──
         if (ordersToInsert.Count > 0)
             await _inventoryService.DeductFromOrdersBatchAsync(ordersToInsert);
@@ -1337,7 +1343,8 @@ public class OrderService : IOrderService
                 UnitPriceCents = i.UnitPriceCents,
                 SizeName = i.SizeName,
                 Notes = i.Notes,
-                Extras = ParseExtrasNames(i.ExtrasJson)
+                Extras = ParseExtrasNames(i.ExtrasJson),
+                Metadata = i.Metadata
             }).ToList() ?? new(),
             Payments = o.Payments?.Select(p => new OrderPullPaymentDto
             {
@@ -1385,7 +1392,8 @@ public class OrderService : IOrderService
             Notes = i.Notes,
             DiscountCents = i.DiscountCents,
             PromotionId = i.PromotionId,
-            PromotionName = i.PromotionName
+            PromotionName = i.PromotionName,
+            Metadata = i.Metadata
         };
     }
 
@@ -1448,6 +1456,140 @@ public class OrderService : IOrderService
             .Where(p => p.PaymentStatusId == PaymentStatus.Completed)
             .Sum(p => p.AmountCents);
         order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
+    }
+
+    /// <summary>
+    /// Phase 5e helper. For every line item whose Product carries
+    /// <c>Metadata.MembershipDurationDays</c>, resolves the beneficiary customer
+    /// (item-level <c>Metadata.BeneficiaryCustomerId</c> overrides the order's payor
+    /// <c>CustomerId</c>) and extends their membership.
+    /// Validates that beneficiaries belong to the same tenant as the order's branch
+    /// to prevent cross-tenant assignment.
+    /// </summary>
+    private async Task ApplyMembershipExtensionsAsync(IEnumerable<Order> orders)
+    {
+        var orderList = orders
+            .Where(o => o.IsPaid && o.CancellationReason == null && o.Items != null && o.Items.Count > 0)
+            .ToList();
+
+        if (orderList.Count == 0) return;
+
+        // Batch-load every Product referenced by these orders' items in a single query
+        var productIds = orderList
+            .SelectMany(o => o.Items!)
+            .Select(i => i.ProductId)
+            .Distinct()
+            .ToList();
+
+        if (productIds.Count == 0) return;
+
+        var products = (await _unitOfWork.Products.GetAsync(p => productIds.Contains(p.Id)))
+            .ToDictionary(p => p.Id);
+
+        // Pre-pass: identify membership lines, resolve beneficiaries, and collect every
+        // referenced customer id so we can batch-load them in a single query (avoid N+1).
+        var pending = new List<(Order Order, OrderItem Item, Product Product, int DurationDays, int BeneficiaryId)>();
+        var referencedCustomerIds = new HashSet<int>();
+
+        foreach (var order in orderList)
+        {
+            foreach (var item in order.Items!)
+            {
+                if (!products.TryGetValue(item.ProductId, out var product)) continue;
+                if (string.IsNullOrWhiteSpace(product.Metadata)) continue;
+
+                var durationDays = TryReadMembershipDurationDays(product.Metadata);
+                if (durationDays is null or <= 0) continue;
+
+                // Item-level beneficiary overrides the order-level payor
+                var beneficiaryId = TryReadBeneficiaryCustomerId(item.Metadata) ?? order.CustomerId;
+
+                if (!beneficiaryId.HasValue)
+                    throw new ValidationException(
+                        $"MEMBERSHIP_BENEFICIARY_REQUIRED: Order #{order.OrderNumber} sold membership product " +
+                        $"'{product.Name}' without a beneficiary or payor customer.");
+
+                pending.Add((order, item, product, durationDays.Value, beneficiaryId.Value));
+                referencedCustomerIds.Add(beneficiaryId.Value);
+            }
+        }
+
+        if (pending.Count == 0) return;
+
+        // Resolve the tenant (BusinessId) for cross-tenant validation.
+        // SyncOrdersAsync constrains all orders in the batch to a single branchId.
+        var branchIds = pending.Select(p => p.Order.BranchId).Distinct().ToList();
+        var branches = (await _unitOfWork.Branches.GetAsync(b => branchIds.Contains(b.Id)))
+            .ToDictionary(b => b.Id);
+
+        // Batch-load every referenced beneficiary customer in a single query.
+        var customers = (await _unitOfWork.Customers.GetAsync(c => referencedCustomerIds.Contains(c.Id)))
+            .ToDictionary(c => c.Id);
+
+        foreach (var (order, item, product, durationDays, beneficiaryId) in pending)
+        {
+            if (!customers.TryGetValue(beneficiaryId, out var customer))
+                throw new ValidationException(
+                    $"BENEFICIARY_NOT_FOUND: Customer {beneficiaryId} referenced by order " +
+                    $"#{order.OrderNumber} item '{product.Name}' was not found.");
+
+            if (!branches.TryGetValue(order.BranchId, out var branch))
+                throw new ValidationException(
+                    $"BRANCH_NOT_FOUND: Branch {order.BranchId} for order #{order.OrderNumber} was not found.");
+
+            if (customer.BusinessId != branch.BusinessId)
+                throw new ValidationException(
+                    $"BENEFICIARY_TENANT_MISMATCH: Customer {beneficiaryId} does not belong to this business " +
+                    $"(order #{order.OrderNumber}, item '{product.Name}').");
+
+            // Apply once per unit sold (e.g., quantity 2 = 60 days for a 30-day membership)
+            var totalDays = durationDays * Math.Max(1, item.Quantity);
+
+            await _customerService.ExtendMembershipAsync(beneficiaryId, totalDays, order.Id);
+        }
+    }
+
+    /// <summary>
+    /// Safely parses Product.Metadata JSON and returns the <c>MembershipDurationDays</c>
+    /// integer if present. Returns null on any parse error or missing field.
+    /// </summary>
+    private static int? TryReadMembershipDurationDays(string metadataJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("MembershipDurationDays", out var prop)) return null;
+            return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var days)
+                ? days
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Safely parses an OrderItem.Metadata JSON and returns the <c>BeneficiaryCustomerId</c>
+    /// integer if present. Returns null on any parse error, missing/empty payload, or non-numeric value.
+    /// </summary>
+    private static int? TryReadBeneficiaryCustomerId(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("BeneficiaryCustomerId", out var prop)) return null;
+            return prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var id) && id > 0
+                ? id
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private async Task RecordPromotionUsagesAsync(Order order)

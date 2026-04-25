@@ -72,6 +72,9 @@ public class SyncOrderItemRequest
 
     [MaxLength(100)]
     public string? PromotionName { get; set; }
+
+    /// <summary>Vertical-specific JSON payload (e.g. <c>{"BeneficiaryCustomerId": 123}</c> for memberships).</summary>
+    public string? Metadata { get; set; }
 }
 
 public class SyncPaymentRequest

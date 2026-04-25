@@ -53,6 +53,13 @@ public partial class OrderItem
 
     #endregion
 
+    /// <summary>
+    /// Vertical-specific extensibility payload (JSON) at the line level.
+    /// Used for item-scoped data that does not belong on the global Order, e.g.
+    /// <c>{"BeneficiaryCustomerId": 123}</c> for a gym membership purchased on behalf of another customer.
+    /// </summary>
+    public string? Metadata { get; set; }
+
     public virtual Order? Order { get; set; }
 
     public virtual Product? Product { get; set; }

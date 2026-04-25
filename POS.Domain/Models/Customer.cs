@@ -56,6 +56,19 @@ public class Customer
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Membership validity expiration (UTC). Null when the customer has no active membership.
+    /// Strict column for fast queries (e.g. "memberships expiring this week").
+    /// Updated by <c>ExtendMembershipAsync</c> when a membership product is sold.
+    /// </summary>
+    public DateTime? MembershipValidUntil { get; set; }
+
+    /// <summary>
+    /// Timestamp of the last membership/recurring payment (UTC).
+    /// Useful for churn analytics and "last seen paying" reports.
+    /// </summary>
+    public DateTime? LastPaymentAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAt { get; set; }

@@ -196,6 +196,9 @@ public class OrderPullItemDto
     public string? SizeName { get; set; }
     public string? Notes { get; set; }
     public List<string> Extras { get; set; } = new();
+
+    /// <summary>Vertical-specific JSON payload (e.g. <c>{"BeneficiaryCustomerId": 123}</c> for memberships).</summary>
+    public string? Metadata { get; set; }
 }
 
 public class ReconcileOrderRequest

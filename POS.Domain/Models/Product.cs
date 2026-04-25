@@ -70,6 +70,12 @@ public partial class Product : IBranchScoped
 
     #endregion
 
+    /// <summary>
+    /// Vertical-specific extensibility payload (JSON). Universal fields stay as strict columns;
+    /// niche fields per vertical (e.g. Gym memberships: <c>{"MembershipDurationDays": 30}</c>) live here.
+    /// </summary>
+    public string? Metadata { get; set; }
+
     public virtual Category? Category { get; set; }
 
     public virtual Branch? Branch { get; set; }

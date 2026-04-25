@@ -95,4 +95,13 @@ public interface ICustomerService
     /// Validates both entities belong to the same business.
     /// </summary>
     Task LinkFiscalCustomerAsync(int customerId, int fiscalCustomerId);
+
+    /// <summary>
+    /// Extends a customer's membership validity by <paramref name="durationDays"/> days.
+    /// If the current <c>MembershipValidUntil</c> is null or already expired, the new period
+    /// starts from today (UTC). If the membership is still active, days are stacked on top
+    /// of the existing expiration to reward early renewals.
+    /// Always updates <c>LastPaymentAt</c> to <c>DateTime.UtcNow</c>.
+    /// </summary>
+    Task ExtendMembershipAsync(int customerId, int durationDays, string orderId);
 }

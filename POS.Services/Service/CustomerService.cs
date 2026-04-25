@@ -344,6 +344,33 @@ public class CustomerService : ICustomerService
     }
 
     /// <summary>
+    /// Extends a customer's membership validity. Stacks on top of an active period or starts
+    /// from today if the membership is missing/expired.
+    /// </summary>
+    public async Task ExtendMembershipAsync(int customerId, int durationDays, string orderId)
+    {
+        if (durationDays <= 0)
+            throw new ValidationException("Duration days must be greater than zero.");
+
+        var customer = await GetByIdAsync(customerId);
+
+        if (!customer.IsActive)
+            throw new ValidationException("Customer is inactive.");
+
+        var now = DateTime.UtcNow;
+        var baseDate = customer.MembershipValidUntil.HasValue && customer.MembershipValidUntil.Value > now
+            ? customer.MembershipValidUntil.Value
+            : now;
+
+        customer.MembershipValidUntil = baseDate.AddDays(durationDays);
+        customer.LastPaymentAt = now;
+        customer.UpdatedAt = now;
+
+        _unitOfWork.Customers.Update(customer);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Links a CRM Customer to an existing FiscalCustomer.
     /// Validates both belong to the same business.
     /// </summary>
