@@ -34,6 +34,7 @@ public static class ProductMapping
             TaxRate = entity.TaxRate,
             IsTaxIncluded = entity.IsTaxIncluded,
             PrintingDestination = entity.PrintingDestination,
+            Metadata = entity.Metadata,
             Sizes = entity.Sizes?.Select(s => new ProductSizeResponse
             {
                 Id = s.Id,
@@ -104,6 +105,7 @@ public static class ProductMapping
             TaxRate = request.TaxRate,
             IsTaxIncluded = request.IsTaxIncluded,
             PrintingDestination = request.PrintingDestination,
+            Metadata = request.Metadata,
             Sizes = request.Sizes.Select(s => new ProductSize
             {
                 Label = s.Label,
@@ -160,5 +162,6 @@ public static class ProductMapping
         entity.TaxRate = request.TaxRate;
         entity.IsTaxIncluded = request.IsTaxIncluded;
         entity.PrintingDestination = request.PrintingDestination;
+        entity.Metadata = request.Metadata;
     }
 }

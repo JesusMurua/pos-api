@@ -44,6 +44,13 @@ public class ProductResponse
 
     public PrintingDestination PrintingDestination { get; set; }
 
+    /// <summary>
+    /// Vertical-specific extensibility payload (JSON). Mirrors the column on
+    /// the entity so the frontend can hydrate niche fields (e.g. Gym
+    /// memberships: <c>{"MembershipDurationDays": 30}</c>) on catalog sync.
+    /// </summary>
+    public string? Metadata { get; set; }
+
     public List<ProductSizeResponse> Sizes { get; set; } = new();
 
     /// <summary>

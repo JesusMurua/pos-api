@@ -51,6 +51,13 @@ public class ProductRequest
 
     public PrintingDestination PrintingDestination { get; set; } = PrintingDestination.Kitchen;
 
+    /// <summary>
+    /// Vertical-specific extensibility payload (JSON). E.g. Gym memberships
+    /// send <c>{"MembershipDurationDays": 30}</c>. Stored verbatim.
+    /// </summary>
+    [MaxLength(1000)]
+    public string? Metadata { get; set; }
+
     public List<ProductSizeRequest> Sizes { get; set; } = new();
 
     /// <summary>
