@@ -15,6 +15,7 @@ public static class ServiceDependencies
         services.AddScoped<IBranchService, BranchService>();
         services.AddScoped<IBusinessService, BusinessService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ITenantSeedingService, TenantSeedingService>();
         services.AddScoped<IDiscountPresetService, DiscountPresetService>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<IReportService, ReportService>();

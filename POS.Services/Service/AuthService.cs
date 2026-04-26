@@ -26,17 +26,20 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
     private readonly IFeatureGateService _featureGate;
+    private readonly ITenantSeedingService _tenantSeedingService;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
-        IFeatureGateService featureGate)
+        IFeatureGateService featureGate,
+        ITenantSeedingService tenantSeedingService)
     {
         _unitOfWork = unitOfWork;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _featureGate = featureGate;
+        _tenantSeedingService = tenantSeedingService;
     }
 
     #region Public API Methods
@@ -249,17 +252,7 @@ public class AuthService : IAuthService
         // Default zones
         var zones = BuildDefaultZones(branch, primaryMacro);
 
-        // Default category so the POS frontend doesn't crash on empty state
-        var defaultCategory = new Category
-        {
-            Branch = branch,
-            Name = "General",
-            Icon = "pi-tag",
-            SortOrder = 1,
-            IsActive = true
-        };
-
-        // ── Atomic transaction: single SaveChangesAsync ──
+        // ── Atomic transaction: register graph + macro-shaped seed data ──
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
         try
@@ -268,7 +261,6 @@ public class AuthService : IAuthService
             await _unitOfWork.Branches.AddAsync(branch);
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.UserBranches.AddAsync(userBranch);
-            await _unitOfWork.Categories.AddAsync(defaultCategory);
 
             if (zones.Count > 0)
                 await _unitOfWork.Zones.AddRangeAsync(zones);
@@ -290,6 +282,12 @@ public class AuthService : IAuthService
             }
 
             await _unitOfWork.SaveChangesAsync();
+
+            // Seed default categories + sample products for the macro so the operator
+            // sees a populated POS on first login. Runs inside the same transaction —
+            // any seeding failure rolls the entire registration back.
+            await _tenantSeedingService.SeedDefaultsForMacroAsync(branch.Id, primaryMacro.Id);
+
             await transaction.CommitAsync();
         }
         catch (DbUpdateException)
