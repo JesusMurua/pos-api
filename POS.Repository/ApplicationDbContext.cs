@@ -1330,6 +1330,9 @@ public class ApplicationDbContext : DbContext
                 .HasFilter("\"Phone\" IS NOT NULL");
 
             entity.HasIndex(c => new { c.BusinessId, c.LastName, c.FirstName });
+
+            entity.HasIndex(c => c.MembershipValidUntil)
+                .HasFilter("\"MembershipValidUntil\" IS NOT NULL");
         });
 
         #endregion
