@@ -96,3 +96,34 @@ public class CreateBusinessRequest
     [Range(1, 4)]
     public int PrimaryMacroCategoryId { get; set; }
 }
+
+/// <summary>
+/// Flat settings projection consumed by the frontend Settings screen.
+/// Combines <see cref="POS.Domain.Models.Business.Name"/> with the matrix
+/// branch's <c>Address</c> and <c>Phone</c>.
+/// </summary>
+public class BusinessSettingsDto
+{
+    public string BusinessName { get; set; } = null!;
+
+    public string? Address { get; set; }
+
+    public string? Phone { get; set; }
+}
+
+/// <summary>
+/// Request body for <c>PUT /api/business/settings</c>. Updates the business
+/// display name and the matrix branch's contact information atomically.
+/// </summary>
+public class UpdateBusinessSettingsRequest
+{
+    [Required]
+    [MaxLength(100)]
+    public string BusinessName { get; set; } = null!;
+
+    [MaxLength(300)]
+    public string? Address { get; set; }
+
+    [MaxLength(30)]
+    public string? Phone { get; set; }
+}

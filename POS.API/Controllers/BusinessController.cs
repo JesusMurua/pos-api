@@ -192,6 +192,61 @@ public class BusinessController : BaseApiController
     }
 
     /// <summary>
+    /// Returns the flat settings payload consumed by the frontend Settings screen:
+    /// business display name plus the primary branch's contact details.
+    /// </summary>
+    /// <returns>The current <see cref="BusinessSettingsDto"/> for the authenticated business.</returns>
+    /// <response code="200">Returns the current business settings.</response>
+    /// <response code="404">If the business or its primary branch is not found.</response>
+    [HttpGet("settings")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(BusinessSettingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSettings()
+    {
+        var settings = await _businessService.GetSettingsAsync(BusinessId);
+
+        return Ok(new BusinessSettingsDto
+        {
+            BusinessName = settings.BusinessName,
+            Address = settings.Address,
+            Phone = settings.Phone
+        });
+    }
+
+    /// <summary>
+    /// Updates the business display name together with the primary branch's
+    /// address and phone in a single transaction.
+    /// </summary>
+    /// <param name="request">The new business name, address and phone.</param>
+    /// <returns>The persisted <see cref="BusinessSettingsDto"/>.</returns>
+    /// <response code="200">Settings updated.</response>
+    /// <response code="400">If the request body fails validation.</response>
+    /// <response code="404">If the business or its primary branch is not found.</response>
+    [HttpPut("settings")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(typeof(BusinessSettingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSettings([FromBody] UpdateBusinessSettingsRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var settings = await _businessService.UpdateSettingsAsync(
+            BusinessId,
+            request.BusinessName,
+            request.Address,
+            request.Phone);
+
+        return Ok(new BusinessSettingsDto
+        {
+            BusinessName = settings.BusinessName,
+            Address = settings.Address,
+            Phone = settings.Phone
+        });
+    }
+
+    /// <summary>
     /// Marks the business onboarding as completed and returns a fresh JWT.
     /// </summary>
     /// <returns>A new JWT token with updated onboardingCompleted claim.</returns>

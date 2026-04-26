@@ -48,6 +48,36 @@ public interface IBusinessService
     /// </exception>
     Task<Business> UpdateFiscalConfigAsync(
         int businessId, string? rfc, string? taxRegime, string? legalName, bool invoicingEnabled);
+
+    /// <summary>
+    /// Returns the flat settings view used by the frontend Settings screen:
+    /// business display name plus the matrix branch's contact information.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.NotFoundException">
+    /// Thrown when the business or its matrix branch cannot be located.
+    /// </exception>
+    Task<BusinessSettingsResult> GetSettingsAsync(int businessId);
+
+    /// <summary>
+    /// Updates the business display name together with the matrix branch's
+    /// address and phone in a single SaveChanges call.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.NotFoundException">
+    /// Thrown when the business or its matrix branch cannot be located.
+    /// </exception>
+    Task<BusinessSettingsResult> UpdateSettingsAsync(
+        int businessId, string businessName, string? address, string? phone);
+}
+
+/// <summary>
+/// Service-layer projection that mirrors the API <c>BusinessSettingsDto</c>
+/// so the controller can map it without leaking entities.
+/// </summary>
+public class BusinessSettingsResult
+{
+    public string BusinessName { get; set; } = null!;
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
 }
 
 /// <summary>

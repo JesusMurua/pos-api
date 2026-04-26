@@ -15,6 +15,12 @@ public partial class Branch
     [MaxLength(200)]
     public string? LocationName { get; set; }
 
+    [MaxLength(300)]
+    public string? Address { get; set; }
+
+    [MaxLength(30)]
+    public string? Phone { get; set; }
+
     [MaxLength(255)]
     public string? PinHash { get; set; }
 

@@ -146,6 +146,43 @@ public class BusinessService : IBusinessService
     }
 
     /// <inheritdoc />
+    public async Task<BusinessSettingsResult> GetSettingsAsync(int businessId)
+    {
+        var business = await LoadBusinessOrThrowAsync(businessId);
+        var branch = ResolvePrimaryBranch(business);
+
+        return new BusinessSettingsResult
+        {
+            BusinessName = business.Name,
+            Address = branch.Address,
+            Phone = branch.Phone
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<BusinessSettingsResult> UpdateSettingsAsync(
+        int businessId, string businessName, string? address, string? phone)
+    {
+        var business = await LoadBusinessOrThrowAsync(businessId);
+        var branch = ResolvePrimaryBranch(business);
+
+        business.Name = businessName;
+        branch.Address = address;
+        branch.Phone = phone;
+
+        _unitOfWork.Business.Update(business);
+        _unitOfWork.Branches.Update(branch);
+        await _unitOfWork.SaveChangesAsync();
+
+        return new BusinessSettingsResult
+        {
+            BusinessName = business.Name,
+            Address = branch.Address,
+            Phone = branch.Phone
+        };
+    }
+
+    /// <inheritdoc />
     public async Task<BusinessGiroResponse> GetGiroAsync(int businessId)
     {
         var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");
@@ -161,6 +198,40 @@ public class BusinessService : IBusinessService
                 .ToList(),
             CustomGiroDescription = business.CustomGiroDescription
         };
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    /// <summary>
+    /// Loads a business eager-including its branches. Centralized so
+    /// settings reads/writes always resolve the same graph shape.
+    /// </summary>
+    private async Task<Business> LoadBusinessOrThrowAsync(int businessId)
+    {
+        var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "Branches");
+        return results.FirstOrDefault()
+            ?? throw new NotFoundException($"Business with id {businessId} not found");
+    }
+
+    /// <summary>
+    /// Picks the matrix branch when present, otherwise falls back to the
+    /// first active branch by id. Mirrors the precedence the rest of the
+    /// system uses for "primary" branch selection.
+    /// </summary>
+    private static Branch ResolvePrimaryBranch(Business business)
+    {
+        var branches = business.Branches?.ToList() ?? new List<Branch>();
+
+        var primary = branches.FirstOrDefault(b => b.IsMatrix && b.IsActive)
+            ?? branches.Where(b => b.IsActive).OrderBy(b => b.Id).FirstOrDefault()
+            ?? branches.OrderBy(b => b.Id).FirstOrDefault();
+
+        if (primary == null)
+            throw new NotFoundException($"Business {business.Id} has no branches configured");
+
+        return primary;
     }
 
     #endregion
