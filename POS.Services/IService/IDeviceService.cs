@@ -75,4 +75,25 @@ public class DeviceSetupResponse
     public int BusinessId { get; set; }
     public string BusinessName { get; set; } = null!;
     public List<BranchSummary> Branches { get; set; } = new();
+
+    /// <summary>
+    /// Tenant macro category (FK to <c>MacroCategory.Id</c>). Drives the
+    /// vertical-aware mode picker on the device-setup screen so a Gym tenant
+    /// no longer sees "Mesas" / "Pantalla de Cocina".
+    /// </summary>
+    public int PrimaryMacroCategoryId { get; set; }
+
+    /// <summary>
+    /// Whether the matrix branch is configured to run a kitchen workflow.
+    /// Surfaced here so the setup UI can hide the <c>kitchen</c> mode option
+    /// without an additional round-trip after branch selection.
+    /// </summary>
+    public bool HasKitchen { get; set; }
+
+    /// <summary>
+    /// Whether the matrix branch is configured for table service. Used by the
+    /// setup UI to hide the <c>tables</c> mode option for non-table-service
+    /// tenants (gyms, retail, etc.).
+    /// </summary>
+    public bool HasTables { get; set; }
 }

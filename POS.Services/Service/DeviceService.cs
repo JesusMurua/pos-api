@@ -138,8 +138,14 @@ public class DeviceService : IDeviceService
         if (business == null)
             throw new NotFoundException($"Business with id {user.BusinessId} not found");
 
-        var branches = await _unitOfWork.Branches.GetAsync(
-            b => b.BusinessId == user.BusinessId && b.IsActive);
+        var branches = (await _unitOfWork.Branches.GetAsync(
+            b => b.BusinessId == user.BusinessId && b.IsActive)).ToList();
+
+        // Pick the matrix branch as the canonical source for the kitchen/tables
+        // flags exposed on the response. Falls back to the first active branch
+        // by id when no matrix is flagged (legacy tenants).
+        var primaryBranch = branches.FirstOrDefault(b => b.IsMatrix)
+            ?? branches.OrderBy(b => b.Id).FirstOrDefault();
 
         return new DeviceSetupResponse
         {
@@ -148,7 +154,10 @@ public class DeviceService : IDeviceService
             Branches = branches
                 .OrderBy(b => b.Id)
                 .Select(b => new BranchSummary { Id = b.Id, Name = b.Name })
-                .ToList()
+                .ToList(),
+            PrimaryMacroCategoryId = business.PrimaryMacroCategoryId,
+            HasKitchen = primaryBranch?.HasKitchen ?? false,
+            HasTables = primaryBranch?.HasTables ?? false
         };
     }
 
