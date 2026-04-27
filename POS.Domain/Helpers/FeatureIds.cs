@@ -40,6 +40,7 @@ public static class FeatureIds
     public const int SimpleFolios = (int)FeatureKey.SimpleFolios;
     public const int CustomFolios = (int)FeatureKey.CustomFolios;
     public const int AppointmentReminders = (int)FeatureKey.AppointmentReminders;
+    public const int GymReception = (int)FeatureKey.GymReception;
 
     public const int PublicApi = (int)FeatureKey.PublicApi;
     public const int MultiBranch = (int)FeatureKey.MultiBranch;

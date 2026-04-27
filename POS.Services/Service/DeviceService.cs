@@ -37,10 +37,9 @@ public class DeviceService : IDeviceService
     public async Task<GenerateCodeResponse> GenerateActivationCodeAsync(
         int businessId, int branchId, string mode, string name, int createdBy)
     {
-        var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
         var normalizedMode = mode.ToLowerInvariant();
-        if (!validModes.Contains(normalizedMode))
-            throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
+        if (!DeviceModeCodes.IsValid(normalizedMode))
+            throw new ValidationException($"Mode must be one of: {DeviceModeCodes.FormatList()}");
 
         var trimmedName = name?.Trim();
         if (string.IsNullOrEmpty(trimmedName))
@@ -171,11 +170,10 @@ public class DeviceService : IDeviceService
     /// </summary>
     public async Task<DeviceResponse> RegisterOrUpdateDeviceAsync(DeviceRegistrationRequest request)
     {
-        var validModes = new[] { "cashier", "tables", "kitchen", "kiosk" };
         var normalizedMode = request.Mode.ToLowerInvariant();
 
-        if (!validModes.Contains(normalizedMode))
-            throw new ValidationException("Mode must be 'cashier', 'tables', 'kitchen', or 'kiosk'");
+        if (!DeviceModeCodes.IsValid(normalizedMode))
+            throw new ValidationException($"Mode must be one of: {DeviceModeCodes.FormatList()}");
 
         var branch = await _unitOfWork.Branches.GetByIdAsync(request.BranchId)
             ?? throw new NotFoundException($"Branch with id {request.BranchId} not found");
@@ -351,6 +349,17 @@ public class DeviceService : IDeviceService
     {
         switch (normalizedMode)
         {
+            case DeviceModeCodes.Reception:
+                if (!await _featureGate.IsEnabledAsync(businessId, FeatureKey.GymReception))
+                {
+                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+                    throw new PlanLimitExceededException(
+                        "modo Recepción",
+                        0,
+                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
+                }
+                break;
+
             case "kiosk":
                 if (!await _featureGate.IsEnabledAsync(businessId, FeatureKey.KioskMode))
                 {

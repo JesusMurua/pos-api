@@ -132,7 +132,8 @@ public static class DbInitializer
                 new DeviceModeCatalog { Code = "cashier", Name = "Cajero", Description = "POS estándar de cobro" },
                 new DeviceModeCatalog { Code = "kiosk", Name = "Kiosk", Description = "Autoservicio para clientes" },
                 new DeviceModeCatalog { Code = "tables", Name = "Mesas", Description = "Vista de mesas para meseros" },
-                new DeviceModeCatalog { Code = "kitchen", Name = "Cocina", Description = "Pantalla de cocina KDS" }
+                new DeviceModeCatalog { Code = "kitchen", Name = "Cocina", Description = "Pantalla de cocina KDS" },
+                new DeviceModeCatalog { Code = "reception", Name = "Recepción", Description = "Control de acceso (gym)" }
             );
             await context.SaveChangesAsync();
         }
@@ -746,6 +747,7 @@ public static class DbInitializer
             new() { Id = FeatureIds.SimpleFolios,            Key = FeatureKey.SimpleFolios,            Code = "SimpleFolios",            Name = "Folios simples",                    Description = "Numeración secuencial de tickets",                             IsQuantitative = false, SortOrder = 80 },
             new() { Id = FeatureIds.CustomFolios,            Key = FeatureKey.CustomFolios,            Code = "CustomFolios",            Name = "Folios personalizados",             Description = "Prefijos y formatos de folio configurables",                   IsQuantitative = false, SortOrder = 81 },
             new() { Id = FeatureIds.AppointmentReminders,    Key = FeatureKey.AppointmentReminders,    Code = "AppointmentReminders",    Name = "Recordatorios de citas",            Description = "Envío automático de recordatorios (WhatsApp / SMS)",           IsQuantitative = false, SortOrder = 82 },
+            new() { Id = FeatureIds.GymReception,            Key = FeatureKey.GymReception,            Code = "GymReception",            Name = "Control de Acceso (Gym)",           Description = "Modo recepción para control de acceso (gimnasios)",            IsQuantitative = false, SortOrder = 83 },
 
             new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",              IsQuantitative = false, SortOrder = 90 },
             new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",          IsQuantitative = false, SortOrder = 91 },
@@ -888,6 +890,11 @@ public static class DbInitializer
             (PlanTypeIds.Pro,        FeatureIds.AppointmentReminders, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.AppointmentReminders, true,  null),
 
+            // Services vertical does not use Enterprise plan — intentionally only 3 rows.
+            (PlanTypeIds.Free,       FeatureIds.GymReception, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.GymReception, true,  null),
+            (PlanTypeIds.Pro,        FeatureIds.GymReception, true,  null),
+
             (PlanTypeIds.Free,       FeatureIds.PublicApi, false, null),
             (PlanTypeIds.Basic,      FeatureIds.PublicApi, false, null),
             (PlanTypeIds.Pro,        FeatureIds.PublicApi, false, null),
@@ -999,6 +1006,7 @@ public static class DbInitializer
         AddAll(allMacros, FeatureIds.SimpleFolios);
         AddAll(allMacros, FeatureIds.CustomFolios);
         AddAll(services, FeatureIds.AppointmentReminders);
+        AddAll(services, FeatureIds.GymReception);
 
         // BDD-015 applicability:
         // TableService — only where seated service exists (restaurant-style macros).

@@ -47,6 +47,7 @@ public enum FeatureKey
     SimpleFolios = 80,
     CustomFolios = 81,
     AppointmentReminders = 82,
+    GymReception = 83,
 
     // Platform
     PublicApi = 90,
