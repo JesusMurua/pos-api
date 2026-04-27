@@ -45,9 +45,9 @@ public interface IBranchService
     Task<BranchConfigDto> GetBranchConfigDtoAsync(int branchId);
 
     /// <summary>
-    /// Updates the branch name and location.
+    /// Updates the branch name.
     /// </summary>
-    Task<Branch> UpdateConfigAsync(int branchId, string name, string? locationName);
+    Task<Branch> UpdateConfigAsync(int branchId, string name);
 
     /// <summary>
     /// Verifies a PIN against the branch's stored hash.

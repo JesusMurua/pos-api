@@ -298,7 +298,6 @@ public static class DbInitializer
         {
             BusinessId = business.Id,
             Name = "Sucursal Centro",
-            LocationName = "Centro, Nogales",
             FolioPrefix = "FND",
             FolioCounter = 45,
             IsMatrix = true,

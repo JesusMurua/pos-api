@@ -64,9 +64,9 @@ public class BranchService : IBranchService
     }
 
     /// <summary>
-    /// Updates an existing branch's name and location, optionally flipping kitchen
-    /// and tables flags. Per BDD-015, enabling either flag (transition to true)
-    /// requires the matching feature — <see cref="FeatureKey.KdsBasic"/> for
+    /// Updates an existing branch's name, optionally flipping kitchen and tables
+    /// flags. Per BDD-015, enabling either flag (transition to true) requires the
+    /// matching feature — <see cref="FeatureKey.KdsBasic"/> for
     /// <paramref name="hasKitchen"/>, <see cref="FeatureKey.TableService"/> for
     /// <paramref name="hasTables"/>. Disabling or leaving them untouched requires
     /// no check. All gate enforcement runs before any DB write so partial state
@@ -88,7 +88,6 @@ public class BranchService : IBranchService
             await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.TableService);
 
         existing.Name = branch.Name;
-        existing.LocationName = branch.LocationName;
 
         if (hasKitchen.HasValue)
             existing.HasKitchen = hasKitchen.Value;
@@ -133,7 +132,6 @@ public class BranchService : IBranchService
             BusinessId = branch.BusinessId,
             BusinessName = branch.Business.Name,
             BranchName = branch.Name,
-            LocationName = branch.LocationName,
             HasKitchen = branch.HasKitchen,
             HasTables = branch.HasTables,
             HasDelivery = branch.HasDelivery,
@@ -148,9 +146,9 @@ public class BranchService : IBranchService
     }
 
     /// <summary>
-    /// Updates the branch name and location.
+    /// Updates the branch name.
     /// </summary>
-    public async Task<Branch> UpdateConfigAsync(int branchId, string name, string? locationName)
+    public async Task<Branch> UpdateConfigAsync(int branchId, string name)
     {
         var branch = await _unitOfWork.Branches.GetByIdAsync(branchId);
 
@@ -158,7 +156,6 @@ public class BranchService : IBranchService
             throw new NotFoundException($"Branch with id {branchId} not found");
 
         branch.Name = name;
-        branch.LocationName = locationName;
 
         _unitOfWork.Branches.Update(branch);
         await _unitOfWork.SaveChangesAsync();

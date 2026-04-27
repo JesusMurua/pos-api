@@ -57,8 +57,7 @@ public class BranchController : BaseApiController
         var branch = new Branch
         {
             BusinessId = BusinessId,
-            Name = request.Name,
-            LocationName = request.LocationName
+            Name = request.Name
         };
 
         var created = await _branchService.CreateAsync(branch);
@@ -88,7 +87,6 @@ public class BranchController : BaseApiController
         {
             BusinessId = BusinessId,
             Name = request.Name,
-            LocationName = request.LocationName,
             HasKitchen = request.HasKitchen ?? false,
             HasTables = request.HasTables ?? false
         };
@@ -155,13 +153,12 @@ public class BranchController : BaseApiController
         {
             branch.Id,
             branch.Name,
-            branch.LocationName,
             businessName = branch.Business?.Name
         });
     }
 
     /// <summary>
-    /// Updates the branch name and location.
+    /// Updates the branch name.
     /// </summary>
     /// <param name="id">The branch identifier.</param>
     /// <param name="request">The update data.</param>
@@ -178,7 +175,7 @@ public class BranchController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var branch = await _branchService.UpdateConfigAsync(id, request.Name, request.LocationName);
+        var branch = await _branchService.UpdateConfigAsync(id, request.Name);
         return Ok(branch);
     }
 

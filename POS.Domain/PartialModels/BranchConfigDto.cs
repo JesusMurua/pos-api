@@ -9,7 +9,6 @@ public class BranchConfigDto
     public int BusinessId { get; set; }
     public string BusinessName { get; set; } = null!;
     public string BranchName { get; set; } = null!;
-    public string? LocationName { get; set; }
     public bool HasKitchen { get; set; }
     public bool HasTables { get; set; }
     public bool HasDelivery { get; set; }

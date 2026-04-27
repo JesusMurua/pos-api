@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations;
 namespace POS.API.Models;
 
 /// <summary>
-/// Admin-wide branch update (Name, location, kitchen/tables flags).
-/// Consumed by <c>PUT /api/branch/{id}</c>. When either <c>HasKitchen</c> or
+/// Admin-wide branch update (Name and kitchen/tables flags). Consumed by
+/// <c>PUT /api/branch/{id}</c>. When either <c>HasKitchen</c> or
 /// <c>HasTables</c> transitions from <c>false → true</c>, <c>BranchService</c>
 /// runs the matching feature gate (<c>KdsBasic</c> / <c>TableService</c>) and
 /// may return <c>402 Payment Required</c>.
@@ -15,16 +15,13 @@ public class UpdateBranchRequest
     [MaxLength(100)]
     public string Name { get; set; } = null!;
 
-    [MaxLength(200)]
-    public string? LocationName { get; set; }
-
     public bool? HasKitchen { get; set; }
 
     public bool? HasTables { get; set; }
 }
 
 /// <summary>
-/// Runtime-level branch config update (Name and location only). Consumed by
+/// Runtime-level branch config update (Name only). Consumed by
 /// <c>PUT /api/branch/{id}/config</c>. Kitchen/tables toggles are explicitly
 /// NOT accepted here — use <c>PATCH /api/branch/{id}/settings</c> instead.
 /// </summary>
@@ -33,9 +30,6 @@ public class UpdateBranchConfigRequest
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = null!;
-
-    [MaxLength(200)]
-    public string? LocationName { get; set; }
 }
 
 public class VerifyPinRequest
@@ -61,9 +55,6 @@ public class CreateBranchRequest
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = null!;
-
-    [MaxLength(200)]
-    public string? LocationName { get; set; }
 }
 
 /// <summary>

@@ -1188,7 +1188,6 @@ public class ApplicationDbContext : DbContext
             Id = 1,
             BusinessId = 1,
             Name = "Sucursal Principal",
-            LocationName = "Centro",
             PinHash = "$2a$11$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
             IsMatrix = true,
             IsActive = true,
