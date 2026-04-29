@@ -6,7 +6,17 @@ namespace POS.Services.IService;
 public interface IDeviceService
 {
     Task<GenerateCodeResponse> GenerateActivationCodeAsync(int businessId, int branchId, string mode, string name, int createdBy);
-    Task<ActivateDeviceResponse> ValidateActivationCodeAsync(string code);
+
+    /// <summary>
+    /// Atomic device pairing entry-point. Validates the 6-digit activation code,
+    /// upserts the <c>Device</c> by <paramref name="deviceUuid"/>, marks the code
+    /// as consumed, and issues a long-lived <c>DeviceToken</c> — all inside a
+    /// single transaction with pessimistic row-level locking on the activation
+    /// row. Replaces the previous two-step <c>activate</c> + <c>register</c>
+    /// flow that left anonymous terminals unable to authenticate against
+    /// <c>/api/devices/register</c>.
+    /// </summary>
+    Task<ActivateDeviceResponse> ActivateAndRegisterDeviceAsync(string code, string deviceUuid);
     Task<DeviceSetupResponse> SetupWithEmailAsync(string email, string password);
     Task<DeviceResponse> RegisterOrUpdateDeviceAsync(DeviceRegistrationRequest request);
     Task UpdateHeartbeatAsync(string uuid);
@@ -56,6 +66,9 @@ public class GenerateCodeResponse
 
 public class ActivateDeviceResponse
 {
+    /// <summary>Database identity of the registered device. Populated by EF on insert.</summary>
+    public int Id { get; set; }
+
     public int BusinessId { get; set; }
     public int BranchId { get; set; }
     public string Mode { get; set; } = null!;
@@ -68,6 +81,13 @@ public class ActivateDeviceResponse
     /// prompt.
     /// </summary>
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Long-lived JWT issued for this device on activation. Persisted client-side
+    /// (IndexedDB) and used to authenticate every subsequent HTTP and SignalR
+    /// call without requiring a human session.
+    /// </summary>
+    public string DeviceToken { get; set; } = null!;
 }
 
 public class DeviceSetupResponse

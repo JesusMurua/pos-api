@@ -84,35 +84,117 @@ public class DeviceService : IDeviceService
     }
 
     /// <summary>
-    /// Validates an activation code: must exist, not be used, and not be expired.
-    /// Marks as used in the same operation.
+    /// Atomic device pairing: validates the activation code, upserts the
+    /// <see cref="Device"/> row (idempotent by <paramref name="deviceUuid"/>),
+    /// consumes the code, and issues the <c>DeviceToken</c> — all inside one
+    /// transaction with pessimistic row-level locking on the activation row.
     /// </summary>
-    public async Task<ActivateDeviceResponse> ValidateActivationCodeAsync(string code)
+    /// <remarks>
+    /// Replaces the previous two-step <c>activate</c> + <c>register</c> flow
+    /// where the second hop required Owner/Manager auth that the anonymous
+    /// terminal could not provide. The 6-digit code is now the sole credential
+    /// that bootstraps a fresh terminal.
+    /// </remarks>
+    public async Task<ActivateDeviceResponse> ActivateAndRegisterDeviceAsync(string code, string deviceUuid)
     {
-        var activation = await _unitOfWork.DeviceActivationCodes.GetByCodeAsync(code);
+        // ── STEP 1: Fail-fast pre-validation (no lock) ────────────────────────
+        // Reject obviously bad codes without opening a transaction so brute-force
+        // attempts don't pile up FOR UPDATE locks against the table.
+        var preview = await _unitOfWork.DeviceActivationCodes.GetByCodeAsync(code);
+
+        if (preview == null)
+            throw new ValidationException("Invalid activation code");
+
+        if (preview.IsUsed)
+            throw new ValidationException("Activation code has already been used");
+
+        if (preview.ExpiresAt < DateTime.UtcNow)
+            throw new ValidationException("Activation code has expired");
+
+        // Re-validate plan × mode here. The plan / giro could have been downgraded
+        // between generate-code and activate (window up to 24h via ExpiresAt).
+        await EnforceDeviceModeGateAsync(preview.BusinessId, preview.Mode);
+
+        // ── STEP 2: Open transaction ──────────────────────────────────────────
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+        // ── STEP 3: Lock & Hydrate ────────────────────────────────────────────
+        // FOR UPDATE serializes concurrent callers on the same code row.
+        var activation = await _unitOfWork.DeviceActivationCodes.GetByCodeForUpdateAsync(code);
 
         if (activation == null)
             throw new ValidationException("Invalid activation code");
 
+        // ── STEP 4: Double-check post-lock ────────────────────────────────────
+        // Another transaction may have consumed this code between fail-fast and
+        // lock acquisition. The lock guarantees we now see the latest committed
+        // state.
         if (activation.IsUsed)
             throw new ValidationException("Activation code has already been used");
 
         if (activation.ExpiresAt < DateTime.UtcNow)
             throw new ValidationException("Activation code has expired");
 
+        // ── STEP 5: Idempotent upsert by DeviceUuid ───────────────────────────
+        var existingDevice = await _unitOfWork.Devices.GetByDeviceUuidAsync(deviceUuid);
+
+        Device device;
+        if (existingDevice != null)
+        {
+            existingDevice.BranchId = activation.BranchId;
+            existingDevice.Mode = activation.Mode;
+            existingDevice.Name = activation.Name;
+            existingDevice.IsActive = true;
+            _unitOfWork.Devices.Update(existingDevice);
+            device = existingDevice;
+        }
+        else
+        {
+            device = new Device
+            {
+                BranchId = activation.BranchId,
+                DeviceUuid = deviceUuid,
+                Mode = activation.Mode,
+                Name = activation.Name,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _unitOfWork.Devices.AddAsync(device);
+        }
+
+        // ── STEP 6: Consume the code ──────────────────────────────────────────
         activation.IsUsed = true;
         activation.UsedAt = DateTime.UtcNow;
         _unitOfWork.DeviceActivationCodes.Update(activation);
+
+        // ── STEP 7: Flush — populates device.Id via INSERT ... RETURNING ──────
+        // Changes are persisted inside the transaction but NOT committed yet.
+        // If anything below throws, the transaction.DisposeAsync rolls back.
         await _unitOfWork.SaveChangesAsync();
+
+        // ── STEP 8: Atomic token mint (still inside transaction) ──────────────
+        // Reuse activation.Business already loaded by the repo to skip an extra
+        // round-trip to Businesses while holding the lock.
+        var features = await _featureGate.GetEnabledFeaturesAsync(activation.BusinessId);
+        var deviceToken = _authService.GenerateDeviceToken(device, activation.Business, features);
+
+        // ── STEP 9: Commit ────────────────────────────────────────────────────
+        await transaction.CommitAsync();
+
+        // Re-pair flips IsActive to true; the cached value may still be false.
+        if (existingDevice != null)
+            _deviceAuth.Invalidate(device.Id);
 
         return new ActivateDeviceResponse
         {
+            Id = device.Id,
             BusinessId = activation.BusinessId,
             BranchId = activation.BranchId,
             Mode = activation.Mode,
             BusinessName = activation.Business.Name,
             BranchName = activation.Branch.Name,
-            Name = activation.Name
+            Name = activation.Name,
+            DeviceToken = deviceToken
         };
     }
 

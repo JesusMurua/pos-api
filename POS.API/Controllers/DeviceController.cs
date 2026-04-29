@@ -40,12 +40,15 @@ public class DeviceController : BaseApiController
     }
 
     /// <summary>
-    /// Activates a device using a 6-digit code.
+    /// Atomic device pairing endpoint. Validates the 6-digit code, registers
+    /// the device by <c>DeviceUuid</c>, consumes the code, and returns the
+    /// long-lived <c>DeviceToken</c> in a single anonymous round-trip.
     /// </summary>
-    /// <param name="request">The activation code.</param>
-    /// <returns>Business and branch info for the device.</returns>
-    /// <response code="200">Returns device configuration.</response>
-    /// <response code="400">If the code is invalid, used, or expired.</response>
+    /// <param name="request">The activation code and the terminal UUID.</param>
+    /// <returns>Device configuration plus the JWT the terminal must persist.</returns>
+    /// <response code="200">Returns device configuration and token.</response>
+    /// <response code="400">If the code is invalid, used, expired, or the
+    /// business plan no longer supports the requested mode.</response>
     [HttpPost("activate")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ActivateDeviceResponse), StatusCodes.Status200OK)]
@@ -54,7 +57,7 @@ public class DeviceController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var response = await _deviceService.ValidateActivationCodeAsync(request.Code);
+        var response = await _deviceService.ActivateAndRegisterDeviceAsync(request.Code, request.DeviceUuid);
         return Ok(response);
     }
 
@@ -109,6 +112,16 @@ public class ActivateDeviceRequest
     [Required]
     [StringLength(6, MinimumLength = 6)]
     public string Code { get; set; } = null!;
+
+    /// <summary>
+    /// Stable per-terminal identifier generated client-side (typically a v4 UUID
+    /// stored in IndexedDB). Re-pairing the same physical terminal reuses this
+    /// UUID so the backend updates the existing Device row instead of creating
+    /// a duplicate.
+    /// </summary>
+    [Required]
+    [MaxLength(100)]
+    public string DeviceUuid { get; set; } = null!;
 }
 
 /// <summary>
