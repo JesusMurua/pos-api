@@ -157,10 +157,16 @@ public class DeviceService : IDeviceService
 
         // Re-validate plan × mode here. The plan / giro could have been downgraded
         // between generate-code and activate (window up to 24h via ExpiresAt).
-        // Note: this code is itself in the pending-codes count — harmless because
-        // its consumption keeps the post-activation total identical (–1 pending,
-        // +1 active). When a downgrade pushed Usage above Limit, this rejects.
-        await EnforceDeviceLimitsAsync(preview.BusinessId, preview.BranchId, preview.Mode);
+        // The code being activated is itself in the pending-codes count, so we
+        // signal isConsumingPendingCode=true to subtract it before comparing —
+        // otherwise a tenant exactly at usage==limit (with one pending code that
+        // is its own consumer) would receive a false-positive 403 even though
+        // the post-activation total stays identical (–1 pending, +1 active).
+        await EnforceDeviceLimitsAsync(
+            preview.BusinessId,
+            preview.BranchId,
+            preview.Mode,
+            isConsumingPendingCode: true);
 
         // ── STEP 2: Open transaction ──────────────────────────────────────────
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -513,13 +519,24 @@ public class DeviceService : IDeviceService
     /// activation codes already meets or exceeds the limit. <c>null</c>
     /// limit means infinite (Enterprise) and bypasses the check.
     /// </summary>
+    /// <param name="isConsumingPendingCode">
+    /// When <c>true</c>, the caller is in the middle of consuming a pending
+    /// activation code (i.e. the activate flow). The pending code is by
+    /// definition included in the <c>pendingCodes</c> count, so this flag
+    /// instructs the method to subtract one from the figure before comparing
+    /// against the limit. Without this adjustment a tenant at exactly
+    /// <c>usage == limit</c> (with one pending code being its own consumer)
+    /// would receive a false-positive 403 even though the post-activation
+    /// total is unchanged. Generate-code and back-office register flows must
+    /// keep the default <c>false</c>.
+    /// </param>
     /// <remarks>
     /// Usage formula (see <c>docs/monetization-architecture.md</c> §2):
     /// <c>Usage = COUNT(active devices in mode) + COUNT(pending codes in mode)</c>,
     /// scope-filtered by <c>BranchId</c> when the feature is
     /// <see cref="EnforcementScope.Branch"/>.
     /// </remarks>
-    private async Task EnforceDeviceLimitsAsync(int businessId, int branchId, string normalizedMode)
+    private async Task EnforceDeviceLimitsAsync(int businessId, int branchId, string normalizedMode, bool isConsumingPendingCode = false)
     {
         var feature = GetFeatureKeyForMode(normalizedMode);
         if (feature is null) return;
@@ -537,6 +554,12 @@ public class DeviceService : IDeviceService
             .CountActiveByModeAsync(businessId, scopeBranchId, normalizedMode);
         var pendingCodes = await _unitOfWork.DeviceActivationCodes
             .CountPendingByModeAsync(businessId, scopeBranchId, normalizedMode);
+
+        // Activate flow: subtract the code we are about to consume so the
+        // pre-state count does not over-report by one (the code is in the
+        // pending table until the transaction commits its IsUsed flip).
+        if (isConsumingPendingCode && pendingCodes > 0)
+            pendingCodes--;
 
         var usage = activeDevices + pendingCodes;
 
