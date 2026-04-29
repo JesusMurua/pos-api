@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.DTOs.CashRegister;
@@ -117,6 +118,43 @@ public class CashRegisterController : BaseApiController
         return Ok(register);
     }
 
+    /// <summary>
+    /// Admin-only: generates a 6-character link code that an already-activated
+    /// device can redeem to bind itself to this register. Code lifetime is 30
+    /// minutes. Rejected with 400 if the register is currently linked.
+    /// </summary>
+    [HttpPost("registers/{id}/generate-link-code")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(GenerateLinkCodeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GenerateLinkCode(int id)
+    {
+        var response = await _cashRegisterService.GenerateLinkCodeAsync(id, BranchId);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Device-authenticated: redeems a previously-generated link code to bind
+    /// this device to the register encoded by the code. The device identity is
+    /// pulled from the JWT (<c>deviceId</c> + <c>branchId</c> claims) — the
+    /// body intentionally does not carry device credentials so a forged
+    /// payload cannot impersonate another terminal.
+    /// </summary>
+    [HttpPost("registers/redeem-link-code")]
+    [Authorize] // Mode B: any authenticated identity, but BaseApiController.DeviceId rejects non-device tokens
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RedeemLinkCode([FromBody] RedeemLinkCodeRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var register = await _cashRegisterService.RedeemLinkCodeAsync(request.Code, DeviceId, BranchId);
+        return Ok(register);
+    }
+
     #endregion
 
     #region Session Operations
@@ -208,4 +246,15 @@ public class CashRegisterController : BaseApiController
     }
 
     #endregion
+}
+
+/// <summary>
+/// Request body for <c>POST /api/CashRegister/registers/redeem-link-code</c>.
+/// Carries only the code — device identity is pulled from the JWT.
+/// </summary>
+public class RedeemLinkCodeRequest
+{
+    [Required]
+    [StringLength(6, MinimumLength = 6)]
+    public string Code { get; set; } = null!;
 }

@@ -90,6 +90,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserBranch> UserBranches { get; set; } = null!;
     public DbSet<PushSubscription> PushSubscriptions { get; set; } = null!;
     public DbSet<DeviceActivationCode> DeviceActivationCodes { get; set; } = null!;
+    public DbSet<CashRegisterLinkCode> CashRegisterLinkCodes { get; set; } = null!;
     public DbSet<ProductImage> ProductImages { get; set; } = null!;
     public DbSet<Promotion> Promotions { get; set; } = null!;
     public DbSet<PromotionUsage> PromotionUsages { get; set; } = null!;
@@ -995,6 +996,40 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(d => d.CreatedBy)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // Optional pre-assigned CashRegister for the auto-link-on-activation
+            // flow. SetNull on cascade — if the register is deleted before the
+            // code is consumed, the code stays valid but loses its auto-link
+            // target (activation succeeds without the auto-link branch).
+            entity.HasOne(d => d.CashRegister)
+                .WithMany()
+                .HasForeignKey(d => d.CashRegisterId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        #endregion
+
+        #region CashRegisterLinkCode Configuration
+
+        modelBuilder.Entity<CashRegisterLinkCode>(entity =>
+        {
+            entity.Property(c => c.Code).HasMaxLength(6).IsRequired();
+            entity.Property(c => c.IsUsed).HasDefaultValue(false);
+
+            // Unique on Code — single source of truth across live and consumed
+            // rows so the collision-avoidance loop never has to filter.
+            entity.HasIndex(c => c.Code).IsUnique();
+
+            // Look-up index for "is there an active code for this register?"
+            // queries used by the back office UI before generating a new one.
+            entity.HasIndex(c => new { c.CashRegisterId, c.IsUsed, c.ExpiresAt });
+
+            // Cascade — orphaned link codes are unusable; deleting the register
+            // should drop them rather than block the delete with an FK error.
+            entity.HasOne(c => c.CashRegister)
+                .WithMany()
+                .HasForeignKey(c => c.CashRegisterId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         #endregion

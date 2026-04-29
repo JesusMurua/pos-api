@@ -26,7 +26,16 @@ public class DeviceActivationCode : IBranchScoped
     public DateTime? UsedAt { get; set; }
     public bool IsUsed { get; set; }
 
+    /// <summary>
+    /// Optional pre-assignment of a <see cref="CashRegister"/>. When set, the
+    /// activation flow auto-links the freshly-paired device to this register
+    /// inside the same transaction that consumes the code. Validated at code
+    /// generation time (cross-tenant + register-not-already-linked).
+    /// </summary>
+    public int? CashRegisterId { get; set; }
+
     public virtual Business Business { get; set; } = null!;
     public virtual Branch Branch { get; set; } = null!;
     public virtual User Creator { get; set; } = null!;
+    public virtual CashRegister? CashRegister { get; set; }
 }

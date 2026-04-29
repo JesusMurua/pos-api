@@ -221,6 +221,119 @@ public class CashRegisterService : ICashRegisterService
         return register == null ? null : MapToDto(register);
     }
 
+    /// <summary>
+    /// Generates a short-lived 6-char link code an admin shares with a cashier
+    /// to bind an already-activated device to <paramref name="registerId"/>.
+    /// Validates cross-tenant ownership and the register-not-already-linked
+    /// invariant up-front; uses a collision-avoidance retry loop bounded at 10
+    /// attempts.
+    /// </summary>
+    public async Task<GenerateLinkCodeResponse> GenerateLinkCodeAsync(int registerId, int branchId)
+    {
+        var register = await _unitOfWork.CashRegisters.GetByIdAsync(registerId)
+            ?? throw new NotFoundException($"Cash register with id {registerId} not found");
+
+        if (register.BranchId != branchId)
+            throw new UnauthorizedException("Cash register does not belong to this branch");
+
+        if (register.DeviceId.HasValue)
+            throw new ValidationException(
+                "Cash register is already linked to a device. Unlink it first.");
+
+        // Collision-safe loop: 36^6 ≈ 2.18 billion combinations, but the
+        // birthday-paradox boundary kicks in earlier under heavy concurrency,
+        // so the retry is more than belt-and-braces.
+        string code;
+        var attempts = 0;
+        do
+        {
+            code = GenerateRandomLinkCode();
+            attempts++;
+            if (attempts > 10)
+                throw new ValidationException("Unable to generate unique link code. Please try again.");
+        } while (await _unitOfWork.CashRegisterLinkCodes.CodeExistsAsync(code));
+
+        var linkCode = new CashRegisterLinkCode
+        {
+            Code = code,
+            CashRegisterId = registerId,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+            IsUsed = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _unitOfWork.CashRegisterLinkCodes.AddAsync(linkCode);
+        await _unitOfWork.SaveChangesAsync();
+
+        return new GenerateLinkCodeResponse
+        {
+            Code = code,
+            ExpiresAt = linkCode.ExpiresAt,
+            CreatedAt = linkCode.CreatedAt
+        };
+    }
+
+    /// <summary>
+    /// Redeems a link code from a device-authenticated request. Locks the code
+    /// row with FOR UPDATE inside a transaction so concurrent attempts on the
+    /// same code serialize and the second one finds <c>IsUsed=true</c>. Validates
+    /// existence, expiration, used-state, cross-tenant (device.BranchId vs
+    /// register.BranchId) and the register-not-already-linked invariant.
+    /// </summary>
+    public async Task<CashRegisterDto> RedeemLinkCodeAsync(string code, int deviceId, int branchId)
+    {
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+        var linkCode = await _unitOfWork.CashRegisterLinkCodes.GetByCodeForUpdateAsync(code)
+            ?? throw new NotFoundException("Link code not found");
+
+        if (linkCode.IsUsed)
+            throw new ValidationException("Link code has already been used");
+
+        if (linkCode.ExpiresAt < DateTime.UtcNow)
+            throw new ValidationException("Link code has expired");
+
+        var register = linkCode.CashRegister
+            ?? throw new NotFoundException("Cash register for this link code is missing");
+
+        // Cross-tenant defense: the redeeming device's BranchId (from JWT) must
+        // match the register's BranchId. 404 (not 403) so cross-tenant codes
+        // cannot be enumerated by error-message disambiguation.
+        if (register.BranchId != branchId)
+            throw new NotFoundException("Link code not found");
+
+        // Race-aware: a manual link via PATCH /link-device may have happened
+        // between code generation and redemption.
+        if (register.DeviceId.HasValue && register.DeviceId.Value != deviceId)
+            throw new ValidationException(
+                "Cash register is already linked to another device.");
+
+        register.DeviceId = deviceId;
+        _unitOfWork.CashRegisters.Update(register);
+
+        linkCode.IsUsed = true;
+        linkCode.UsedAt = DateTime.UtcNow;
+        _unitOfWork.CashRegisterLinkCodes.Update(linkCode);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Unique partial index on CashRegister.DeviceId would fire if
+            // somehow another transaction linked the same device to a different
+            // register concurrently. Surface as a clean 400.
+            throw new ValidationException(
+                "Could not link device to register. The device may already be bound elsewhere.");
+        }
+
+        await transaction.CommitAsync();
+
+        var refreshed = await _unitOfWork.CashRegisters.GetByIdWithDeviceAsync(register.Id);
+        return MapToDto(refreshed!);
+    }
+
     #endregion
 
     #region Session Operations
@@ -439,6 +552,22 @@ public class CashRegisterService : ICashRegisterService
     /// Uses Order.CashRegisterSessionId instead of temporal window to guarantee
     /// exact precision with overlapping multi-till sessions.
     /// </summary>
+    /// <summary>
+    /// Generates a 6-char uppercase alphanumeric link code. The character set
+    /// excludes <c>I</c>, <c>O</c>, <c>0</c>, <c>1</c> so an operator
+    /// dictating the code over the phone cannot confuse them visually.
+    /// </summary>
+    private static string GenerateRandomLinkCode()
+    {
+        const string charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var bytes = new byte[6];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+        var chars = new char[6];
+        for (var i = 0; i < 6; i++)
+            chars[i] = charset[bytes[i] % charset.Length];
+        return new string(chars);
+    }
+
     private async Task<int> CalculateCashSalesAsync(int sessionId)
     {
         var orders = await _unitOfWork.Orders.GetAsync(

@@ -45,6 +45,7 @@ public class UnitOfWork : IUnitOfWork
     private IKdsEventOutboxRepository? _kdsEventOutbox;
     private IInvoiceRepository? _invoices;
     private IDeviceRepository? _devices;
+    private ICashRegisterLinkCodeRepository? _cashRegisterLinkCodes;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -161,6 +162,9 @@ public class UnitOfWork : IUnitOfWork
 
     public IDeviceRepository Devices =>
         _devices ??= new DeviceRepository(_context);
+
+    public ICashRegisterLinkCodeRepository CashRegisterLinkCodes =>
+        _cashRegisterLinkCodes ??= new CashRegisterLinkCodeRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

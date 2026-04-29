@@ -36,7 +36,7 @@ public class DeviceController : BaseApiController
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var response = await _deviceService.GenerateActivationCodeAsync(
-            BusinessId, request.BranchId, request.Mode, request.Name, UserId);
+            BusinessId, request.BranchId, request.Mode, request.Name, UserId, request.CashRegisterId);
         return Ok(response);
     }
 
@@ -122,6 +122,15 @@ public class GenerateCodeRequest
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Optional pre-assignment of a <c>CashRegister</c>. When supplied, the
+    /// activation flow auto-links the freshly-paired device to this register
+    /// inside the same transaction. Validated at generation time
+    /// (cross-tenant + register-not-already-linked) so the admin gets a
+    /// 400/404 immediately instead of a deferred error at activation time.
+    /// </summary>
+    public int? CashRegisterId { get; set; }
 }
 
 /// <summary>

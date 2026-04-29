@@ -77,4 +77,29 @@ public abstract class BaseApiController : ControllerBase
             return claim.Value;
         }
     }
+
+    /// <summary>
+    /// Gets the device identifier from a device-issued JWT. Refuses any token
+    /// whose <c>type</c> claim is not <c>"device"</c>, so a human session can
+    /// never satisfy a device-only endpoint.
+    /// </summary>
+    /// <exception cref="UnauthorizedException">
+    /// Thrown when the token is not device-issued or the <c>deviceId</c> claim
+    /// is missing or non-numeric.
+    /// </exception>
+    protected int DeviceId
+    {
+        get
+        {
+            var typeClaim = User.FindFirst("type")?.Value;
+            if (typeClaim != "device")
+                throw new UnauthorizedException("This endpoint requires a device-issued token.");
+
+            var claim = User.FindFirst("deviceId");
+            if (claim == null || !int.TryParse(claim.Value, out var deviceId))
+                throw new UnauthorizedException("Missing or invalid deviceId claim in token.");
+
+            return deviceId;
+        }
+    }
 }

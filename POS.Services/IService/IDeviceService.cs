@@ -5,7 +5,16 @@ namespace POS.Services.IService;
 
 public interface IDeviceService
 {
-    Task<GenerateCodeResponse> GenerateActivationCodeAsync(int businessId, int branchId, string mode, string name, int createdBy);
+    /// <summary>
+    /// Generates a 6-digit device activation code. When <paramref name="cashRegisterId"/>
+    /// is supplied, the activation flow will auto-link the freshly-paired device
+    /// to that register inside the same transaction. The register is validated
+    /// to belong to <paramref name="branchId"/> and to currently be unbound; both
+    /// validations run at code generation time so an admin gets immediate
+    /// feedback rather than seeing a deferred 400 at activation.
+    /// </summary>
+    Task<GenerateCodeResponse> GenerateActivationCodeAsync(
+        int businessId, int branchId, string mode, string name, int createdBy, int? cashRegisterId = null);
 
     /// <summary>
     /// Lists all live (non-consumed, non-expired) activation codes that belong

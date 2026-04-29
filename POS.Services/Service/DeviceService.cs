@@ -42,7 +42,7 @@ public class DeviceService : IDeviceService
     /// <c>docs/monetization-architecture.md</c> §3 for the policy rationale.
     /// </remarks>
     public async Task<GenerateCodeResponse> GenerateActivationCodeAsync(
-        int businessId, int branchId, string mode, string name, int createdBy)
+        int businessId, int branchId, string mode, string name, int createdBy, int? cashRegisterId = null)
     {
         var normalizedMode = mode.ToLowerInvariant();
         if (!DeviceModeCodes.IsValid(normalizedMode))
@@ -62,6 +62,24 @@ public class DeviceService : IDeviceService
 
         if (branch.BusinessId != businessId)
             throw new UnauthorizedException("Branch does not belong to the caller's business");
+
+        // ── AUTO-LINK PRE-FLIGHT: when a CashRegisterId is supplied, validate
+        // it up-front so the admin gets immediate feedback instead of an opaque
+        // FK violation at activation time. We enforce both cross-tenant
+        // (BranchId match) and the unique-partial-index precondition
+        // (DeviceId == null) here; the activation flow can then assume the
+        // pre-assignment is still valid (race-protected by re-read on activate).
+        if (cashRegisterId.HasValue)
+        {
+            var register = await _unitOfWork.CashRegisters.GetByIdAsync(cashRegisterId.Value)
+                ?? throw new NotFoundException($"Cash register with id {cashRegisterId.Value} not found");
+
+            if (register.BranchId != branchId)
+                throw new ValidationException("Cash register does not belong to this branch");
+
+            if (register.DeviceId.HasValue)
+                throw new ValidationException("Cash register is already linked to a device. Unlink it first.");
+        }
 
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
@@ -108,7 +126,8 @@ public class DeviceService : IDeviceService
             CreatedBy = createdBy,
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddHours(24),
-            IsUsed = false
+            IsUsed = false,
+            CashRegisterId = cashRegisterId
         };
 
         await _unitOfWork.DeviceActivationCodes.AddAsync(activation);
@@ -224,6 +243,29 @@ public class DeviceService : IDeviceService
         // Changes are persisted inside the transaction but NOT committed yet.
         // If anything below throws, the transaction.DisposeAsync rolls back.
         await _unitOfWork.SaveChangesAsync();
+
+        // ── STEP 7b: Auto-link the device to the pre-assigned CashRegister ────
+        // Runs INSIDE the same transaction — if the link fails (e.g. the register
+        // got linked to another device between code generation and activation),
+        // the entire activation is rolled back. The admin sees a clean 400, the
+        // tenant is not left with an orphaned device row.
+        if (activation.CashRegisterId.HasValue)
+        {
+            var register = await _unitOfWork.CashRegisters.GetByIdAsync(activation.CashRegisterId.Value);
+
+            if (register == null || register.BranchId != activation.BranchId)
+                throw new ValidationException(
+                    "Cash register pre-assigned at code generation is no longer valid for this branch.");
+
+            if (register.DeviceId.HasValue && register.DeviceId.Value != device.Id)
+                throw new ValidationException(
+                    "Cash register was linked to another device after the code was generated. " +
+                    "Generate a new code or pick a different register.");
+
+            register.DeviceId = device.Id;
+            _unitOfWork.CashRegisters.Update(register);
+            await _unitOfWork.SaveChangesAsync();
+        }
 
         // ── STEP 8: Atomic token mint (still inside transaction) ──────────────
         // Reuse activation.Business already loaded by the repo to skip an extra

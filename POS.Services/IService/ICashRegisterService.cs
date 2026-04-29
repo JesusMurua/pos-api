@@ -40,6 +40,25 @@ public interface ICashRegisterService
     /// </summary>
     Task<CashRegisterDto?> GetRegisterByDeviceUuidAsync(int branchId, string deviceUuid);
 
+    /// <summary>
+    /// Generates a 6-character alphanumeric link code that lets an
+    /// already-activated device redeem its binding to <paramref name="registerId"/>
+    /// from the terminal UI. Validates cross-tenant ownership and that the
+    /// register is currently unbound; rejects with 400 otherwise. Code lifetime
+    /// is 30 minutes.
+    /// </summary>
+    Task<GenerateLinkCodeResponse> GenerateLinkCodeAsync(int registerId, int branchId);
+
+    /// <summary>
+    /// Redeems a previously-generated link code. Called by the device itself
+    /// authenticated with its long-lived device JWT (Mode B). The
+    /// <paramref name="branchId"/> and <paramref name="deviceId"/> are pulled
+    /// from the device JWT — the body never carries device identity.
+    /// Uses pessimistic row-level locking on the code row to prevent
+    /// double-redemption races.
+    /// </summary>
+    Task<CashRegisterDto> RedeemLinkCodeAsync(string code, int deviceId, int branchId);
+
     #endregion
 
     #region Session Operations
