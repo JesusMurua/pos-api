@@ -38,4 +38,14 @@ public interface IDeviceRepository : IGenericRepository<Device>
     /// not exist.
     /// </summary>
     Task<DeviceListItemResponse?> GetProjectedByIdAsync(int deviceId);
+
+    /// <summary>
+    /// Counts active devices of <paramref name="mode"/> within
+    /// <paramref name="businessId"/>, optionally narrowed by
+    /// <paramref name="branchId"/>. Used by the device-licensing engine to
+    /// compute the active-hardware portion of the usage formula. Tenancy is
+    /// applied via <c>Branch.BusinessId</c>; <c>IsActive=false</c> rows are
+    /// excluded so deactivated terminals do not consume quota.
+    /// </summary>
+    Task<int> CountActiveByModeAsync(int businessId, int? branchId, string mode);
 }

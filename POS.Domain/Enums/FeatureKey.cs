@@ -14,19 +14,20 @@ public enum FeatureKey
     MaxUsers = 11,
     MaxBranches = 12,
     MaxCashRegisters = 13,
+    MaxKdsScreens = 14,
+    MaxKiosks = 15,
+    MaxReceptionsPerBranch = 16,
 
     // Fiscal
     CfdiInvoicing = 20,
 
     // Kitchen / KDS
-    KdsBasic = 30,
     RealtimeKds = 31,
     PrintedCommandaTickets = 32,
 
     // Restaurant operations
     TableMap = 40,
     WaiterApp = 41,
-    KioskMode = 42,
     TableService = 43,
 
     // Inventory
@@ -47,7 +48,6 @@ public enum FeatureKey
     SimpleFolios = 80,
     CustomFolios = 81,
     AppointmentReminders = 82,
-    GymReception = 83,
 
     // Platform
     PublicApi = 90,

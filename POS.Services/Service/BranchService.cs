@@ -66,7 +66,7 @@ public class BranchService : IBranchService
     /// <summary>
     /// Updates an existing branch's name, optionally flipping kitchen and tables
     /// flags. Per BDD-015, enabling either flag (transition to true) requires the
-    /// matching feature — <see cref="FeatureKey.KdsBasic"/> for
+    /// matching feature — <see cref="FeatureKey.MaxKdsScreens"/> for
     /// <paramref name="hasKitchen"/>, <see cref="FeatureKey.TableService"/> for
     /// <paramref name="hasTables"/>. Disabling or leaving them untouched requires
     /// no check. All gate enforcement runs before any DB write so partial state
@@ -83,7 +83,7 @@ public class BranchService : IBranchService
             throw new ValidationException("Branch does not belong to the specified business");
 
         if (hasKitchen == true && !existing.HasKitchen)
-            await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.KdsBasic);
+            await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.MaxKdsScreens);
         if (hasTables == true && !existing.HasTables)
             await _featureGate.EnforceAsync(existing.BusinessId, FeatureKey.TableService);
 

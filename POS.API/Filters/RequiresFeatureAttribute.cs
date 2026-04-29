@@ -9,8 +9,8 @@ namespace POS.API.Filters;
 
 /// <summary>
 /// Action filter that verifies a feature is enabled for the caller's business
-/// via the Plan × BusinessType matrix. Returns HTTP 402 Payment Required when
-/// the feature is unavailable under the current plan or giro.
+/// via the Plan × BusinessType matrix. Returns HTTP 403 Forbidden when the
+/// feature is unavailable under the current plan or giro.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
 public class RequiresFeatureAttribute : Attribute, IAsyncAuthorizationFilter
@@ -27,7 +27,7 @@ public class RequiresFeatureAttribute : Attribute, IAsyncAuthorizationFilter
         var businessIdClaim = context.HttpContext.User.FindFirst("businessId")?.Value;
         if (!int.TryParse(businessIdClaim, out var businessId))
         {
-            context.Result = BuildPaymentRequired(_feature, "Unknown", null);
+            context.Result = BuildForbidden(_feature, "Unknown", null);
             return;
         }
 
@@ -39,11 +39,11 @@ public class RequiresFeatureAttribute : Attribute, IAsyncAuthorizationFilter
         }
         catch (PlanLimitExceededException ex)
         {
-            context.Result = BuildPaymentRequired(_feature, ex.CurrentPlan, ex.Limit);
+            context.Result = BuildForbidden(_feature, ex.CurrentPlan, ex.Limit);
         }
     }
 
-    private static ObjectResult BuildPaymentRequired(FeatureKey feature, string currentPlan, int? limit)
+    private static ObjectResult BuildForbidden(FeatureKey feature, string currentPlan, int? limit)
     {
         var payload = new
         {
@@ -52,9 +52,9 @@ public class RequiresFeatureAttribute : Attribute, IAsyncAuthorizationFilter
             feature = feature.ToString(),
             currentPlan,
             limit,
-            statusCode = 402
+            statusCode = 403
         };
 
-        return new ObjectResult(payload) { StatusCode = StatusCodes.Status402PaymentRequired };
+        return new ObjectResult(payload) { StatusCode = StatusCodes.Status403Forbidden };
     }
 }

@@ -41,4 +41,49 @@ public class DeviceActivationCodeRepository : GenericRepository<DeviceActivation
 
         return activation;
     }
+
+    public async Task<int> CountPendingByModeAsync(int businessId, int? branchId, string mode)
+    {
+        var now = DateTime.UtcNow;
+        var query = _context.DeviceActivationCodes
+            .AsNoTracking()
+            .Where(c => !c.IsUsed
+                        && c.ExpiresAt > now
+                        && c.Mode == mode
+                        && c.BusinessId == businessId);
+
+        if (branchId.HasValue)
+            query = query.Where(c => c.BranchId == branchId.Value);
+
+        return await query.CountAsync();
+    }
+
+    public async Task<IReadOnlyList<DeviceActivationCode>> GetPendingByTargetAsync(int branchId, string mode, string name)
+    {
+        return await _context.DeviceActivationCodes
+            .Where(c => !c.IsUsed
+                        && c.BranchId == branchId
+                        && c.Mode == mode
+                        && c.Name == name)
+            .ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<DeviceActivationCode>> ListPendingByBusinessAsync(int businessId, int? branchId = null)
+    {
+        var now = DateTime.UtcNow;
+        var query = _context.DeviceActivationCodes
+            .AsNoTracking()
+            .Include(c => c.Branch)
+            .Where(c => !c.IsUsed
+                        && c.ExpiresAt > now
+                        && c.BusinessId == businessId);
+
+        if (branchId.HasValue)
+            query = query.Where(c => c.BranchId == branchId.Value);
+
+        return await query
+            .OrderBy(c => c.BranchId)
+            .ThenBy(c => c.CreatedAt)
+            .ToListAsync();
+    }
 }

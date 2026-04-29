@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using POS.Repository;
@@ -11,9 +12,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260429022243_AddDeviceLimitsSchemaAndScope")]
+    partial class AddDeviceLimitsSchemaAndScope
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3241,6 +3244,11 @@ namespace POS.Repository.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("StripePriceId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<string>("StripeSubscriptionId")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -3264,49 +3272,6 @@ namespace POS.Repository.Migrations
                     b.HasIndex("StripeSubscriptionId");
 
                     b.ToTable("Subscriptions");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.SubscriptionItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsBasePlan")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StripeItemId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("StripePriceId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<int>("SubscriptionId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StripeItemId")
-                        .IsUnique();
-
-                    b.HasIndex("SubscriptionId");
-
-                    b.ToTable("SubscriptionItems");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Supplier", b =>
@@ -4357,17 +4322,6 @@ namespace POS.Repository.Migrations
                     b.Navigation("PlanTypeCatalog");
                 });
 
-            modelBuilder.Entity("POS.Domain.Models.SubscriptionItem", b =>
-                {
-                    b.HasOne("POS.Domain.Models.Subscription", "Subscription")
-                        .WithMany("Items")
-                        .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Subscription");
-                });
-
             modelBuilder.Entity("POS.Domain.Models.Supplier", b =>
                 {
                     b.HasOne("POS.Domain.Models.Branch", "Branch")
@@ -4548,11 +4502,6 @@ namespace POS.Repository.Migrations
                 });
 
             modelBuilder.Entity("POS.Domain.Models.StockReceipt", b =>
-                {
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.Subscription", b =>
                 {
                     b.Navigation("Items");
                 });

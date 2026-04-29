@@ -27,4 +27,11 @@ public class SubscriptionRepository : GenericRepository<Subscription>, ISubscrip
         return await _context.Subscriptions
             .FirstOrDefaultAsync(s => s.StripeSubscriptionId == stripeSubscriptionId);
     }
+
+    public async Task<Subscription?> GetByStripeSubscriptionIdWithItemsAsync(string stripeSubscriptionId)
+    {
+        return await _context.Subscriptions
+            .Include(s => s.Items)
+            .FirstOrDefaultAsync(s => s.StripeSubscriptionId == stripeSubscriptionId);
+    }
 }

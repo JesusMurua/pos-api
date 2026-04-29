@@ -86,4 +86,17 @@ public class DeviceRepository : GenericRepository<Device>, IDeviceRepository
             })
             .FirstOrDefaultAsync();
     }
+
+    /// <inheritdoc />
+    public async Task<int> CountActiveByModeAsync(int businessId, int? branchId, string mode)
+    {
+        var query = _context.Devices
+            .AsNoTracking()
+            .Where(d => d.IsActive && d.Mode == mode && d.Branch!.BusinessId == businessId);
+
+        if (branchId.HasValue)
+            query = query.Where(d => d.BranchId == branchId.Value);
+
+        return await query.CountAsync();
+    }
 }

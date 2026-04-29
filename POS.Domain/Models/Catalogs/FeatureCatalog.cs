@@ -38,4 +38,12 @@ public class FeatureCatalog
     public string? ResourceLabel { get; set; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Aggregation scope used by the device-licensing enforcement engine.
+    /// <c>Global</c> counts devices across the entire business; <c>Branch</c>
+    /// counts within a single sucursal. Only consulted for quantitative
+    /// features whose Code maps to a hardware <c>DeviceMode</c>.
+    /// </summary>
+    public EnforcementScope Scope { get; set; } = EnforcementScope.Global;
 }

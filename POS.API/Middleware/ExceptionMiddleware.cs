@@ -50,7 +50,7 @@ public class ExceptionMiddleware
         {
             _logger.LogWarning(ex, "Plan limit exceeded: {Message}", ex.Message);
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = 402;
+            context.Response.StatusCode = 403;
 
             var planError = new
             {
@@ -59,7 +59,7 @@ public class ExceptionMiddleware
                 currentPlan = ex.CurrentPlan,
                 resource = ex.Resource,
                 limit = ex.Limit,
-                statusCode = 402
+                statusCode = 403
             };
 
             var json = JsonSerializer.Serialize(planError, new JsonSerializerOptions

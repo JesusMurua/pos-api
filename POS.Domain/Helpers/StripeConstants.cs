@@ -1,4 +1,11 @@
+using POS.Domain.Enums;
+
 namespace POS.Domain.Helpers;
+
+// RUNBOOK: Any new Price ID created in the Stripe Dashboard MUST be registered here
+// (in PriceMap for base plans, in AddonPriceMap for add-ons) before selling.
+// Otherwise the webhook processor will fail-closed and the customer's subscription
+// will not sync — see StripeEventProcessorWorker for the strict resolution path.
 
 /// <summary>
 /// Stripe Price IDs organized by plan tier, business type pricing group, and billing cycle.
@@ -108,15 +115,69 @@ public static class StripeConstants
         { Enterprise.Restaurant.Annual, ("Enterprise", "Annual", "Restaurant") },
     };
 
-    public static string ResolvePlanType(string priceId) =>
-        PriceMap.TryGetValue(priceId, out var info) ? info.Plan : "Free";
+    /// <summary>
+    /// Resolves a Stripe Price ID to its base plan name. Throws
+    /// <see cref="KeyNotFoundException"/> when the id is not present in
+    /// <see cref="PriceMap"/> — fail-closed semantics force a registry update
+    /// instead of silently bucketing unknown prices into "Free", which used
+    /// to downgrade tenants invisibly when Stripe drift occurred.
+    /// </summary>
+    public static string ResolvePlanType(string priceId)
+    {
+        if (!PriceMap.TryGetValue(priceId, out var info))
+            throw new KeyNotFoundException(
+                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap. Add it to the catalog before processing this subscription.");
+        return info.Plan;
+    }
 
     public static int ResolvePlanTypeId(string priceId) =>
         PlanTypeIds.FromEnum(Enum.TryParse<Enums.PlanType>(ResolvePlanType(priceId), true, out var p) ? p : Enums.PlanType.Free);
 
-    public static string ResolveBillingCycle(string priceId) =>
-        PriceMap.TryGetValue(priceId, out var info) ? info.Cycle : "Monthly";
+    public static string ResolveBillingCycle(string priceId)
+    {
+        if (!PriceMap.TryGetValue(priceId, out var info))
+            throw new KeyNotFoundException(
+                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap.");
+        return info.Cycle;
+    }
 
-    public static string ResolvePricingGroup(string priceId) =>
-        PriceMap.TryGetValue(priceId, out var info) ? info.Group : "General";
+    public static string ResolvePricingGroup(string priceId)
+    {
+        if (!PriceMap.TryGetValue(priceId, out var info))
+            throw new KeyNotFoundException(
+                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap.");
+        return info.Group;
+    }
+
+    /// <summary>
+    /// Catalog of Add-on Price IDs (extra device licenses sold on top of a
+    /// base plan). Each entry maps to a <see cref="FeatureKey"/> and a
+    /// <c>QuantityPerUnit</c> indicating how many license units the add-on
+    /// grants per purchased Stripe quantity.
+    /// </summary>
+    /// <remarks>
+    /// Real Stripe Price IDs replace these placeholders once the dashboard
+    /// products are created. The placeholder ids are intentionally
+    /// unconventional (no <c>price_1</c> prefix) so they cannot collide with
+    /// real Stripe ids by accident.
+    /// </remarks>
+    public static readonly Dictionary<string, (FeatureKey Feature, int QuantityPerUnit)> AddonPriceMap = new()
+    {
+        { "price_dummy_kds",      (FeatureKey.MaxKdsScreens,      1) },
+        { "price_dummy_kiosk",    (FeatureKey.MaxKiosks,          1) },
+        { "price_dummy_cashier",  (FeatureKey.MaxCashRegisters,   1) },
+    };
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="priceId"/> is a registered
+    /// add-on price. Used by the webhook handler to classify each item in
+    /// <c>stripe_subscription.items.data</c> as base-plan vs add-on.
+    /// </summary>
+    public static bool IsAddon(string priceId) => AddonPriceMap.ContainsKey(priceId);
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="priceId"/> is a registered
+    /// base plan price.
+    /// </summary>
+    public static bool IsBasePlan(string priceId) => PriceMap.ContainsKey(priceId);
 }

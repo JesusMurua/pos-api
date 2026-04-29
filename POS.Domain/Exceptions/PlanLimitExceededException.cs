@@ -2,7 +2,8 @@ namespace POS.Domain.Exceptions;
 
 /// <summary>
 /// Thrown when a business on a limited plan exceeds a quantitative limit.
-/// Controllers should map this to HTTP 402 Payment Required.
+/// Controllers should map this to HTTP 403 Forbidden per
+/// <c>docs/monetization-architecture.md</c>.
 /// </summary>
 public class PlanLimitExceededException : Exception
 {

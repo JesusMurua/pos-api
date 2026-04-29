@@ -559,7 +559,6 @@ public static class DbInitializer
                 BusinessId = business.Id,
                 StripeCustomerId = $"test_customer_{business.Id}",
                 StripeSubscriptionId = $"test_sub_{business.Id}",
-                StripePriceId = "free",
                 PlanTypeId = PlanTypeIds.Free,
                 BillingCycle = "Monthly",
                 PricingGroup = Domain.Helpers.StripeConstants.GetPricingGroup(business.PrimaryMacroCategoryId),
@@ -715,44 +714,44 @@ public static class DbInitializer
         // 1. Upsert FeatureCatalog rows — stable Ids come from FeatureKey enum values.
         var desiredFeatures = new List<FeatureCatalog>
         {
-            new() { Id = FeatureIds.CoreHardware,            Key = FeatureKey.CoreHardware,            Code = "CoreHardware",            Name = "Hardware local",                   Description = "Impresoras, escáneres, básculas y cajón de dinero locales",   IsQuantitative = false, SortOrder = 1 },
+            new() { Id = FeatureIds.CoreHardware,            Key = FeatureKey.CoreHardware,            Code = "CoreHardware",            Name = "Hardware local",                   Description = "Impresoras, escáneres, básculas y cajón de dinero locales",   IsQuantitative = false, SortOrder = 1,  Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.MaxProducts,             Key = FeatureKey.MaxProducts,             Code = "MaxProducts",             Name = "Límite de productos",              Description = "Número máximo de productos permitidos",                        IsQuantitative = true,  ResourceLabel = "productos",        SortOrder = 10 },
-            new() { Id = FeatureIds.MaxUsers,                Key = FeatureKey.MaxUsers,                Code = "MaxUsers",                Name = "Límite de usuarios",               Description = "Número máximo de usuarios activos",                            IsQuantitative = true,  ResourceLabel = "usuarios",         SortOrder = 11 },
-            new() { Id = FeatureIds.MaxBranches,             Key = FeatureKey.MaxBranches,             Code = "MaxBranches",             Name = "Límite de sucursales",             Description = "Número máximo de sucursales operativas",                       IsQuantitative = true,  ResourceLabel = "sucursales",       SortOrder = 12 },
-            new() { Id = FeatureIds.MaxCashRegisters,        Key = FeatureKey.MaxCashRegisters,        Code = "MaxCashRegisters",        Name = "Límite de cajas",                  Description = "Número máximo de cajas registradoras abiertas",                IsQuantitative = true,  ResourceLabel = "cajas",            SortOrder = 13 },
+            new() { Id = FeatureIds.MaxProducts,             Key = FeatureKey.MaxProducts,             Code = "MaxProducts",             Name = "Límite de productos",              Description = "Número máximo de productos permitidos",                        IsQuantitative = true,  ResourceLabel = "productos",        SortOrder = 10, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxUsers,                Key = FeatureKey.MaxUsers,                Code = "MaxUsers",                Name = "Límite de usuarios",               Description = "Número máximo de usuarios activos",                            IsQuantitative = true,  ResourceLabel = "usuarios",         SortOrder = 11, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxBranches,             Key = FeatureKey.MaxBranches,             Code = "MaxBranches",             Name = "Límite de sucursales",             Description = "Número máximo de sucursales operativas",                       IsQuantitative = true,  ResourceLabel = "sucursales",       SortOrder = 12, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxCashRegisters,        Key = FeatureKey.MaxCashRegisters,        Code = "MaxCashRegisters",        Name = "Límite de cajas",                  Description = "Número máximo de cajas registradoras abiertas",                IsQuantitative = true,  ResourceLabel = "cajas",            SortOrder = 13, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxKdsScreens,           Key = FeatureKey.MaxKdsScreens,           Code = "MaxKdsScreens",           Name = "Límite de pantallas KDS",          Description = "Número máximo de pantallas de cocina (KDS) activas",           IsQuantitative = true,  ResourceLabel = "pantallas KDS",    SortOrder = 14, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxKiosks,               Key = FeatureKey.MaxKiosks,               Code = "MaxKiosks",               Name = "Límite de kioscos",                Description = "Número máximo de terminales en modo kiosco",                   IsQuantitative = true,  ResourceLabel = "kioscos",          SortOrder = 15, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MaxReceptionsPerBranch,  Key = FeatureKey.MaxReceptionsPerBranch,  Code = "MaxReceptionsPerBranch",  Name = "Límite de recepciones por sucursal", Description = "Número máximo de pantallas de control de acceso (gym) por sucursal", IsQuantitative = true, ResourceLabel = "recepciones",     SortOrder = 16, Scope = EnforcementScope.Branch },
 
-            new() { Id = FeatureIds.CfdiInvoicing,           Key = FeatureKey.CfdiInvoicing,           Code = "CfdiInvoicing",           Name = "Facturación CFDI",                 Description = "Emisión de comprobantes fiscales digitales (México)",          IsQuantitative = false, SortOrder = 20 },
+            new() { Id = FeatureIds.CfdiInvoicing,           Key = FeatureKey.CfdiInvoicing,           Code = "CfdiInvoicing",           Name = "Facturación CFDI",                 Description = "Emisión de comprobantes fiscales digitales (México)",          IsQuantitative = false, SortOrder = 20, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.KdsBasic,                Key = FeatureKey.KdsBasic,                Code = "KdsBasic",                Name = "KDS básico",                        Description = "Pantalla de cocina con auto-refresh (sin sockets)",            IsQuantitative = false, SortOrder = 30 },
-            new() { Id = FeatureIds.RealtimeKds,             Key = FeatureKey.RealtimeKds,             Code = "RealtimeKds",             Name = "KDS en tiempo real",               Description = "Pantalla de cocina vía WebSockets con eventos en vivo",        IsQuantitative = false, SortOrder = 31 },
-            new() { Id = FeatureIds.PrintedCommandaTickets,  Key = FeatureKey.PrintedCommandaTickets,  Code = "PrintedCommandaTickets",  Name = "Comandas impresas",                Description = "Impresión de comandas en impresora térmica",                   IsQuantitative = false, SortOrder = 32 },
+            new() { Id = FeatureIds.RealtimeKds,             Key = FeatureKey.RealtimeKds,             Code = "RealtimeKds",             Name = "KDS en tiempo real",               Description = "Pantalla de cocina vía WebSockets con eventos en vivo",        IsQuantitative = false, SortOrder = 31, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.PrintedCommandaTickets,  Key = FeatureKey.PrintedCommandaTickets,  Code = "PrintedCommandaTickets",  Name = "Comandas impresas",                Description = "Impresión de comandas en impresora térmica",                   IsQuantitative = false, SortOrder = 32, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.TableMap,                Key = FeatureKey.TableMap,                Code = "TableMap",                Name = "Mapa de mesas",                     Description = "Layout visual de mesas y asignación de órdenes",               IsQuantitative = false, SortOrder = 40 },
-            new() { Id = FeatureIds.WaiterApp,               Key = FeatureKey.WaiterApp,               Code = "WaiterApp",               Name = "App de meseros",                    Description = "Aplicación móvil para toma de órdenes en mesa",                IsQuantitative = false, SortOrder = 41 },
-            new() { Id = FeatureIds.KioskMode,               Key = FeatureKey.KioskMode,               Code = "KioskMode",                Name = "Modo kiosco",                       Description = "Modo kiosco de autoservicio para clientes",                    IsQuantitative = false, SortOrder = 42 },
-            new() { Id = FeatureIds.TableService,            Key = FeatureKey.TableService,            Code = "TableService",            Name = "Servicio en mesa",                  Description = "Operación con mesas: órdenes sentados y gestión de estado de mesa", IsQuantitative = false, SortOrder = 43 },
+            new() { Id = FeatureIds.TableMap,                Key = FeatureKey.TableMap,                Code = "TableMap",                Name = "Mapa de mesas",                     Description = "Layout visual de mesas y asignación de órdenes",               IsQuantitative = false, SortOrder = 40, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.WaiterApp,               Key = FeatureKey.WaiterApp,               Code = "WaiterApp",               Name = "App de meseros",                    Description = "Aplicación móvil para toma de órdenes en mesa",                IsQuantitative = false, SortOrder = 41, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.TableService,            Key = FeatureKey.TableService,            Code = "TableService",            Name = "Servicio en mesa",                  Description = "Operación con mesas: órdenes sentados y gestión de estado de mesa", IsQuantitative = false, SortOrder = 43, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.RecipeInventory,         Key = FeatureKey.RecipeInventory,         Code = "RecipeInventory",         Name = "Inventario con recetas",            Description = "Descuento de ingredientes por receta y control de mermas",     IsQuantitative = false, SortOrder = 50 },
-            new() { Id = FeatureIds.MultiWarehouseInventory, Key = FeatureKey.MultiWarehouseInventory, Code = "MultiWarehouseInventory", Name = "Inventario multi-bodega",           Description = "Control de inventario en múltiples bodegas",                   IsQuantitative = false, SortOrder = 51 },
-            new() { Id = FeatureIds.StockAlerts,             Key = FeatureKey.StockAlerts,             Code = "StockAlerts",             Name = "Alertas de stock",                  Description = "Notificaciones automáticas de stock bajo",                      IsQuantitative = false, SortOrder = 52 },
+            new() { Id = FeatureIds.RecipeInventory,         Key = FeatureKey.RecipeInventory,         Code = "RecipeInventory",         Name = "Inventario con recetas",            Description = "Descuento de ingredientes por receta y control de mermas",     IsQuantitative = false, SortOrder = 50, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MultiWarehouseInventory, Key = FeatureKey.MultiWarehouseInventory, Code = "MultiWarehouseInventory", Name = "Inventario multi-bodega",           Description = "Control de inventario en múltiples bodegas",                   IsQuantitative = false, SortOrder = 51, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.StockAlerts,             Key = FeatureKey.StockAlerts,             Code = "StockAlerts",             Name = "Alertas de stock",                  Description = "Notificaciones automáticas de stock bajo",                      IsQuantitative = false, SortOrder = 52, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.StoreCredit,             Key = FeatureKey.StoreCredit,             Code = "StoreCredit",             Name = "Control de fiado / crédito",        Description = "Gestión de fiado a clientes con saldo y abonos",               IsQuantitative = false, SortOrder = 60 },
-            new() { Id = FeatureIds.ComparativeReports,      Key = FeatureKey.ComparativeReports,      Code = "ComparativeReports",      Name = "Reportes comparativos",             Description = "Comparación de ventas entre periodos y sucursales",            IsQuantitative = false, SortOrder = 61 },
-            new() { Id = FeatureIds.AdvancedReports,         Key = FeatureKey.AdvancedReports,         Code = "AdvancedReports",         Name = "Reportes avanzados",                Description = "Exportaciones (Excel, PDF, CSV) y dashboards avanzados",       IsQuantitative = false, SortOrder = 62 },
+            new() { Id = FeatureIds.StoreCredit,             Key = FeatureKey.StoreCredit,             Code = "StoreCredit",             Name = "Control de fiado / crédito",        Description = "Gestión de fiado a clientes con saldo y abonos",               IsQuantitative = false, SortOrder = 60, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.ComparativeReports,      Key = FeatureKey.ComparativeReports,      Code = "ComparativeReports",      Name = "Reportes comparativos",             Description = "Comparación de ventas entre periodos y sucursales",            IsQuantitative = false, SortOrder = 61, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.AdvancedReports,         Key = FeatureKey.AdvancedReports,         Code = "AdvancedReports",         Name = "Reportes avanzados",                Description = "Exportaciones (Excel, PDF, CSV) y dashboards avanzados",       IsQuantitative = false, SortOrder = 62, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.LoyaltyCrm,              Key = FeatureKey.LoyaltyCrm,              Code = "LoyaltyCrm",              Name = "Lealtad y CRM",                     Description = "Puntos de lealtad y recompensas",                              IsQuantitative = false, SortOrder = 70 },
-            new() { Id = FeatureIds.CustomerDatabase,        Key = FeatureKey.CustomerDatabase,        Code = "CustomerDatabase",        Name = "Base de clientes",                  Description = "Historial y perfil básico del cliente",                         IsQuantitative = false, SortOrder = 71 },
+            new() { Id = FeatureIds.LoyaltyCrm,              Key = FeatureKey.LoyaltyCrm,              Code = "LoyaltyCrm",              Name = "Lealtad y CRM",                     Description = "Puntos de lealtad y recompensas",                              IsQuantitative = false, SortOrder = 70, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.CustomerDatabase,        Key = FeatureKey.CustomerDatabase,        Code = "CustomerDatabase",        Name = "Base de clientes",                  Description = "Historial y perfil básico del cliente",                         IsQuantitative = false, SortOrder = 71, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.SimpleFolios,            Key = FeatureKey.SimpleFolios,            Code = "SimpleFolios",            Name = "Folios simples",                    Description = "Numeración secuencial de tickets",                             IsQuantitative = false, SortOrder = 80 },
-            new() { Id = FeatureIds.CustomFolios,            Key = FeatureKey.CustomFolios,            Code = "CustomFolios",            Name = "Folios personalizados",             Description = "Prefijos y formatos de folio configurables",                   IsQuantitative = false, SortOrder = 81 },
-            new() { Id = FeatureIds.AppointmentReminders,    Key = FeatureKey.AppointmentReminders,    Code = "AppointmentReminders",    Name = "Recordatorios de citas",            Description = "Envío automático de recordatorios (WhatsApp / SMS)",           IsQuantitative = false, SortOrder = 82 },
-            new() { Id = FeatureIds.GymReception,            Key = FeatureKey.GymReception,            Code = "GymReception",            Name = "Control de Acceso (Gym)",           Description = "Modo recepción para control de acceso (gimnasios)",            IsQuantitative = false, SortOrder = 83 },
+            new() { Id = FeatureIds.SimpleFolios,            Key = FeatureKey.SimpleFolios,            Code = "SimpleFolios",            Name = "Folios simples",                    Description = "Numeración secuencial de tickets",                             IsQuantitative = false, SortOrder = 80, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.CustomFolios,            Key = FeatureKey.CustomFolios,            Code = "CustomFolios",            Name = "Folios personalizados",             Description = "Prefijos y formatos de folio configurables",                   IsQuantitative = false, SortOrder = 81, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.AppointmentReminders,    Key = FeatureKey.AppointmentReminders,    Code = "AppointmentReminders",    Name = "Recordatorios de citas",            Description = "Envío automático de recordatorios (WhatsApp / SMS)",           IsQuantitative = false, SortOrder = 82, Scope = EnforcementScope.Global },
 
-            new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",              IsQuantitative = false, SortOrder = 90 },
-            new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",          IsQuantitative = false, SortOrder = 91 },
-            new() { Id = FeatureIds.ProviderPayments,        Key = FeatureKey.ProviderPayments,        Code = "ProviderPayments",        Name = "Proveedores de pago externos",      Description = "Integración con procesadores de pago (Clip, MercadoPago) y flujos de intent + webhook", IsQuantitative = false, SortOrder = 100 },
-            new() { Id = FeatureIds.DeliveryPlatforms,       Key = FeatureKey.DeliveryPlatforms,       Code = "DeliveryPlatforms",       Name = "Plataformas de delivery",           Description = "Integración con plataformas de reparto (UberEats, Rappi, DidiFood) con ingesta de webhooks", IsQuantitative = false, SortOrder = 110 },
+            new() { Id = FeatureIds.PublicApi,               Key = FeatureKey.PublicApi,               Code = "PublicApi",               Name = "API pública",                       Description = "Acceso a la API REST pública para integraciones",              IsQuantitative = false, SortOrder = 90, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",          IsQuantitative = false, SortOrder = 91, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.ProviderPayments,        Key = FeatureKey.ProviderPayments,        Code = "ProviderPayments",        Name = "Proveedores de pago externos",      Description = "Integración con procesadores de pago (Clip, MercadoPago) y flujos de intent + webhook", IsQuantitative = false, SortOrder = 100, Scope = EnforcementScope.Global },
+            new() { Id = FeatureIds.DeliveryPlatforms,       Key = FeatureKey.DeliveryPlatforms,       Code = "DeliveryPlatforms",       Name = "Plataformas de delivery",           Description = "Integración con plataformas de reparto (UberEats, Rappi, DidiFood) con ingesta de webhooks", IsQuantitative = false, SortOrder = 110, Scope = EnforcementScope.Global },
         };
 
         var existingFeatures = await context.FeatureCatalogs.ToListAsync();
@@ -768,6 +767,7 @@ public static class DbInitializer
                 row.IsQuantitative = item.IsQuantitative;
                 row.ResourceLabel = item.ResourceLabel;
                 row.SortOrder = item.SortOrder;
+                row.Scope = item.Scope;
             }
             else
             {
@@ -802,18 +802,28 @@ public static class DbInitializer
 
             (PlanTypeIds.Free,       FeatureIds.MaxCashRegisters, true, 1),
             (PlanTypeIds.Basic,      FeatureIds.MaxCashRegisters, true, 1),
-            (PlanTypeIds.Pro,        FeatureIds.MaxCashRegisters, true, null),
+            (PlanTypeIds.Pro,        FeatureIds.MaxCashRegisters, true, 3),
             (PlanTypeIds.Enterprise, FeatureIds.MaxCashRegisters, true, null),
+
+            (PlanTypeIds.Free,       FeatureIds.MaxKdsScreens, true, 0),
+            (PlanTypeIds.Basic,      FeatureIds.MaxKdsScreens, true, 1),
+            (PlanTypeIds.Pro,        FeatureIds.MaxKdsScreens, true, 3),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxKdsScreens, true, null),
+
+            (PlanTypeIds.Free,       FeatureIds.MaxKiosks, true, 0),
+            (PlanTypeIds.Basic,      FeatureIds.MaxKiosks, true, 0),
+            (PlanTypeIds.Pro,        FeatureIds.MaxKiosks, true, 0),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxKiosks, true, null),
+
+            (PlanTypeIds.Free,       FeatureIds.MaxReceptionsPerBranch, true, 0),
+            (PlanTypeIds.Basic,      FeatureIds.MaxReceptionsPerBranch, true, 1),
+            (PlanTypeIds.Pro,        FeatureIds.MaxReceptionsPerBranch, true, 1),
+            (PlanTypeIds.Enterprise, FeatureIds.MaxReceptionsPerBranch, true, 1),
 
             (PlanTypeIds.Free,       FeatureIds.CfdiInvoicing, false, null),
             (PlanTypeIds.Basic,      FeatureIds.CfdiInvoicing, true,  null),
             (PlanTypeIds.Pro,        FeatureIds.CfdiInvoicing, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.CfdiInvoicing, true,  null),
-
-            (PlanTypeIds.Free,       FeatureIds.KdsBasic, false, null),
-            (PlanTypeIds.Basic,      FeatureIds.KdsBasic, true,  null),
-            (PlanTypeIds.Pro,        FeatureIds.KdsBasic, true,  null),
-            (PlanTypeIds.Enterprise, FeatureIds.KdsBasic, true,  null),
 
             (PlanTypeIds.Free,       FeatureIds.RealtimeKds, false, null),
             (PlanTypeIds.Basic,      FeatureIds.RealtimeKds, false, null),
@@ -834,11 +844,6 @@ public static class DbInitializer
             (PlanTypeIds.Basic,      FeatureIds.WaiterApp, false, null),
             (PlanTypeIds.Pro,        FeatureIds.WaiterApp, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.WaiterApp, true,  null),
-
-            (PlanTypeIds.Free,       FeatureIds.KioskMode, false, null),
-            (PlanTypeIds.Basic,      FeatureIds.KioskMode, false, null),
-            (PlanTypeIds.Pro,        FeatureIds.KioskMode, true,  null),
-            (PlanTypeIds.Enterprise, FeatureIds.KioskMode, true,  null),
 
             (PlanTypeIds.Free,       FeatureIds.RecipeInventory, false, null),
             (PlanTypeIds.Basic,      FeatureIds.RecipeInventory, false, null),
@@ -889,11 +894,6 @@ public static class DbInitializer
             (PlanTypeIds.Basic,      FeatureIds.AppointmentReminders, false, null),
             (PlanTypeIds.Pro,        FeatureIds.AppointmentReminders, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.AppointmentReminders, true,  null),
-
-            // Services vertical does not use Enterprise plan — intentionally only 3 rows.
-            (PlanTypeIds.Free,       FeatureIds.GymReception, false, null),
-            (PlanTypeIds.Basic,      FeatureIds.GymReception, true,  null),
-            (PlanTypeIds.Pro,        FeatureIds.GymReception, true,  null),
 
             (PlanTypeIds.Free,       FeatureIds.PublicApi, false, null),
             (PlanTypeIds.Basic,      FeatureIds.PublicApi, false, null),
@@ -982,19 +982,18 @@ public static class DbInitializer
         if (idx >= 0)
             desiredApplicability[idx] = (MacroCategoryIds.Retail, FeatureIds.MaxProducts, 500);
 
-        AddAll(foodAndBeverage.Concat(quickService).ToArray(), FeatureIds.KdsBasic);
+        AddAll(foodAndBeverage.Concat(quickService).ToArray(), FeatureIds.MaxKdsScreens);
         AddAll(foodAndBeverage, FeatureIds.RealtimeKds);
         AddAll(foodAndBeverage, FeatureIds.PrintedCommandaTickets);
         AddAll(foodAndBeverage, FeatureIds.TableMap);
         AddAll(foodAndBeverage, FeatureIds.WaiterApp);
-        AddAll(foodAndBeverage, FeatureIds.KioskMode);
         AddAll(foodAndBeverage, FeatureIds.RecipeInventory);
         AddAll(allMacros, FeatureIds.PublicApi);
         AddAll(allMacros, FeatureIds.MultiBranch);
 
         AddAll(quickService, FeatureIds.RealtimeKds);
         AddAll(quickService, FeatureIds.PrintedCommandaTickets);
-        AddAll(quickService, FeatureIds.KioskMode);
+        AddAll(quickService, FeatureIds.MaxKiosks);
         AddAll(foodAndBeverage.Concat(quickService).ToArray(), FeatureIds.LoyaltyCrm);
 
         AddAll(allMacros, FeatureIds.StoreCredit);
@@ -1006,7 +1005,7 @@ public static class DbInitializer
         AddAll(allMacros, FeatureIds.SimpleFolios);
         AddAll(allMacros, FeatureIds.CustomFolios);
         AddAll(services, FeatureIds.AppointmentReminders);
-        AddAll(services, FeatureIds.GymReception);
+        AddAll(services, FeatureIds.MaxReceptionsPerBranch);
 
         // BDD-015 applicability:
         // TableService — only where seated service exists (restaurant-style macros).

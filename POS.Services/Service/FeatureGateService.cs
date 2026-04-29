@@ -37,6 +37,20 @@ public class FeatureGateService : IFeatureGateService
         return snapshot.Entries.TryGetValue(feature, out var entry) ? entry.Limit : null;
     }
 
+    public async Task<EnforcementScope> GetScopeAsync(int businessId, FeatureKey feature)
+    {
+        var snapshot = await GetSnapshotAsync(businessId);
+        return snapshot.Entries.TryGetValue(feature, out var entry) ? entry.Scope : EnforcementScope.Global;
+    }
+
+    public async Task<(int? Limit, EnforcementScope Scope)> GetEnforcementInfoAsync(int businessId, FeatureKey feature)
+    {
+        var snapshot = await GetSnapshotAsync(businessId);
+        if (snapshot.Entries.TryGetValue(feature, out var entry))
+            return (entry.Limit, entry.Scope);
+        return (null, EnforcementScope.Global);
+    }
+
     public async Task<IReadOnlyList<string>> GetEnabledFeaturesAsync(int businessId)
     {
         var snapshot = await GetSnapshotAsync(businessId);
@@ -140,7 +154,7 @@ public class FeatureGateService : IFeatureGateService
 
             var limit = ResolveLimit(planRow?.DefaultLimit, applicable ? macroLimit : null);
 
-            entries[feature.Key] = new FeatureEntry(isEnabled, limit);
+            entries[feature.Key] = new FeatureEntry(isEnabled, limit, feature.Scope);
             resourceLabels[feature.Key] = feature.ResourceLabel;
         }
 
@@ -159,7 +173,7 @@ public class FeatureGateService : IFeatureGateService
 
     private static string CacheKey(int businessId) => $"FeatureGate::{businessId}";
 
-    private sealed record FeatureEntry(bool IsEnabled, int? Limit);
+    private sealed record FeatureEntry(bool IsEnabled, int? Limit, EnforcementScope Scope);
 
     private sealed record BusinessFeatureSnapshot(
         string PlanCode,

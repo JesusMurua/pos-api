@@ -31,6 +31,7 @@ public class UnitOfWork : IUnitOfWork
     private ICatalogRepository? _catalog;
     private IReservationRepository? _reservations;
     private ISubscriptionRepository? _subscriptions;
+    private ISubscriptionItemRepository? _subscriptionItems;
     private IStripeEventInboxRepository? _stripeEventInbox;
     private IPaymentWebhookInboxRepository? _paymentWebhookInbox;
     private IBranchPaymentConfigRepository? _branchPaymentConfigs;
@@ -118,6 +119,9 @@ public class UnitOfWork : IUnitOfWork
 
     public ISubscriptionRepository Subscriptions =>
         _subscriptions ??= new SubscriptionRepository(_context);
+
+    public ISubscriptionItemRepository SubscriptionItems =>
+        _subscriptionItems ??= new SubscriptionItemRepository(_context);
 
     public IStripeEventInboxRepository StripeEventInbox =>
         _stripeEventInbox ??= new StripeEventInboxRepository(_context);

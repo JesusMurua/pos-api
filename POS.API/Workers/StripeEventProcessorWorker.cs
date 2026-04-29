@@ -141,17 +141,21 @@ public class StripeEventProcessorWorker : BackgroundService
         var subscriptionService = new SubscriptionService(stripeClient);
         var stripeSub = await subscriptionService.GetAsync(stripeSubscriptionId);
 
-        var priceId = stripeSub.Items?.Data?.FirstOrDefault()?.Price?.Id;
-        if (string.IsNullOrEmpty(priceId))
+        if (stripeSub.Items?.Data == null || stripeSub.Items.Data.Count == 0)
         {
             _logger.LogWarning("checkout.session.completed: subscription {SubId} has no price items",
                 stripeSubscriptionId);
             return;
         }
 
-        var firstItem = stripeSub.Items!.Data![0];
+        var firstItem = stripeSub.Items.Data[0];
 
-        var subscription = await unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);
+        // Eager-load with items so the clear-and-replace path operates on the
+        // full collection in memory (otherwise EF will not delete orphans).
+        var subscription = await unitOfWork.Subscriptions
+            .GetByStripeSubscriptionIdWithItemsAsync(stripeSubscriptionId);
+        bool isNew = subscription == null;
+
         if (subscription == null)
         {
             subscription = new Domain.Models.Subscription
@@ -159,33 +163,30 @@ public class StripeEventProcessorWorker : BackgroundService
                 BusinessId = businessId,
                 StripeCustomerId = session.CustomerId,
                 StripeSubscriptionId = stripeSubscriptionId,
-                StripePriceId = priceId,
-                PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId),
-                BillingCycle = StripeConstants.ResolveBillingCycle(priceId),
-                PricingGroup = StripeConstants.ResolvePricingGroup(priceId),
                 Status = stripeSub.Status,
                 TrialEndsAt = stripeSub.TrialEnd,
                 CurrentPeriodStart = firstItem.CurrentPeriodStart,
                 CurrentPeriodEnd = firstItem.CurrentPeriodEnd,
                 UpdatedAt = DateTime.UtcNow
             };
-            await unitOfWork.Subscriptions.AddAsync(subscription);
         }
         else
         {
             subscription.StripeCustomerId = session.CustomerId;
             subscription.StripeSubscriptionId = stripeSubscriptionId;
-            subscription.StripePriceId = priceId;
-            subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId);
-            subscription.BillingCycle = StripeConstants.ResolveBillingCycle(priceId);
-            subscription.PricingGroup = StripeConstants.ResolvePricingGroup(priceId);
             subscription.Status = stripeSub.Status;
             subscription.TrialEndsAt = stripeSub.TrialEnd ?? subscription.TrialEndsAt;
             subscription.CurrentPeriodStart = firstItem.CurrentPeriodStart;
             subscription.CurrentPeriodEnd = firstItem.CurrentPeriodEnd;
             subscription.CanceledAt = null;
-            unitOfWork.Subscriptions.Update(subscription);
         }
+
+        SyncItemsAndPlan(subscription, stripeSub);
+
+        if (isNew)
+            await unitOfWork.Subscriptions.AddAsync(subscription);
+        else
+            unitOfWork.Subscriptions.Update(subscription);
 
         // Single Source of Truth: Business.PlanTypeId is the canonical plan used by
         // FeatureGateService. Keep it in sync with the Stripe subscription on every mutation.
@@ -208,8 +209,10 @@ public class StripeEventProcessorWorker : BackgroundService
         var stripeSub = stripeEvent.Data.Object as Stripe.Subscription;
         if (stripeSub == null) return;
 
+        // Eager-load items so SyncItemsAndPlan can clear-and-replace without
+        // leaving orphan rows in SubscriptionItems.
         var subscription = await unitOfWork.Subscriptions
-            .GetByStripeSubscriptionIdAsync(stripeSub.Id);
+            .GetByStripeSubscriptionIdWithItemsAsync(stripeSub.Id);
         if (subscription == null) return;
 
         // Temporal guard: discard out-of-order events
@@ -221,20 +224,17 @@ public class StripeEventProcessorWorker : BackgroundService
             return;
         }
 
-        var priceId = stripeSub.Items?.Data?.FirstOrDefault()?.Price?.Id;
-        if (string.IsNullOrEmpty(priceId))
+        if (stripeSub.Items?.Data == null || stripeSub.Items.Data.Count == 0)
         {
             _logger.LogWarning("subscription.updated: subscription {SubId} has no price items", stripeSub.Id);
             return;
         }
 
         subscription.Status = stripeSub.Status;
-        subscription.StripePriceId = priceId;
-        subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(priceId);
-        subscription.BillingCycle = StripeConstants.ResolveBillingCycle(priceId);
-        subscription.PricingGroup = StripeConstants.ResolvePricingGroup(priceId);
-        subscription.CurrentPeriodStart = stripeSub.Items!.Data![0].CurrentPeriodStart;
-        subscription.CurrentPeriodEnd = stripeSub.Items!.Data![0].CurrentPeriodEnd;
+        subscription.CurrentPeriodStart = stripeSub.Items.Data[0].CurrentPeriodStart;
+        subscription.CurrentPeriodEnd = stripeSub.Items.Data[0].CurrentPeriodEnd;
+
+        SyncItemsAndPlan(subscription, stripeSub);
 
         unitOfWork.Subscriptions.Update(subscription);
 
@@ -357,6 +357,71 @@ public class StripeEventProcessorWorker : BackgroundService
     {
         return subscription.UpdatedAt > DateTime.MinValue
             && stripeEvent.Created < subscription.UpdatedAt;
+    }
+
+    /// <summary>
+    /// Clears the local <see cref="Domain.Models.Subscription.Items"/>
+    /// collection and rebuilds it from <paramref name="stripeSub"/> so
+    /// the local row mirrors Stripe's authoritative state. Each item is
+    /// classified as base plan or add-on via <see cref="StripeConstants"/>;
+    /// unknown Price IDs raise <see cref="KeyNotFoundException"/> (fail-closed).
+    /// After rebuilding, the method validates that exactly one item carries
+    /// <see cref="Domain.Models.SubscriptionItem.IsBasePlan"/> and uses it
+    /// to resolve <c>PlanTypeId</c>, <c>BillingCycle</c> and <c>PricingGroup</c>.
+    /// </summary>
+    private static void SyncItemsAndPlan(
+        Domain.Models.Subscription subscription,
+        Stripe.Subscription stripeSub)
+    {
+        // Clear-and-replace: EF tracks removals on the loaded collection so
+        // the corresponding SubscriptionItems rows get deleted on SaveChanges.
+        subscription.Items.Clear();
+
+        var now = DateTime.UtcNow;
+
+        foreach (var item in stripeSub.Items.Data)
+        {
+            var priceId = item.Price?.Id
+                ?? throw new InvalidOperationException(
+                    $"Stripe subscription {stripeSub.Id} item {item.Id} has no Price.Id.");
+
+            bool isBase = StripeConstants.IsBasePlan(priceId);
+            bool isAddon = StripeConstants.IsAddon(priceId);
+
+            if (!isBase && !isAddon)
+            {
+                throw new KeyNotFoundException(
+                    $"Stripe Price ID '{priceId}' on subscription {stripeSub.Id} is not registered " +
+                    "in StripeConstants.PriceMap nor StripeConstants.AddonPriceMap. " +
+                    "Add it to the catalog before processing this subscription (fail-closed).");
+            }
+
+            subscription.Items.Add(new Domain.Models.SubscriptionItem
+            {
+                StripeItemId = item.Id,
+                StripePriceId = priceId,
+                Quantity = (int)item.Quantity,
+                IsBasePlan = isBase,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        // Exactly-one-base-plan invariant — fail-closed so catalog drift or
+        // mis-classified add-ons surface as failed events instead of silent
+        // tenant downgrades.
+        var basePlanItems = subscription.Items.Where(i => i.IsBasePlan).ToList();
+        if (basePlanItems.Count == 0)
+            throw new InvalidOperationException(
+                $"Stripe subscription {stripeSub.Id} has no base plan item.");
+        if (basePlanItems.Count > 1)
+            throw new InvalidOperationException(
+                $"Stripe subscription {stripeSub.Id} has {basePlanItems.Count} base plan items — only one expected.");
+
+        var basePlanPriceId = basePlanItems[0].StripePriceId;
+        subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(basePlanPriceId);
+        subscription.BillingCycle = StripeConstants.ResolveBillingCycle(basePlanPriceId);
+        subscription.PricingGroup = StripeConstants.ResolvePricingGroup(basePlanPriceId);
     }
 
     #endregion

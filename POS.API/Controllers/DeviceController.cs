@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.DTOs.Device;
 using POS.Services.IService;
 
 namespace POS.API.Controllers;
@@ -78,6 +79,25 @@ public class DeviceController : BaseApiController
 
         var response = await _deviceService.SetupWithEmailAsync(request.Email, request.Password);
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Lists every live activation code for the caller's business so the
+    /// Dashboard can show what is consuming the device-licensing quota and
+    /// inform the operator before issuing more codes. Filters apply to the
+    /// caller's tenant only — cross-tenant <c>branchId</c> values yield an
+    /// empty array.
+    /// </summary>
+    /// <param name="branchId">Optional branch filter.</param>
+    /// <returns>Pending codes ordered by branch then creation time.</returns>
+    /// <response code="200">Returns the list of pending codes.</response>
+    [HttpGet("pending-codes")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(IReadOnlyList<PendingDeviceCodeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPendingCodes([FromQuery] int? branchId = null)
+    {
+        var pending = await _deviceService.GetPendingCodesAsync(BusinessId, branchId);
+        return Ok(pending);
     }
 }
 

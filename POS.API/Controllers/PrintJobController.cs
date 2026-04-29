@@ -13,7 +13,7 @@ namespace POS.API.Controllers;
 /// and acknowledge completion or failure.
 /// </summary>
 [Route("api/print-jobs")]
-[RequiresFeature(FeatureKey.KdsBasic)]
+[RequiresFeature(FeatureKey.MaxKdsScreens)]
 public class PrintJobController : BaseApiController
 {
     private readonly IPrintJobService _printJobService;

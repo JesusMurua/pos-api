@@ -15,7 +15,14 @@ public class Subscription
     // Stripe references
     public string StripeCustomerId { get; set; } = null!;
     public string StripeSubscriptionId { get; set; } = null!;
-    public string StripePriceId { get; set; } = null!;
+
+    /// <summary>
+    /// Subscription line items mirroring <c>stripe_subscription.items.data</c>.
+    /// Exactly one row should have <see cref="SubscriptionItem.IsBasePlan"/>
+    /// set to <c>true</c>; the rest are add-on licenses summed into the
+    /// device-licensing engine via <c>EnforceDeviceLimitsAsync</c>.
+    /// </summary>
+    public ICollection<SubscriptionItem> Items { get; set; } = new List<SubscriptionItem>();
 
     // Plan info (denormalized for quick access)
     /// <summary>FK to PlanTypeCatalog.Id (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>

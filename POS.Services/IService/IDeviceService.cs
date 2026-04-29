@@ -8,6 +8,15 @@ public interface IDeviceService
     Task<GenerateCodeResponse> GenerateActivationCodeAsync(int businessId, int branchId, string mode, string name, int createdBy);
 
     /// <summary>
+    /// Lists all live (non-consumed, non-expired) activation codes that belong
+    /// to <paramref name="businessId"/>, optionally narrowed by
+    /// <paramref name="branchId"/>. Used by the back-office Dashboard to
+    /// surface what is currently consuming the device-licensing quota and to
+    /// inform the operator before generating new codes.
+    /// </summary>
+    Task<IReadOnlyList<PendingDeviceCodeDto>> GetPendingCodesAsync(int businessId, int? branchId = null);
+
+    /// <summary>
     /// Atomic device pairing entry-point. Validates the 6-digit activation code,
     /// upserts the <c>Device</c> by <paramref name="deviceUuid"/>, marks the code
     /// as consumed, and issues a long-lived <c>DeviceToken</c> — all inside a
@@ -62,6 +71,18 @@ public class GenerateCodeResponse
 {
     public string Code { get; set; } = null!;
     public DateTime ExpiresAt { get; set; }
+
+    /// <summary>Pre-configured device label set by the Admin at code generation.</summary>
+    public string Name { get; set; } = null!;
+
+    /// <summary>Normalized device mode (cashier, tables, kitchen, kiosk, reception).</summary>
+    public string Mode { get; set; } = null!;
+
+    /// <summary>Branch the device will be paired into. Echoed back so the UI can render context without a second query.</summary>
+    public string BranchName { get; set; } = null!;
+
+    /// <summary>UTC timestamp the code was issued. Frontend uses this together with <see cref="ExpiresAt"/> to render a countdown.</summary>
+    public DateTime CreatedAt { get; set; }
 }
 
 public class ActivateDeviceResponse

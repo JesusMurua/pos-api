@@ -14,16 +14,17 @@ public static class FeatureIds
     public const int MaxUsers = (int)FeatureKey.MaxUsers;
     public const int MaxBranches = (int)FeatureKey.MaxBranches;
     public const int MaxCashRegisters = (int)FeatureKey.MaxCashRegisters;
+    public const int MaxKdsScreens = (int)FeatureKey.MaxKdsScreens;
+    public const int MaxKiosks = (int)FeatureKey.MaxKiosks;
+    public const int MaxReceptionsPerBranch = (int)FeatureKey.MaxReceptionsPerBranch;
 
     public const int CfdiInvoicing = (int)FeatureKey.CfdiInvoicing;
 
-    public const int KdsBasic = (int)FeatureKey.KdsBasic;
     public const int RealtimeKds = (int)FeatureKey.RealtimeKds;
     public const int PrintedCommandaTickets = (int)FeatureKey.PrintedCommandaTickets;
 
     public const int TableMap = (int)FeatureKey.TableMap;
     public const int WaiterApp = (int)FeatureKey.WaiterApp;
-    public const int KioskMode = (int)FeatureKey.KioskMode;
     public const int TableService = (int)FeatureKey.TableService;
 
     public const int RecipeInventory = (int)FeatureKey.RecipeInventory;
@@ -40,7 +41,6 @@ public static class FeatureIds
     public const int SimpleFolios = (int)FeatureKey.SimpleFolios;
     public const int CustomFolios = (int)FeatureKey.CustomFolios;
     public const int AppointmentReminders = (int)FeatureKey.AppointmentReminders;
-    public const int GymReception = (int)FeatureKey.GymReception;
 
     public const int PublicApi = (int)FeatureKey.PublicApi;
     public const int MultiBranch = (int)FeatureKey.MultiBranch;

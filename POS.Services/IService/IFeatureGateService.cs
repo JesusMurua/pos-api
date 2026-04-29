@@ -23,6 +23,22 @@ public interface IFeatureGateService
     Task<int?> GetLimitAsync(int businessId, FeatureKey feature);
 
     /// <summary>
+    /// Returns the enforcement scope for a feature (Global vs Branch).
+    /// Used by the device-licensing engine to decide how to aggregate the
+    /// usage count for a quantitative feature. Defaults to <c>Global</c>
+    /// when the feature is not present in the snapshot.
+    /// </summary>
+    Task<EnforcementScope> GetScopeAsync(int businessId, FeatureKey feature);
+
+    /// <summary>
+    /// Returns the limit and scope of a feature in a single snapshot lookup.
+    /// Preferred over calling <see cref="GetLimitAsync"/> and
+    /// <see cref="GetScopeAsync"/> separately when both values are needed,
+    /// since both reads come from the same cached snapshot.
+    /// </summary>
+    Task<(int? Limit, EnforcementScope Scope)> GetEnforcementInfoAsync(int businessId, FeatureKey feature);
+
+    /// <summary>
     /// Returns the list of enabled feature codes for a business (string form of FeatureKey).
     /// Used by the frontend to render/hide UI elements without having to probe each feature.
     /// </summary>

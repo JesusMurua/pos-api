@@ -31,9 +31,16 @@ public class DeviceService : IDeviceService
     #region Public API Methods
 
     /// <summary>
-    /// Generates a unique 6-digit activation code for device setup.
-    /// Retries on collision (up to 10 attempts).
+    /// Generates a unique 6-digit activation code for device setup. The full
+    /// flow runs inside a single transaction so hygiene + enforcement + insert
+    /// are atomic: if any step fails, no half-cancelled prior codes survive.
     /// </summary>
+    /// <remarks>
+    /// Order is load-bearing: hygiene runs BEFORE the enforcement count so
+    /// the codes we are about to invalidate do not inflate the usage figure
+    /// and trigger a false-positive 403. See
+    /// <c>docs/monetization-architecture.md</c> §3 for the policy rationale.
+    /// </remarks>
     public async Task<GenerateCodeResponse> GenerateActivationCodeAsync(
         int businessId, int branchId, string mode, string name, int createdBy)
     {
@@ -45,8 +52,39 @@ public class DeviceService : IDeviceService
         if (string.IsNullOrEmpty(trimmedName))
             throw new ValidationException("Name is required");
 
-        await EnforceDeviceModeGateAsync(businessId, normalizedMode);
+        // ── CROSS-TENANT GUARD (IDOR fix): an Owner of Tenant A must not be
+        // able to generate codes against Tenant B by submitting a foreign
+        // BranchId. We fetch the branch here to (a) prove existence + tenancy
+        // and (b) reuse it to populate BranchName in the response without a
+        // second round-trip.
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
 
+        if (branch.BusinessId != businessId)
+            throw new UnauthorizedException("Branch does not belong to the caller's business");
+
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+        // ── HYGIENE: invalidate any prior pending code for the same target ─
+        var stalePending = await _unitOfWork.DeviceActivationCodes
+            .GetPendingByTargetAsync(branchId, normalizedMode, trimmedName);
+
+        if (stalePending.Count > 0)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var stale in stalePending)
+            {
+                stale.IsUsed = true;
+                stale.UsedAt = now;
+                _unitOfWork.DeviceActivationCodes.Update(stale);
+            }
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        // ── ENFORCE: data-driven count using EnforcementScope ───────────────
+        await EnforceDeviceLimitsAsync(businessId, branchId, normalizedMode);
+
+        // ── GENERATE: collision-safe loop ──────────────────────────────────
         string code;
         var attempts = 0;
 
@@ -76,10 +114,16 @@ public class DeviceService : IDeviceService
         await _unitOfWork.DeviceActivationCodes.AddAsync(activation);
         await _unitOfWork.SaveChangesAsync();
 
+        await transaction.CommitAsync();
+
         return new GenerateCodeResponse
         {
             Code = code,
-            ExpiresAt = activation.ExpiresAt
+            ExpiresAt = activation.ExpiresAt,
+            Name = activation.Name,
+            Mode = activation.Mode,
+            BranchName = branch.Name,
+            CreatedAt = activation.CreatedAt
         };
     }
 
@@ -113,7 +157,10 @@ public class DeviceService : IDeviceService
 
         // Re-validate plan × mode here. The plan / giro could have been downgraded
         // between generate-code and activate (window up to 24h via ExpiresAt).
-        await EnforceDeviceModeGateAsync(preview.BusinessId, preview.Mode);
+        // Note: this code is itself in the pending-codes count — harmless because
+        // its consumption keeps the post-activation total identical (–1 pending,
+        // +1 active). When a downgrade pushed Usage above Limit, this rejects.
+        await EnforceDeviceLimitsAsync(preview.BusinessId, preview.BranchId, preview.Mode);
 
         // ── STEP 2: Open transaction ──────────────────────────────────────────
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
@@ -260,7 +307,7 @@ public class DeviceService : IDeviceService
         var branch = await _unitOfWork.Branches.GetByIdAsync(request.BranchId)
             ?? throw new NotFoundException($"Branch with id {request.BranchId} not found");
 
-        await EnforceDeviceModeGateAsync(branch.BusinessId, normalizedMode);
+        await EnforceDeviceLimitsAsync(branch.BusinessId, request.BranchId, normalizedMode);
 
         var existing = await _unitOfWork.Devices.GetByDeviceUuidAsync(request.DeviceUuid);
 
@@ -326,6 +373,26 @@ public class DeviceService : IDeviceService
     public async Task<IReadOnlyList<DeviceListItemResponse>> ListForBusinessAsync(int businessId, int? branchId)
     {
         return await _unitOfWork.Devices.ListProjectedAsync(businessId, branchId);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PendingDeviceCodeDto>> GetPendingCodesAsync(int businessId, int? branchId = null)
+    {
+        var rows = await _unitOfWork.DeviceActivationCodes
+            .ListPendingByBusinessAsync(businessId, branchId);
+
+        return rows
+            .Select(c => new PendingDeviceCodeDto
+            {
+                Code = c.Code,
+                Name = c.Name,
+                Mode = c.Mode,
+                BranchId = c.BranchId,
+                BranchName = c.Branch.Name,
+                CreatedAt = c.CreatedAt,
+                ExpiresAt = c.ExpiresAt
+            })
+            .ToList();
     }
 
     /// <inheritdoc />
@@ -422,49 +489,73 @@ public class DeviceService : IDeviceService
     }
 
     /// <summary>
-    /// Validates that the business's current plan × giros supports the requested device mode.
-    /// Kiosk requires <see cref="FeatureKey.KioskMode"/>; kitchen requires either
-    /// <see cref="FeatureKey.KdsBasic"/> or <see cref="FeatureKey.RealtimeKds"/>.
-    /// Cashier and tables are universally available.
+    /// Maps a device mode string to the quantitative <see cref="FeatureKey"/>
+    /// that gates and meters it. <c>cashier</c> and <c>tables</c> share the
+    /// <see cref="FeatureKey.MaxCashRegisters"/> quota — both are fixed
+    /// floor-terminals counted as a single hardware class. Returns <c>null</c>
+    /// for modes that are not metered (none today).
     /// </summary>
-    private async Task EnforceDeviceModeGateAsync(int businessId, string normalizedMode)
+    private static FeatureKey? GetFeatureKeyForMode(string normalizedMode) => normalizedMode switch
     {
-        switch (normalizedMode)
+        DeviceModeCodes.Cashier   => FeatureKey.MaxCashRegisters,
+        DeviceModeCodes.Tables    => FeatureKey.MaxCashRegisters,
+        DeviceModeCodes.Kitchen   => FeatureKey.MaxKdsScreens,
+        DeviceModeCodes.Kiosk     => FeatureKey.MaxKiosks,
+        DeviceModeCodes.Reception => FeatureKey.MaxReceptionsPerBranch,
+        _                         => null
+    };
+
+    /// <summary>
+    /// Data-driven device-licensing enforcement. Resolves the quantitative
+    /// feature for <paramref name="normalizedMode"/>, reads its limit and
+    /// scope from the <see cref="IFeatureGateService"/> snapshot, and
+    /// rejects the call when the active hardware count plus pending
+    /// activation codes already meets or exceeds the limit. <c>null</c>
+    /// limit means infinite (Enterprise) and bypasses the check.
+    /// </summary>
+    /// <remarks>
+    /// Usage formula (see <c>docs/monetization-architecture.md</c> §2):
+    /// <c>Usage = COUNT(active devices in mode) + COUNT(pending codes in mode)</c>,
+    /// scope-filtered by <c>BranchId</c> when the feature is
+    /// <see cref="EnforcementScope.Branch"/>.
+    /// </remarks>
+    private async Task EnforceDeviceLimitsAsync(int businessId, int branchId, string normalizedMode)
+    {
+        var feature = GetFeatureKeyForMode(normalizedMode);
+        if (feature is null) return;
+
+        var (limit, scope) = await _featureGate.GetEnforcementInfoAsync(businessId, feature.Value);
+
+        // null limit = infinite (e.g. Enterprise plan).
+        if (limit is null) return;
+
+        // Branch-scoped features count only within the requesting branch;
+        // global features count the entire tenant.
+        int? scopeBranchId = scope == EnforcementScope.Branch ? branchId : null;
+
+        var activeDevices = await _unitOfWork.Devices
+            .CountActiveByModeAsync(businessId, scopeBranchId, normalizedMode);
+        var pendingCodes = await _unitOfWork.DeviceActivationCodes
+            .CountPendingByModeAsync(businessId, scopeBranchId, normalizedMode);
+
+        var usage = activeDevices + pendingCodes;
+
+        // Sum purchased Stripe Add-on licenses for this feature. Fail-strict:
+        // only active/trialing subscriptions contribute — a past_due tenant
+        // loses the add-on capacity until payment recovers (see XML doc on
+        // ISubscriptionItemRepository.SumAddonQuantityByFeatureAsync).
+        var addonLimit = await _unitOfWork.SubscriptionItems
+            .SumAddonQuantityByFeatureAsync(businessId, feature.Value);
+
+        var effectiveLimit = limit.Value + addonLimit;
+
+        if (usage >= effectiveLimit)
         {
-            case DeviceModeCodes.Reception:
-                if (!await _featureGate.IsEnabledAsync(businessId, FeatureKey.GymReception))
-                {
-                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
-                    throw new PlanLimitExceededException(
-                        "modo Recepción",
-                        0,
-                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
-                }
-                break;
-
-            case "kiosk":
-                if (!await _featureGate.IsEnabledAsync(businessId, FeatureKey.KioskMode))
-                {
-                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
-                    throw new PlanLimitExceededException(
-                        "modo Kiosco",
-                        0,
-                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
-                }
-                break;
-
-            case "kitchen":
-                var hasKdsBasic = await _featureGate.IsEnabledAsync(businessId, FeatureKey.KdsBasic);
-                var hasRealtimeKds = await _featureGate.IsEnabledAsync(businessId, FeatureKey.RealtimeKds);
-                if (!hasKdsBasic && !hasRealtimeKds)
-                {
-                    var business = await _unitOfWork.Business.GetByIdAsync(businessId);
-                    throw new PlanLimitExceededException(
-                        "modo Cocina (KDS)",
-                        0,
-                        PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
-                }
-                break;
+            var business = await _unitOfWork.Business.GetByIdAsync(businessId);
+            throw new PlanLimitExceededException(
+                resource: $"modo {normalizedMode}",
+                limit: effectiveLimit,
+                currentPlan: PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
         }
     }
 

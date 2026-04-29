@@ -33,6 +33,12 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
+        foreach (var entry in ChangeTracker.Entries<SubscriptionItem>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            entry.Entity.UpdatedAt = DateTime.UtcNow;
+        }
+
         foreach (var entry in ChangeTracker.Entries<Supplier>()
             .Where(e => e.State == EntityState.Modified))
         {
@@ -91,6 +97,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<Subscription> Subscriptions { get; set; } = null!;
+    public DbSet<SubscriptionItem> SubscriptionItems { get; set; } = null!;
     public DbSet<Supplier> Suppliers { get; set; } = null!;
     public DbSet<StockReceipt> StockReceipts { get; set; } = null!;
     public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
@@ -227,7 +234,6 @@ public class ApplicationDbContext : DbContext
         {
             entity.Property(s => s.StripeCustomerId).HasMaxLength(255);
             entity.Property(s => s.StripeSubscriptionId).HasMaxLength(255);
-            entity.Property(s => s.StripePriceId).HasMaxLength(255);
             entity.Property(s => s.BillingCycle).HasMaxLength(20);
             entity.Property(s => s.PricingGroup).HasMaxLength(20);
             entity.Property(s => s.Status).HasMaxLength(20);
@@ -240,6 +246,23 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(s => s.BusinessId).IsUnique();
             entity.HasIndex(s => s.StripeCustomerId);
             entity.HasIndex(s => s.StripeSubscriptionId);
+        });
+
+        modelBuilder.Entity<SubscriptionItem>(entity =>
+        {
+            entity.Property(s => s.StripeItemId).HasMaxLength(255);
+            entity.Property(s => s.StripePriceId).HasMaxLength(255);
+
+            entity.HasOne(s => s.Subscription)
+                .WithMany(s => s.Items)
+                .HasForeignKey(s => s.SubscriptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Stripe item IDs are globally unique. The unique index defends
+            // idempotency at the DB level even if a webhook replay slips
+            // past StripeEventInbox.
+            entity.HasIndex(s => s.StripeItemId).IsUnique();
+            entity.HasIndex(s => s.SubscriptionId);
         });
 
         #endregion
