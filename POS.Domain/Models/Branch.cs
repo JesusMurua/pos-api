@@ -34,9 +34,9 @@ public partial class Branch
     [MaxLength(30)]
     public string? FolioFormat { get; set; }
 
-    public bool HasKitchen { get; set; } = true;
+    public bool HasKitchen { get; set; } = false;
 
-    public bool HasTables { get; set; } = true;
+    public bool HasTables { get; set; } = false;
 
     /// <summary>Whether this branch accepts orders from delivery platforms.</summary>
     public bool HasDelivery { get; set; } = false;

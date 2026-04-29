@@ -43,9 +43,29 @@ public class BranchService : IBranchService
 
     /// <summary>
     /// Creates a new branch and copies the catalog from the matrix branch.
+    ///
+    /// HasKitchen / HasTables / HasDelivery are hydrated from the parent
+    /// Business's <c>PrimaryMacroCategory</c> — the caller-supplied values on
+    /// the incoming entity are deliberately overwritten. This guarantees that
+    /// a Gym (Services) branch can never be born with restaurant flags
+    /// regardless of what an outdated or malicious client sends in the body.
+    /// Operators that legitimately need to deviate from the macro defaults
+    /// must do so post-creation through <see cref="UpdateAsync"/>, which
+    /// runs the per-flag feature gates.
     /// </summary>
     public async Task<Branch> CreateAsync(Branch branch)
     {
+        var business = await _unitOfWork.Business.GetByIdAsync(branch.BusinessId)
+            ?? throw new NotFoundException($"Business with id {branch.BusinessId} not found");
+
+        var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+        var macro = macros.FirstOrDefault(m => m.Id == business.PrimaryMacroCategoryId)
+            ?? throw new ValidationException(
+                $"Business {branch.BusinessId} has unresolved PrimaryMacroCategoryId={business.PrimaryMacroCategoryId}");
+
+        branch.HasKitchen = macro.HasKitchen;
+        branch.HasTables = macro.HasTables;
+        branch.HasDelivery = false;
         branch.IsActive = true;
         branch.CreatedAt = DateTime.UtcNow;
 

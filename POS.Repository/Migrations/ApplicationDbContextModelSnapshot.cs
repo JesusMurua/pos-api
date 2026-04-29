@@ -66,7 +66,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("EntityType", "EntityId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Branch", b =>
@@ -145,7 +145,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BusinessId");
 
-                    b.ToTable("Branches");
+                    b.ToTable("Branches", (string)null);
 
                     b.HasData(
                         new
@@ -214,7 +214,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BranchId", "Platform")
                         .IsUnique();
 
-                    b.ToTable("BranchDeliveryConfigs");
+                    b.ToTable("BranchDeliveryConfigs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.BranchPaymentConfig", b =>
@@ -259,7 +259,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BranchId", "Provider")
                         .IsUnique();
 
-                    b.ToTable("BranchPaymentConfigs");
+                    b.ToTable("BranchPaymentConfigs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Business", b =>
@@ -356,7 +356,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("PrimaryMacroCategoryId");
 
-                    b.ToTable("Businesses");
+                    b.ToTable("Businesses", (string)null);
 
                     b.HasData(
                         new
@@ -401,7 +401,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BusinessId", "BusinessTypeId")
                         .IsUnique();
 
-                    b.ToTable("BusinessGiros");
+                    b.ToTable("BusinessGiros", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.CashMovement", b =>
@@ -440,7 +440,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("SessionId");
 
-                    b.ToTable("CashMovements");
+                    b.ToTable("CashMovements", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.CashRegister", b =>
@@ -477,7 +477,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BranchId", "Name")
                         .IsUnique();
 
-                    b.ToTable("CashRegisters");
+                    b.ToTable("CashRegisters", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.CashRegisterSession", b =>
@@ -559,7 +559,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "OpenedAt");
 
-                    b.ToTable("CashRegisterSessions");
+                    b.ToTable("CashRegisterSessions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.BusinessTypeCatalog", b =>
@@ -585,7 +585,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("PrimaryMacroCategoryId");
 
-                    b.ToTable("BusinessTypeCatalogs");
+                    b.ToTable("BusinessTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.BusinessTypeFeature", b =>
@@ -603,7 +603,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("FeatureId");
 
-                    b.ToTable("BusinessTypeFeatures");
+                    b.ToTable("BusinessTypeFeatures", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.CashMovementTypeCatalog", b =>
@@ -629,7 +629,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("CashMovementTypeCatalogs");
+                    b.ToTable("CashMovementTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.CashRegisterStatusCatalog", b =>
@@ -655,7 +655,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("CashRegisterStatusCatalogs");
+                    b.ToTable("CashRegisterStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.DeviceModeCatalog", b =>
@@ -685,7 +685,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("DeviceModeCatalogs");
+                    b.ToTable("DeviceModeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.DisplayStatusCatalog", b =>
@@ -718,7 +718,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("DisplayStatusCatalogs");
+                    b.ToTable("DisplayStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.FeatureCatalog", b =>
@@ -767,7 +767,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
-                    b.ToTable("FeatureCatalogs");
+                    b.ToTable("FeatureCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.InventoryMovementTypeCatalog", b =>
@@ -793,7 +793,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("InventoryMovementTypeCatalogs");
+                    b.ToTable("InventoryMovementTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.KitchenStatusCatalog", b =>
@@ -826,7 +826,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("KitchenStatusCatalogs");
+                    b.ToTable("KitchenStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.MacroCategory", b =>
@@ -867,7 +867,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("InternalCode")
                         .IsUnique();
 
-                    b.ToTable("MacroCategories");
+                    b.ToTable("MacroCategories", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.OnboardingStatusCatalog", b =>
@@ -893,7 +893,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("OnboardingStatusCatalogs");
+                    b.ToTable("OnboardingStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.OrderStatusCatalog", b =>
@@ -919,7 +919,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("OrderStatusCatalogs");
+                    b.ToTable("OrderStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.OrderSyncStatusCatalog", b =>
@@ -945,7 +945,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("OrderSyncStatusCatalogs");
+                    b.ToTable("OrderSyncStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PaymentMethodCatalog", b =>
@@ -974,7 +974,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("PaymentMethodCatalogs");
+                    b.ToTable("PaymentMethodCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PaymentStatusCatalog", b =>
@@ -1000,7 +1000,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("PaymentStatusCatalogs");
+                    b.ToTable("PaymentStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanBusinessTypeFeatureOverride", b =>
@@ -1025,7 +1025,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("PlanTypeId", "FeatureId");
 
-                    b.ToTable("PlanBusinessTypeFeatureOverrides");
+                    b.ToTable("PlanBusinessTypeFeatureOverrides", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanFeatureMatrix", b =>
@@ -1046,7 +1046,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("FeatureId");
 
-                    b.ToTable("PlanFeatureMatrices");
+                    b.ToTable("PlanFeatureMatrices", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PlanTypeCatalog", b =>
@@ -1083,7 +1083,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("PlanTypeCatalogs");
+                    b.ToTable("PlanTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PromotionScopeCatalog", b =>
@@ -1109,7 +1109,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("PromotionScopeCatalogs");
+                    b.ToTable("PromotionScopeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.PromotionTypeCatalog", b =>
@@ -1138,7 +1138,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("PromotionTypeCatalogs");
+                    b.ToTable("PromotionTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.TableStatusCatalog", b =>
@@ -1164,7 +1164,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("TableStatusCatalogs");
+                    b.ToTable("TableStatusCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.UserRoleCatalog", b =>
@@ -1193,7 +1193,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("UserRoleCatalogs");
+                    b.ToTable("UserRoleCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.ZoneTypeCatalog", b =>
@@ -1222,7 +1222,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("ZoneTypeCatalogs");
+                    b.ToTable("ZoneTypeCatalogs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Category", b =>
@@ -1255,7 +1255,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "SortOrder");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
 
                     b.HasData(
                         new
@@ -1371,7 +1371,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BusinessId", "LastName", "FirstName");
 
-                    b.ToTable("Customers");
+                    b.ToTable("Customers", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.CustomerTransaction", b =>
@@ -1432,7 +1432,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("CustomerId", "CreatedAt");
 
-                    b.ToTable("CustomerTransactions");
+                    b.ToTable("CustomerTransactions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Device", b =>
@@ -1476,7 +1476,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "Mode");
 
-                    b.ToTable("Devices");
+                    b.ToTable("Devices", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.DeviceActivationCode", b =>
@@ -1536,7 +1536,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("CreatedBy");
 
-                    b.ToTable("DeviceActivationCodes");
+                    b.ToTable("DeviceActivationCodes", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.DiscountPreset", b =>
@@ -1573,7 +1573,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "IsActive");
 
-                    b.ToTable("DiscountPresets");
+                    b.ToTable("DiscountPresets", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.FiscalCustomer", b =>
@@ -1635,7 +1635,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BusinessId", "Rfc")
                         .IsUnique();
 
-                    b.ToTable("FiscalCustomers");
+                    b.ToTable("FiscalCustomers", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.InventoryItem", b =>
@@ -1692,7 +1692,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "IsActive");
 
-                    b.ToTable("InventoryItems");
+                    b.ToTable("InventoryItems", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.InventoryMovement", b =>
@@ -1751,7 +1751,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("TransactionType", "CreatedAt");
 
-                    b.ToTable("InventoryMovements");
+                    b.ToTable("InventoryMovements", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Invoice", b =>
@@ -1844,7 +1844,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("FiscalCustomerId");
 
-                    b.ToTable("Invoices");
+                    b.ToTable("Invoices", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.KdsEventOutbox", b =>
@@ -1878,7 +1878,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("IsProcessed", "CreatedAt");
 
-                    b.ToTable("KdsEventOutbox");
+                    b.ToTable("KdsEventOutbox", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Order", b =>
@@ -2060,7 +2060,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "CreatedAt");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.OrderItem", b =>
@@ -2134,7 +2134,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.OrderItemTax", b =>
@@ -2169,7 +2169,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("OrderItemTaxes");
+                    b.ToTable("OrderItemTaxes", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.OrderPayment", b =>
@@ -2229,7 +2229,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("PaymentStatusId");
 
-                    b.ToTable("OrderPayments");
+                    b.ToTable("OrderPayments", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.PaymentWebhookInbox", b =>
@@ -2281,7 +2281,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("Provider", "ExternalEventId")
                         .IsUnique();
 
-                    b.ToTable("PaymentWebhookInbox");
+                    b.ToTable("PaymentWebhookInbox", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.PrintJob", b =>
@@ -2336,7 +2336,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BranchId", "Status")
                         .HasDatabaseName("IX_PrintJobs_BranchId_Status");
 
-                    b.ToTable("PrintJobs");
+                    b.ToTable("PrintJobs", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Product", b =>
@@ -2427,7 +2427,7 @@ namespace POS.Repository.Migrations
                         .IsUnique()
                         .HasFilter("\"Barcode\" IS NOT NULL");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
 
                     b.HasData(
                         new
@@ -2637,7 +2637,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("ProductId", "InventoryItemId")
                         .IsUnique();
 
-                    b.ToTable("ProductConsumptions");
+                    b.ToTable("ProductConsumptions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.ProductExtra", b =>
@@ -2668,7 +2668,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("ProductModifierGroupId");
 
-                    b.ToTable("ProductExtras");
+                    b.ToTable("ProductExtras", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.ProductImage", b =>
@@ -2697,7 +2697,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImages");
+                    b.ToTable("ProductImages", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.ProductModifierGroup", b =>
@@ -2740,7 +2740,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductModifierGroups");
+                    b.ToTable("ProductModifierGroups", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.ProductSize", b =>
@@ -2766,7 +2766,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductSizes");
+                    b.ToTable("ProductSizes", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.ProductTax", b =>
@@ -2781,7 +2781,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("TaxId");
 
-                    b.ToTable("ProductTaxes");
+                    b.ToTable("ProductTaxes", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Promotion", b =>
@@ -2871,7 +2871,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "IsActive");
 
-                    b.ToTable("Promotions");
+                    b.ToTable("Promotions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.PromotionUsage", b =>
@@ -2900,7 +2900,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("PromotionId", "UsedAt");
 
-                    b.ToTable("PromotionUsages");
+                    b.ToTable("PromotionUsages", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.PushSubscription", b =>
@@ -2948,7 +2948,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PushSubscriptions");
+                    b.ToTable("PushSubscriptions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Reservation", b =>
@@ -3017,7 +3017,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("TableId", "ReservationDate", "Status");
 
-                    b.ToTable("Reservations");
+                    b.ToTable("Reservations", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.RestaurantTable", b =>
@@ -3065,7 +3065,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "IsActive");
 
-                    b.ToTable("RestaurantTables");
+                    b.ToTable("RestaurantTables", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.StockReceipt", b =>
@@ -3106,7 +3106,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("StockReceipts");
+                    b.ToTable("StockReceipts", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.StockReceiptItem", b =>
@@ -3148,7 +3148,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("StockReceiptId");
 
-                    b.ToTable("StockReceiptItems");
+                    b.ToTable("StockReceiptItems", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.StripeEventInbox", b =>
@@ -3195,7 +3195,7 @@ namespace POS.Repository.Migrations
                     b.HasIndex("StripeEventId")
                         .IsUnique();
 
-                    b.ToTable("StripeEventInbox");
+                    b.ToTable("StripeEventInbox", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Subscription", b =>
@@ -3263,7 +3263,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("StripeSubscriptionId");
 
-                    b.ToTable("Subscriptions");
+                    b.ToTable("Subscriptions", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.SubscriptionItem", b =>
@@ -3306,7 +3306,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("SubscriptionId");
 
-                    b.ToTable("SubscriptionItems");
+                    b.ToTable("SubscriptionItems", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Supplier", b =>
@@ -3350,7 +3350,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.ToTable("Suppliers");
+                    b.ToTable("Suppliers", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Tax", b =>
@@ -3388,7 +3388,7 @@ namespace POS.Repository.Migrations
                         .IsUnique()
                         .HasFilter("\"Code\" IS NOT NULL");
 
-                    b.ToTable("Taxes");
+                    b.ToTable("Taxes", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.User", b =>
@@ -3443,7 +3443,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
 
                     b.HasData(
                         new
@@ -3498,7 +3498,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.ToTable("UserBranches");
+                    b.ToTable("UserBranches", (string)null);
 
                     b.HasData(
                         new
@@ -3554,7 +3554,7 @@ namespace POS.Repository.Migrations
 
                     b.HasIndex("BranchId", "SortOrder");
 
-                    b.ToTable("Zones");
+                    b.ToTable("Zones", (string)null);
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Branch", b =>

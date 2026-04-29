@@ -56,8 +56,14 @@ public interface IAuthService
     /// <c>deviceId</c>, a <c>type=device</c> discriminator and the resolved feature
     /// matrix. It has no <c>userId</c> / <c>roleId</c> and its lifetime is measured
     /// in years so that infrastructure hardware does not require human re-auth.
+    ///
+    /// <paramref name="macroCode"/> is the resolved <c>MacroCategory.InternalCode</c>
+    /// passed in by the caller — this method intentionally does not touch the
+    /// <c>Business.PrimaryMacroCategory</c> navigation property, since that nav
+    /// is rarely eager-loaded and silently produces an empty <c>macroCategory</c>
+    /// claim.
     /// </summary>
-    string GenerateDeviceToken(Device device, Business business, IReadOnlyList<string> features);
+    string GenerateDeviceToken(Device device, Business business, string macroCode, IReadOnlyList<string> features);
 }
 
 /// <summary>

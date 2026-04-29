@@ -371,7 +371,7 @@ public class AuthService : IAuthService
         return macros.FirstOrDefault(m => m.Id == primaryMacroCategoryId)?.InternalCode ?? string.Empty;
     }
 
-    public string GenerateDeviceToken(Device device, Business business, IReadOnlyList<string> features)
+    public string GenerateDeviceToken(Device device, Business business, string macroCode, IReadOnlyList<string> features)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -380,7 +380,10 @@ public class AuthService : IAuthService
 
         // Device tokens intentionally omit userId/roleId so that infrastructure screens
         // cannot impersonate human operators on HTTP endpoints that enforce role checks.
-        var macroCode = business.PrimaryMacroCategory?.InternalCode ?? string.Empty;
+        // macroCode is supplied by the caller — DO NOT read it from
+        // business.PrimaryMacroCategory. That nav is not eager-loaded by the
+        // BusinessRepository or DeviceActivationCodeRepository, and the resulting
+        // empty claim was the root cause of the "Gym branch loads Restaurant UI" bug.
         var claims = new List<Claim>
         {
             new("type", "device"),

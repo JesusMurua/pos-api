@@ -227,9 +227,13 @@ public class DeviceService : IDeviceService
 
         // ── STEP 8: Atomic token mint (still inside transaction) ──────────────
         // Reuse activation.Business already loaded by the repo to skip an extra
-        // round-trip to Businesses while holding the lock.
+        // round-trip to Businesses while holding the lock. macroCode is resolved
+        // explicitly via the catalog repo because activation.Business is loaded
+        // without its PrimaryMacroCategory navigation property — relying on the
+        // nav would silently emit an empty claim (PR 3 bug fix).
         var features = await _featureGate.GetEnabledFeaturesAsync(activation.BusinessId);
-        var deviceToken = _authService.GenerateDeviceToken(device, activation.Business, features);
+        var macroCode = await ResolveMacroCodeAsync(activation.Business.PrimaryMacroCategoryId);
+        var deviceToken = _authService.GenerateDeviceToken(device, activation.Business, macroCode, features);
 
         // ── STEP 9: Commit ────────────────────────────────────────────────────
         await transaction.CommitAsync();
@@ -483,7 +487,9 @@ public class DeviceService : IDeviceService
     /// <summary>
     /// Resolves the business and the enabled feature set and returns a long-lived
     /// JWT representing the device. Called from registration flows so the device
-    /// can authenticate against HTTP and SignalR without a human session.
+    /// can authenticate against HTTP and SignalR without a human session. The
+    /// <c>macroCode</c> is resolved explicitly via the catalog repo so the JWT's
+    /// <c>macroCategory</c> claim is never empty (PR 3 bug fix).
     /// </summary>
     private async Task<string?> IssueDeviceTokenAsync(Device device, int businessId)
     {
@@ -491,7 +497,19 @@ public class DeviceService : IDeviceService
         if (business == null) return null;
 
         var features = await _featureGate.GetEnabledFeaturesAsync(businessId);
-        return _authService.GenerateDeviceToken(device, business, features);
+        var macroCode = await ResolveMacroCodeAsync(business.PrimaryMacroCategoryId);
+        return _authService.GenerateDeviceToken(device, business, macroCode, features);
+    }
+
+    /// <summary>
+    /// Resolves a <c>MacroCategory.InternalCode</c> by id. Returns
+    /// <see cref="string.Empty"/> only when the catalog row is missing, which
+    /// signals a corrupted seed — never a routine null-nav-property situation.
+    /// </summary>
+    private async Task<string> ResolveMacroCodeAsync(int primaryMacroCategoryId)
+    {
+        var macros = await _unitOfWork.Catalog.GetMacroCategoriesAsync();
+        return macros.FirstOrDefault(m => m.Id == primaryMacroCategoryId)?.InternalCode ?? string.Empty;
     }
 
     /// <summary>

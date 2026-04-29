@@ -1242,6 +1242,11 @@ public class ApplicationDbContext : DbContext
             PinHash = "$2a$11$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
             IsMatrix = true,
             IsActive = true,
+            // Explicit because Business 1 is food-beverage (Restaurant) — pinning these
+            // here decouples the seed from the C# property initializer, which now
+            // defaults to false to fix the Gym-loads-Restaurant bug (PR 3).
+            HasKitchen = true,
+            HasTables = true,
             TimeZoneId = "America/Mexico_City",
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });

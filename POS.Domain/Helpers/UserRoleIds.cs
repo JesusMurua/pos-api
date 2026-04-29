@@ -3,29 +3,26 @@ using POS.Domain.Enums;
 namespace POS.Domain.Helpers;
 
 /// <summary>
-/// Integer constants matching UserRoleCatalog.Id values.
+/// Integer constants matching <c>UserRoleCatalog.Id</c> values. Now that
+/// <see cref="UserRole"/> is anchored to the same 1-based numbering, these
+/// constants and the enum are interchangeable — kept here only so existing
+/// call sites that read role ids as <c>int</c> stay readable.
 /// </summary>
 public static class UserRoleIds
 {
-    public const int Owner = 1;
-    public const int Manager = 2;
-    public const int Cashier = 3;
-    public const int Kitchen = 4;
-    public const int Waiter = 5;
-    public const int Kiosk = 6;
-    public const int Host = 7;
+    public const int Owner = (int)UserRole.Owner;
+    public const int Manager = (int)UserRole.Manager;
+    public const int Cashier = (int)UserRole.Cashier;
+    public const int Kitchen = (int)UserRole.Kitchen;
+    public const int Waiter = (int)UserRole.Waiter;
+    public const int Kiosk = (int)UserRole.Kiosk;
+    public const int Host = (int)UserRole.Host;
 
-    public static int FromEnum(UserRole role) => role switch
-    {
-        UserRole.Owner => Owner,
-        UserRole.Manager => Manager,
-        UserRole.Cashier => Cashier,
-        UserRole.Kitchen => Kitchen,
-        UserRole.Waiter => Waiter,
-        UserRole.Kiosk => Kiosk,
-        UserRole.Host => Host,
-        _ => Cashier
-    };
+    /// <summary>
+    /// Trivial wrapper kept for back-compat. Direct cast <c>(int)role</c>
+    /// produces the same result now that the enum is DB-aligned.
+    /// </summary>
+    public static int FromEnum(UserRole role) => (int)role;
 
     public static string ToCode(int id) => id switch
     {
