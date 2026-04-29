@@ -12,16 +12,13 @@ public class CashRegisterSession : IBranchScoped
 
     public int BranchId { get; set; }
 
-    [Required]
-    [MaxLength(100)]
-    public string OpenedBy { get; set; } = null!;
+    public int? OpenedByUserId { get; set; }
 
     public DateTime OpenedAt { get; set; } = DateTime.UtcNow;
 
     public int InitialAmountCents { get; set; }
 
-    [MaxLength(100)]
-    public string? ClosedBy { get; set; }
+    public int? ClosedByUserId { get; set; }
 
     public DateTime? ClosedAt { get; set; }
 
@@ -58,6 +55,10 @@ public class CashRegisterSession : IBranchScoped
     public virtual Branch? Branch { get; set; }
 
     public virtual CashRegister? CashRegister { get; set; }
+
+    public virtual User? OpenedByUser { get; set; }
+
+    public virtual User? ClosedByUser { get; set; }
 
     public virtual ICollection<CashMovement>? Movements { get; set; }
 

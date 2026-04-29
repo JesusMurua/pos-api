@@ -12,4 +12,11 @@ public interface ICashRegisterSessionRepository : IGenericRepository<CashRegiste
     /// <see cref="DateTimeKind.Utc"/>.
     /// </summary>
     Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime startUtc, DateTime endUtc);
+
+    /// <summary>
+    /// Tracked fetch by id with both user navigations eager-loaded. Used by
+    /// the service layer immediately after closing a session, since the closed
+    /// session no longer matches the "open" filters used by the other lookups.
+    /// </summary>
+    Task<CashRegisterSession?> GetByIdWithUsersAsync(int id);
 }

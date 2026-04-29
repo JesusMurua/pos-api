@@ -29,6 +29,13 @@ public class DeviceRepository : GenericRepository<Device>, IDeviceRepository
     }
 
     /// <inheritdoc />
+    public async Task<Device?> GetByDeviceUuidAndBranchAsync(string deviceUuid, int branchId)
+    {
+        return await _context.Devices
+            .FirstOrDefaultAsync(d => d.DeviceUuid == deviceUuid && d.BranchId == branchId);
+    }
+
+    /// <inheritdoc />
     public async Task<Device?> GetForTenantAsync(int deviceId, int businessId)
     {
         // Tenancy projected through Branch because Device has no direct BusinessId

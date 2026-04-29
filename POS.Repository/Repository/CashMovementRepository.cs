@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
 
@@ -7,5 +8,12 @@ public class CashMovementRepository : GenericRepository<CashMovement>, ICashMove
 {
     public CashMovementRepository(ApplicationDbContext context) : base(context)
     {
+    }
+
+    public async Task<CashMovement?> GetByIdWithUserAsync(int id)
+    {
+        return await _context.CashMovements
+            .Include(m => m.CreatedByUser)
+            .FirstOrDefaultAsync(m => m.Id == id);
     }
 }

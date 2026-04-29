@@ -18,13 +18,13 @@ public class CashMovement
     [MaxLength(200)]
     public string Description { get; set; } = null!;
 
-    [Required]
-    [MaxLength(100)]
-    public string CreatedBy { get; set; } = null!;
+    public int? CreatedByUserId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public virtual CashRegisterSession? Session { get; set; }
+
+    public virtual User? CreatedByUser { get; set; }
 
     public CashMovementTypeCatalog? CashMovementTypeCatalog { get; set; }
 }

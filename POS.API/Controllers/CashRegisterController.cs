@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.DTOs.CashRegister;
 using POS.Domain.Models;
 using POS.Services.IService;
 
@@ -25,7 +26,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpGet("registers")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(IEnumerable<CashRegister>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<CashRegisterDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRegisters()
     {
         var registers = await _cashRegisterService.GetAllRegistersAsync(BranchId);
@@ -37,7 +38,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpPost("registers")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateRegister([FromBody] CreateCashRegisterRequest request)
     {
@@ -52,7 +53,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpPut("registers/{id}")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateRegister(int id, [FromBody] UpdateCashRegisterRequest request)
@@ -74,7 +75,7 @@ public class CashRegisterController : BaseApiController
     /// <response code="404">If the cash register is not found.</response>
     [HttpPatch("registers/{id}/link-device")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> LinkDevice(int id, [FromBody] LinkDeviceRequest request)
@@ -90,7 +91,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpPatch("registers/{id}/toggle")]
     [Authorize(Roles = "Owner,Manager")]
-    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ToggleRegister(int id)
@@ -104,7 +105,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpGet("registers/by-device/{deviceUuid}")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
-    [ProducesResponseType(typeof(CashRegister), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> GetRegisterByDeviceUuid(string deviceUuid)
     {
@@ -126,7 +127,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpGet("session")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
-    [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> GetOpenSession([FromQuery] int? registerId = null)
     {
@@ -141,26 +142,27 @@ public class CashRegisterController : BaseApiController
     /// <summary>
     /// Opens a new cash register session. If CashRegisterId is set in the body,
     /// the session is tied to that register (multi-till). Otherwise, legacy behavior.
+    /// The opener identity is read from the JWT, not the body.
     /// </summary>
     [HttpPost("session/open")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
-    [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> OpenSession([FromBody] OpenSessionRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var session = await _cashRegisterService.OpenSessionAsync(BranchId, request);
+        var session = await _cashRegisterService.OpenSessionAsync(BranchId, UserId, request);
         return Ok(session);
     }
 
     /// <summary>
     /// Closes the current open session. If registerId is provided, closes by register;
-    /// otherwise closes by branch (legacy).
+    /// otherwise closes by branch (legacy). The closer identity is read from the JWT.
     /// </summary>
     [HttpPost("session/close")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
-    [ProducesResponseType(typeof(CashRegisterSession), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashRegisterSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CloseSession(
         [FromBody] CloseSessionRequest request,
@@ -168,17 +170,17 @@ public class CashRegisterController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var session = await _cashRegisterService.CloseSessionAsync(BranchId, request, registerId);
+        var session = await _cashRegisterService.CloseSessionAsync(BranchId, UserId, request, registerId);
         return Ok(session);
     }
 
     /// <summary>
     /// Adds a movement to the open session. If registerId is provided, targets that register;
-    /// otherwise targets the branch session (legacy).
+    /// otherwise targets the branch session (legacy). The author identity is read from the JWT.
     /// </summary>
     [HttpPost("movement")]
     [Authorize(Roles = "Owner,Manager,Cashier")]
-    [ProducesResponseType(typeof(CashMovement), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CashMovementDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AddMovement(
@@ -187,7 +189,7 @@ public class CashRegisterController : BaseApiController
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var movement = await _cashRegisterService.AddMovementAsync(BranchId, request, registerId);
+        var movement = await _cashRegisterService.AddMovementAsync(BranchId, UserId, request, registerId);
         return Ok(movement);
     }
 
@@ -196,7 +198,7 @@ public class CashRegisterController : BaseApiController
     /// </summary>
     [HttpGet("history")]
     [Authorize(Roles = "Owner")]
-    [ProducesResponseType(typeof(IEnumerable<CashRegisterSession>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<CashRegisterSessionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] DateOnly from,
         [FromQuery] DateOnly to)

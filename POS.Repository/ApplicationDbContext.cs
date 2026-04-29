@@ -652,13 +652,23 @@ public class ApplicationDbContext : DbContext
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Hard FK to Device. SetNull preserves the register (and its session
+            // history) when the bound device is deleted — cascade would destroy
+            // financial records.
+            entity.HasOne(r => r.Device)
+                .WithMany()
+                .HasForeignKey(r => r.DeviceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.Property(r => r.Name).HasMaxLength(50).IsRequired();
-            entity.Property(r => r.DeviceUuid).HasMaxLength(100);
 
             entity.HasIndex(r => new { r.BranchId, r.Name }).IsUnique();
-            entity.HasIndex(r => new { r.BranchId, r.DeviceUuid })
+
+            // Enforce 1-to-1 between Device and CashRegister (when bound).
+            // Partial unique index — null DeviceId rows are unconstrained.
+            entity.HasIndex(r => r.DeviceId)
                 .IsUnique()
-                .HasFilter("\"DeviceUuid\" IS NOT NULL");
+                .HasFilter("\"DeviceId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<CashRegisterSession>(entity =>
@@ -676,6 +686,19 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(s => s.CashRegisterStatusId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // SetNull on user delete — financial records must survive a user
+            // being removed. The audit fact "this session was opened" stays;
+            // only the link to the (now-deleted) user identity is dropped.
+            entity.HasOne(s => s.OpenedByUser)
+                .WithMany()
+                .HasForeignKey(s => s.OpenedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(s => s.ClosedByUser)
+                .WithMany()
+                .HasForeignKey(s => s.ClosedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(s => new { s.BranchId, s.CashRegisterStatusId });
             entity.HasIndex(s => new { s.BranchId, s.OpenedAt });
@@ -698,6 +721,11 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.CashMovementTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(m => m.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(m => m.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         #endregion

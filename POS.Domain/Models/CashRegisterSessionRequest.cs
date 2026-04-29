@@ -7,10 +7,6 @@ public class OpenSessionRequest
     public int? CashRegisterId { get; set; }
 
     public int InitialAmountCents { get; set; }
-
-    [Required]
-    [MaxLength(100)]
-    public string OpenedBy { get; set; } = null!;
 }
 
 public class CreateCashRegisterRequest
@@ -52,10 +48,6 @@ public class CloseSessionRequest
 {
     public int CountedAmountCents { get; set; }
 
-    [Required]
-    [MaxLength(100)]
-    public string ClosedBy { get; set; } = null!;
-
     [MaxLength(500)]
     public string? Notes { get; set; }
 }
@@ -71,8 +63,4 @@ public class AddMovementRequest
     [Required]
     [MaxLength(200)]
     public string Description { get; set; } = null!;
-
-    [Required]
-    [MaxLength(100)]
-    public string CreatedBy { get; set; } = null!;
 }

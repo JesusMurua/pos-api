@@ -16,6 +16,8 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
         return await _context.CashRegisterSessions
             .Where(s => s.BranchId == branchId && s.CashRegisterStatusId == CashRegisterStatus.Open)
             .Include(s => s.Movements)
+            .Include(s => s.OpenedByUser)
+            .Include(s => s.ClosedByUser)
             .FirstOrDefaultAsync();
     }
 
@@ -24,7 +26,17 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
         return await _context.CashRegisterSessions
             .Where(s => s.CashRegisterId == registerId && s.CashRegisterStatusId == CashRegisterStatus.Open)
             .Include(s => s.Movements)
+            .Include(s => s.OpenedByUser)
+            .Include(s => s.ClosedByUser)
             .FirstOrDefaultAsync();
+    }
+
+    public async Task<CashRegisterSession?> GetByIdWithUsersAsync(int id)
+    {
+        return await _context.CashRegisterSessions
+            .Include(s => s.OpenedByUser)
+            .Include(s => s.ClosedByUser)
+            .FirstOrDefaultAsync(s => s.Id == id);
     }
 
     public async Task<IEnumerable<CashRegisterSession>> GetHistoryAsync(int branchId, DateTime startUtc, DateTime endUtc)
@@ -36,6 +48,8 @@ public class CashRegisterSessionRepository : GenericRepository<CashRegisterSessi
                 && s.OpenedAt >= startUtc
                 && s.OpenedAt < endUtc)
             .Include(s => s.Movements)
+            .Include(s => s.OpenedByUser)
+            .Include(s => s.ClosedByUser)
             .OrderByDescending(s => s.OpenedAt)
             .ToListAsync();
     }

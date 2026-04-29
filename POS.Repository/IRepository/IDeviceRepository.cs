@@ -16,6 +16,15 @@ public interface IDeviceRepository : IGenericRepository<Device>
     Task<Device?> GetByDeviceUuidAsync(string deviceUuid);
 
     /// <summary>
+    /// Branch-scoped UUID lookup for the device-binding flow on
+    /// <c>CashRegister</c>. Returns the tracked entity only when the device
+    /// exists AND belongs to <paramref name="branchId"/>; cross-branch UUIDs
+    /// resolve to <c>null</c> so callers can convert to a 404 instead of a
+    /// foreign-key violation.
+    /// </summary>
+    Task<Device?> GetByDeviceUuidAndBranchAsync(string deviceUuid, int branchId);
+
+    /// <summary>
     /// Tenant-scoped fetch used by admin mutations. Returns the tracked entity
     /// when both the id and the caller's business match, otherwise <c>null</c>.
     /// The tenant filter is applied at the SQL level via <c>Branch.BusinessId</c>

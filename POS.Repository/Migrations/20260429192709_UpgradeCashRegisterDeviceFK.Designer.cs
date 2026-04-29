@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using POS.Repository;
@@ -11,9 +12,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260429192709_UpgradeCashRegisterDeviceFK")]
+    partial class UpgradeCashRegisterDeviceFK
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -421,8 +424,10 @@ namespace POS.Repository.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("integer");
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -435,8 +440,6 @@ namespace POS.Repository.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CashMovementTypeId");
-
-                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("SessionId");
 
@@ -503,8 +506,9 @@ namespace POS.Repository.Migrations
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("ClosedByUserId")
-                        .HasColumnType("integer");
+                    b.Property<string>("ClosedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int?>("CountedAmountCents")
                         .HasColumnType("integer");
@@ -525,8 +529,10 @@ namespace POS.Repository.Migrations
                     b.Property<DateTime>("OpenedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("OpenedByUserId")
-                        .HasColumnType("integer");
+                    b.Property<string>("OpenedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int?>("TotalCashInCents")
                         .HasColumnType("integer");
@@ -550,10 +556,6 @@ namespace POS.Repository.Migrations
                         .HasFilter("\"CashRegisterStatusId\" = 1 AND \"CashRegisterId\" IS NOT NULL");
 
                     b.HasIndex("CashRegisterStatusId");
-
-                    b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("OpenedByUserId");
 
                     b.HasIndex("BranchId", "CashRegisterStatusId");
 
@@ -3644,11 +3646,6 @@ namespace POS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("POS.Domain.Models.CashRegisterSession", "Session")
                         .WithMany("Movements")
                         .HasForeignKey("SessionId")
@@ -3656,8 +3653,6 @@ namespace POS.Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("CashMovementTypeCatalog");
-
-                    b.Navigation("CreatedByUser");
 
                     b.Navigation("Session");
                 });
@@ -3699,25 +3694,11 @@ namespace POS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("POS.Domain.Models.User", "ClosedByUser")
-                        .WithMany()
-                        .HasForeignKey("ClosedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("POS.Domain.Models.User", "OpenedByUser")
-                        .WithMany()
-                        .HasForeignKey("OpenedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Branch");
 
                     b.Navigation("CashRegister");
 
                     b.Navigation("CashRegisterStatusCatalog");
-
-                    b.Navigation("ClosedByUser");
-
-                    b.Navigation("OpenedByUser");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.Catalogs.BusinessTypeCatalog", b =>
