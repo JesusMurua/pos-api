@@ -28,6 +28,42 @@ public class DeviceService : IDeviceService
         _deviceAuth = deviceAuth;
     }
 
+    /// <summary>
+    /// Returns a per-mode quota snapshot for the tenant. Used by the back
+    /// office to render proactive disabled-state UI per device mode.
+    /// </summary>
+    public async Task<DeviceLimitsDto> GetDeviceLimitsAsync(int businessId, int branchId)
+    {
+        var modes = new List<DeviceModeQuotaDto>(DeviceModeCodes.All.Length);
+
+        foreach (var mode in DeviceModeCodes.All)
+        {
+            var snapshot = await GetUsageAndLimitAsync(businessId, branchId, mode, subtractPendingForActivate: false);
+
+            // GetFeatureKeyForMode currently returns a key for every entry in
+            // DeviceModeCodes.All, so snapshot is non-null in practice. Guard
+            // anyway so a future un-metered mode doesn't break this loop.
+            if (snapshot is null) continue;
+
+            var isUnlimited = snapshot.EffectiveLimit is null;
+            modes.Add(new DeviceModeQuotaDto
+            {
+                Mode = mode,
+                Scope = snapshot.Scope == EnforcementScope.Branch ? "Branch" : "Business",
+                ActiveDevices = snapshot.ActiveDevices,
+                PendingCodes = snapshot.PendingCodes,
+                Usage = snapshot.Usage,
+                PlanLimit = snapshot.PlanLimit,
+                AddonLimit = snapshot.AddonLimit,
+                EffectiveLimit = snapshot.EffectiveLimit,
+                IsLimitReached = !isUnlimited && snapshot.Usage >= snapshot.EffectiveLimit!.Value,
+                IsUnlimited = isUnlimited
+            });
+        }
+
+        return new DeviceLimitsDto { Modes = modes };
+    }
+
     #region Public API Methods
 
     /// <summary>
@@ -572,6 +608,77 @@ public class DeviceService : IDeviceService
     };
 
     /// <summary>
+    /// Computes the per-mode quota snapshot used by both the
+    /// <see cref="EnforceDeviceLimitsAsync"/> guard (write paths) and the
+    /// proactive <c>GET /api/Device/limits</c> endpoint (read path). Returns
+    /// <c>null</c> for modes that are not metered. <c>EffectiveLimit == null</c>
+    /// means the plan grants unlimited devices for this mode (Enterprise).
+    /// </summary>
+    /// <param name="subtractPendingForActivate">
+    /// Race-aware adjustment used only by the activate flow. The pending code
+    /// being consumed is in the <c>pendingCodes</c> count by definition, so
+    /// this flag subtracts one before computing usage. Without it a tenant at
+    /// <c>usage == limit</c> with one pending code that is its own consumer
+    /// would receive a false-positive 403 even though the post-activation
+    /// total stays identical.
+    /// </param>
+    private async Task<UsageSnapshot?> GetUsageAndLimitAsync(
+        int businessId, int branchId, string normalizedMode, bool subtractPendingForActivate = false)
+    {
+        var feature = GetFeatureKeyForMode(normalizedMode);
+        if (feature is null) return null;
+
+        var (limit, scope) = await _featureGate.GetEnforcementInfoAsync(businessId, feature.Value);
+
+        // Branch-scoped features count only within the requesting branch;
+        // global features count the entire tenant.
+        int? scopeBranchId = scope == EnforcementScope.Branch ? branchId : null;
+
+        var activeDevices = await _unitOfWork.Devices
+            .CountActiveByModeAsync(businessId, scopeBranchId, normalizedMode);
+        var pendingCodes = await _unitOfWork.DeviceActivationCodes
+            .CountPendingByModeAsync(businessId, scopeBranchId, normalizedMode);
+
+        if (subtractPendingForActivate && pendingCodes > 0)
+            pendingCodes--;
+
+        var usage = activeDevices + pendingCodes;
+
+        // Sum purchased Stripe Add-on licenses for this feature. Fail-strict:
+        // only active/trialing subscriptions contribute.
+        var addonLimit = await _unitOfWork.SubscriptionItems
+            .SumAddonQuantityByFeatureAsync(businessId, feature.Value);
+
+        // null limit (Enterprise) stays null even after add-ons — unlimited
+        // remains unlimited, no point summing finite add-ons into infinity.
+        int? effectiveLimit = limit.HasValue ? limit.Value + addonLimit : (int?)null;
+
+        return new UsageSnapshot(
+            Feature: feature.Value,
+            Scope: scope,
+            ActiveDevices: activeDevices,
+            PendingCodes: pendingCodes,
+            Usage: usage,
+            PlanLimit: limit,
+            AddonLimit: addonLimit,
+            EffectiveLimit: effectiveLimit);
+    }
+
+    /// <summary>
+    /// Per-mode quota snapshot. Internal carrier between
+    /// <see cref="GetUsageAndLimitAsync"/> and its two consumers.
+    /// </summary>
+    private sealed record UsageSnapshot(
+        FeatureKey Feature,
+        EnforcementScope Scope,
+        int ActiveDevices,
+        int PendingCodes,
+        int Usage,
+        int? PlanLimit,
+        int AddonLimit,
+        int? EffectiveLimit);
+
+    /// <summary>
     /// Data-driven device-licensing enforcement. Resolves the quantitative
     /// feature for <paramref name="normalizedMode"/>, reads its limit and
     /// scope from the <see cref="IFeatureGateService"/> snapshot, and
@@ -598,46 +705,20 @@ public class DeviceService : IDeviceService
     /// </remarks>
     private async Task EnforceDeviceLimitsAsync(int businessId, int branchId, string normalizedMode, bool isConsumingPendingCode = false)
     {
-        var feature = GetFeatureKeyForMode(normalizedMode);
-        if (feature is null) return;
+        var snapshot = await GetUsageAndLimitAsync(
+            businessId, branchId, normalizedMode, subtractPendingForActivate: isConsumingPendingCode);
 
-        var (limit, scope) = await _featureGate.GetEnforcementInfoAsync(businessId, feature.Value);
+        // Non-metered modes (snapshot null) and unlimited plans (EffectiveLimit
+        // null) bypass the check.
+        if (snapshot is null) return;
+        if (snapshot.EffectiveLimit is null) return;
 
-        // null limit = infinite (e.g. Enterprise plan).
-        if (limit is null) return;
-
-        // Branch-scoped features count only within the requesting branch;
-        // global features count the entire tenant.
-        int? scopeBranchId = scope == EnforcementScope.Branch ? branchId : null;
-
-        var activeDevices = await _unitOfWork.Devices
-            .CountActiveByModeAsync(businessId, scopeBranchId, normalizedMode);
-        var pendingCodes = await _unitOfWork.DeviceActivationCodes
-            .CountPendingByModeAsync(businessId, scopeBranchId, normalizedMode);
-
-        // Activate flow: subtract the code we are about to consume so the
-        // pre-state count does not over-report by one (the code is in the
-        // pending table until the transaction commits its IsUsed flip).
-        if (isConsumingPendingCode && pendingCodes > 0)
-            pendingCodes--;
-
-        var usage = activeDevices + pendingCodes;
-
-        // Sum purchased Stripe Add-on licenses for this feature. Fail-strict:
-        // only active/trialing subscriptions contribute — a past_due tenant
-        // loses the add-on capacity until payment recovers (see XML doc on
-        // ISubscriptionItemRepository.SumAddonQuantityByFeatureAsync).
-        var addonLimit = await _unitOfWork.SubscriptionItems
-            .SumAddonQuantityByFeatureAsync(businessId, feature.Value);
-
-        var effectiveLimit = limit.Value + addonLimit;
-
-        if (usage >= effectiveLimit)
+        if (snapshot.Usage >= snapshot.EffectiveLimit.Value)
         {
             var business = await _unitOfWork.Business.GetByIdAsync(businessId);
             throw new PlanLimitExceededException(
                 resource: $"modo {normalizedMode}",
-                limit: effectiveLimit,
+                limit: snapshot.EffectiveLimit.Value,
                 currentPlan: PlanTypeIds.ToCode(business?.PlanTypeId ?? PlanTypeIds.Free));
         }
     }

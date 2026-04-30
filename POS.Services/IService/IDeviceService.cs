@@ -26,6 +26,19 @@ public interface IDeviceService
     Task<IReadOnlyList<PendingDeviceCodeDto>> GetPendingCodesAsync(int businessId, int? branchId = null);
 
     /// <summary>
+    /// Returns a per-mode quota snapshot so the frontend can render proactive
+    /// disabled-state UI (instead of relying on a reactive 403 from
+    /// <c>POST /api/Device/generate-code</c>). One entry per metered device
+    /// mode is included: <c>cashier</c>, <c>tables</c>, <c>kitchen</c>,
+    /// <c>kiosk</c>, <c>reception</c>. <paramref name="branchId"/> is consulted
+    /// only for branch-scoped modes (Reception); business-scoped modes are
+    /// counted across the entire tenant regardless of <paramref name="branchId"/>.
+    /// Reuses the same primitive used by <c>EnforceDeviceLimitsAsync</c> so the
+    /// numbers are guaranteed to match the enforcer at the next call site.
+    /// </summary>
+    Task<DeviceLimitsDto> GetDeviceLimitsAsync(int businessId, int branchId);
+
+    /// <summary>
     /// Atomic device pairing entry-point. Validates the 6-digit activation code,
     /// upserts the <c>Device</c> by <paramref name="deviceUuid"/>, marks the code
     /// as consumed, and issues a long-lived <c>DeviceToken</c> — all inside a

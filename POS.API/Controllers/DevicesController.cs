@@ -106,6 +106,25 @@ public class DevicesController : BaseApiController
     }
 
     /// <summary>
+    /// Returns a per-mode device quota snapshot for the caller's business so
+    /// the back office can disable activation actions proactively instead of
+    /// reacting to a 403 from <c>POST /api/Device/generate-code</c>. Branch
+    /// context is taken from the JWT — branch-scoped modes (Reception) are
+    /// counted within that branch; business-scoped modes (Cashier, Tables,
+    /// Kitchen, Kiosk) are counted across the entire tenant.
+    /// </summary>
+    /// <returns>Per-mode quota breakdown including pending codes and add-on contributions.</returns>
+    /// <response code="200">Returns the quota snapshot.</response>
+    [HttpGet("limits")]
+    [Authorize(Roles = "Owner,Manager")]
+    [ProducesResponseType(typeof(DeviceLimitsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLimits()
+    {
+        var limits = await _deviceService.GetDeviceLimitsAsync(BusinessId, BranchId);
+        return Ok(limits);
+    }
+
+    /// <summary>
     /// Flips the <c>IsActive</c> flag on a device and invalidates the auth
     /// cache so the revocation propagates on the next device request.
     /// </summary>
