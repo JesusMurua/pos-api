@@ -26,7 +26,7 @@ public class SubscriptionController : BaseApiController
     /// Always returns a valid response — Free plan defaults when no Stripe subscription exists.
     /// </summary>
     [HttpGet("status")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStatus()
     {

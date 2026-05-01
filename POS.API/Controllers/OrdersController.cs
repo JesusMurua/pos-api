@@ -52,7 +52,7 @@ public class OrdersController : BaseApiController
     /// <returns>A list of orders.</returns>
     /// <response code="200">Returns the list of orders.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<Order>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByBranchAndDate([FromQuery] DateOnly date)
     {
@@ -96,7 +96,7 @@ public class OrdersController : BaseApiController
     /// <returns>A list of orders with items and payments.</returns>
     /// <response code="200">Returns the list of orders.</response>
     [HttpGet("pull")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<OrderPullDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Pull([FromQuery] DateTime? since)
     {
@@ -112,7 +112,7 @@ public class OrdersController : BaseApiController
     /// <response code="200">Returns the order.</response>
     /// <response code="404">If the order is not found in this branch.</response>
     [HttpGet("{id}")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(OrderPullDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(string id)
@@ -129,7 +129,7 @@ public class OrdersController : BaseApiController
     /// <returns>A list of active orders for the table.</returns>
     /// <response code="200">Returns the list of active orders, or empty array if none.</response>
     [HttpGet("by-table/{tableId}")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByTable(int tableId)
     {
@@ -170,7 +170,7 @@ public class OrdersController : BaseApiController
     /// <response code="400">If the status value is invalid.</response>
     /// <response code="404">If the order is not found.</response>
     [HttpPatch("{id}/kitchen-status")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

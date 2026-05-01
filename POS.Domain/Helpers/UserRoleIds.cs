@@ -13,9 +13,7 @@ public static class UserRoleIds
     public const int Owner = (int)UserRole.Owner;
     public const int Manager = (int)UserRole.Manager;
     public const int Cashier = (int)UserRole.Cashier;
-    public const int Kitchen = (int)UserRole.Kitchen;
     public const int Waiter = (int)UserRole.Waiter;
-    public const int Kiosk = (int)UserRole.Kiosk;
     public const int Host = (int)UserRole.Host;
 
     /// <summary>
@@ -29,9 +27,7 @@ public static class UserRoleIds
         Owner => "Owner",
         Manager => "Manager",
         Cashier => "Cashier",
-        Kitchen => "Kitchen",
         Waiter => "Waiter",
-        Kiosk => "Kiosk",
         Host => "Host",
         _ => "Cashier"
     };

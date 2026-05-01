@@ -36,7 +36,7 @@ public class PrintJobController : BaseApiController
     /// <returns>List of active <see cref="PrintJob"/>s.</returns>
     /// <response code="200">Returns the list of active print jobs.</response>
     [HttpGet("pending")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<PrintJob>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPending([FromQuery] PrintingDestination? destination)
     {
@@ -52,7 +52,7 @@ public class PrintJobController : BaseApiController
     /// <returns>All <see cref="PrintJob"/>s for the given order.</returns>
     /// <response code="200">Returns the list of print jobs for the order.</response>
     [HttpGet("by-order/{orderId}")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<PrintJob>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByOrder(string orderId)
     {
@@ -71,7 +71,7 @@ public class PrintJobController : BaseApiController
     /// <response code="404">If the print job is not found or does not belong to this branch.</response>
     /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> status.</response>
     [HttpPatch("{id:int}/in-progress")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -100,7 +100,7 @@ public class PrintJobController : BaseApiController
     /// <response code="404">If the print job is not found or does not belong to this branch.</response>
     /// <response code="400">If the job is already in a terminal state (<see cref="PrintJobStatus.Printed"/> or <see cref="PrintJobStatus.Failed"/>).</response>
     [HttpPatch("{id:int}/printed")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(PrintJob), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -128,7 +128,7 @@ public class PrintJobController : BaseApiController
     /// <response code="404">If the print job is not found or does not belong to this branch.</response>
     /// <response code="400">If the job is not in <see cref="PrintJobStatus.Pending"/> status.</response>
     [HttpPatch("{id:int}/failed")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(PrintJob), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

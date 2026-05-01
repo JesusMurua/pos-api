@@ -26,7 +26,7 @@ public class DeliveryController : BaseApiController
     /// <returns>List of active delivery orders.</returns>
     /// <response code="200">Returns active delivery orders.</response>
     [HttpGet("active")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(IEnumerable<DeliveryOrderDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActive()
     {
@@ -106,7 +106,7 @@ public class DeliveryController : BaseApiController
     /// <response code="400">If the order cannot be marked ready (wrong status).</response>
     /// <response code="404">If the order is not found.</response>
     [HttpPost("{orderId}/ready")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
     [ProducesResponseType(typeof(Order), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

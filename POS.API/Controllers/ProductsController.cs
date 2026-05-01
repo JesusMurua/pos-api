@@ -36,7 +36,7 @@ public class ProductsController : BaseApiController
     /// <returns>A list of active products.</returns>
     /// <response code="200">Returns the list of active products.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<ProductResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
@@ -67,7 +67,7 @@ public class ProductsController : BaseApiController
     /// <response code="200">Returns the matching product.</response>
     /// <response code="404">If no product matches the barcode.</response>
     [HttpGet("by-barcode/{code}")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByBarcode(string code)

@@ -45,7 +45,7 @@ public class PushController : BaseApiController
     /// <response code="200">Subscription saved successfully.</response>
     /// <response code="400">If the subscription data is invalid.</response>
     [HttpPost("subscribe")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Subscribe([FromBody] PushSubscriptionDto dto)
@@ -63,7 +63,7 @@ public class PushController : BaseApiController
     /// <returns>Success acknowledgement.</returns>
     /// <response code="200">Subscription removed successfully.</response>
     [HttpDelete("unsubscribe")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> Unsubscribe([FromQuery] string endpoint)
     {

@@ -84,10 +84,8 @@ public static class DbInitializer
                 new UserRoleCatalog { Id = 1, Code = "Owner", Name = "Dueño", Level = 1 },
                 new UserRoleCatalog { Id = 2, Code = "Manager", Name = "Gerente", Level = 2 },
                 new UserRoleCatalog { Id = 3, Code = "Cashier", Name = "Cajero", Level = 3 },
-                new UserRoleCatalog { Id = 4, Code = "Kitchen", Name = "Cocina", Level = 4 },
-                new UserRoleCatalog { Id = 5, Code = "Waiter", Name = "Mesero", Level = 5 },
-                new UserRoleCatalog { Id = 6, Code = "Kiosk", Name = "Kiosk", Level = 6 },
-                new UserRoleCatalog { Id = 7, Code = "Host", Name = "Hostess", Level = 7 }
+                new UserRoleCatalog { Id = 4, Code = "Waiter", Name = "Mesero", Level = 4 },
+                new UserRoleCatalog { Id = 5, Code = "Host", Name = "Hostess", Level = 5 }
             );
             await context.SaveChangesAsync();
         }

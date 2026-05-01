@@ -30,7 +30,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of inventory items.</returns>
     /// <response code="200">Returns the list of inventory items.</response>
     [HttpGet]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<InventoryItem>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
@@ -42,7 +42,7 @@ public class InventoryController : BaseApiController
     /// <returns>A list of product IDs with depleted inventory.</returns>
     /// <response code="200">Returns the list of out-of-stock product IDs.</response>
     [HttpGet("out-of-stock-products")]
-    [Authorize(Roles = "Owner,Manager,Cashier,Kitchen,Waiter")]
+    [Authorize(Roles = "Owner,Manager,Cashier,Waiter")]
     [ProducesResponseType(typeof(IEnumerable<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetOutOfStockProducts()
     {

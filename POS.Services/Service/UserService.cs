@@ -15,7 +15,7 @@ public class UserService : IUserService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFeatureGateService _featureGate;
 
-    private static readonly int[] PinRoleIds = { UserRoleIds.Cashier, UserRoleIds.Kitchen, UserRoleIds.Waiter, UserRoleIds.Kiosk };
+    private static readonly int[] PinRoleIds = { UserRoleIds.Cashier, UserRoleIds.Waiter, UserRoleIds.Host };
     private static readonly int[] EmailRoleIds = { UserRoleIds.Owner, UserRoleIds.Manager };
 
     public UserService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)

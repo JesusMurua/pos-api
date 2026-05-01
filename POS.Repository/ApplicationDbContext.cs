@@ -1334,26 +1334,15 @@ public class ApplicationDbContext : DbContext
                 RoleId = UserRoleIds.Cashier,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new User
-            {
-                Id = 3,
-                BusinessId = 1,
-                BranchId = 1,
-                Name = "Cocina",
-                Email = null,
-                PasswordHash = null,
-                PinHash = "$2a$11$1uDkWZWuha6zTWRnTY7Eke1GgFSozVZnRZZ8/ouAA6OdMOEp4k0sm",
-                RoleId = UserRoleIds.Kitchen,
-                IsActive = true,
-                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
+            // BDD-018: User Id=3 (Cocina, RoleId=Kitchen) removed. Kitchen is no
+            // longer a human role; KDS terminals authenticate via Device-JWT.
         );
 
         modelBuilder.Entity<UserBranch>().HasData(
             new UserBranch { UserId = 1, BranchId = 1, IsDefault = true },
-            new UserBranch { UserId = 2, BranchId = 1, IsDefault = true },
-            new UserBranch { UserId = 3, BranchId = 1, IsDefault = true }
+            new UserBranch { UserId = 2, BranchId = 1, IsDefault = true }
+            // BDD-018: UserBranch for UserId=3 removed alongside the user.
         );
 
         #endregion
