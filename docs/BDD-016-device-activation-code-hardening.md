@@ -3,6 +3,7 @@
 **Documentos relacionados:**
 - [BDD-014-device-security-and-management.md](BDD-014-device-security-and-management.md) — Established the per-request `IsActive` gate and the back-office management surface this refactor sits on top of.
 - [AUDIT-049-device-activation-register-linking-ux.md](AUDIT-049-device-activation-register-linking-ux.md) — Activation + cash-register linking UX audit; informs the contract assumptions on the existing flow.
+- [BDD-017-unified-secure-alphabet.md](BDD-017-unified-secure-alphabet.md) — Follow-up that closed a scope gap discovered post-deploy: `CashRegisterService` had a parallel 32-char generator with `L`/`U` allowed. BDD-017 unified both surfaces under a shared helper and renamed `DeviceActivationAlphabet` → `SecureCodeAlphabet`. References below reflect the post-BDD-017 names.
 
 ---
 
@@ -73,11 +74,11 @@ Replace the numeric `Random` generator with a CSPRNG-backed helper that pulls 6 
 
 ## 3. Domain Model Changes
 
-### 3.1 New Helper — `DeviceActivationAlphabet`
+### 3.1 New Helper — `SecureCodeAlphabet`
 
 | Property | Value |
 |---|---|
-| File | [`POS.Domain/Helpers/DeviceActivationAlphabet.cs`](../POS.Domain/Helpers/DeviceActivationAlphabet.cs) (new) |
+| File | [`POS.Domain/Helpers/SecureCodeAlphabet.cs`](../POS.Domain/Helpers/SecureCodeAlphabet.cs) (new) |
 | Visibility | `public static class` |
 | Field `Chars` | `"ABCDEFGHJKMNPQRSTVWXYZ23456789"` (30 characters) |
 | Field `Length` | `const int` = `6` |
@@ -126,7 +127,7 @@ The interface contract (`GenerateActivationCodeAsync`, `ActivateAndRegisterDevic
 | Change | Type | Detail |
 |---|---|---|
 | Delete `private static readonly Random _random = new();` | DELETE | Field becomes orphaned after the generator swap; under zero-tech-debt rule, remove rather than keep. |
-| Add `private static string GenerateSecureActivationCode()` | NEW | Pure helper. No DI. CSPRNG-backed (`RandomNumberGenerator.Fill`). Returns 6 chars from `DeviceActivationAlphabet.Chars`. |
+| Add `private static string GenerateSecureActivationCode()` | NEW | Pure helper. No DI. CSPRNG-backed (`RandomNumberGenerator.Fill`). Returns 6 chars from `SecureCodeAlphabet.Chars`. |
 | Modify `GenerateActivationCodeAsync` (collision loop, [`DeviceService.cs:142-153`](../POS.Services/Service/DeviceService.cs#L142-L153)) | MODIFY | Replace `_random.Next(...)` with `GenerateSecureActivationCode()`. Retain the `attempts > 10` cap and the existing `ValidationException` message. |
 | Modify `ActivateAndRegisterDeviceAsync` (entry, [`DeviceService.cs:197`](../POS.Services/Service/DeviceService.cs#L197)) | MODIFY | First statement: `code = code?.Trim().ToUpperInvariant() ?? string.Empty;`. All subsequent reads (`GetByCodeAsync`, `GetByCodeForUpdateAsync`) consume the normalized form. |
 
@@ -355,7 +356,7 @@ The interface contract (`GenerateActivationCodeAsync`, `ActivateAndRegisterDevic
 
 | # | Task | Layer | Blocks | Notes |
 |---|---|---|---|---|
-| 1 | Create `DeviceActivationAlphabet` (`Chars`, `Length`, XML doc invariant) | Domain | 2, 5 | Single source of truth |
+| 1 | Create `SecureCodeAlphabet` (`Chars`, `Length`, XML doc invariant) | Domain | 2, 5 | Single source of truth |
 | 2 | Implement `GenerateSecureActivationCode()` private helper in `DeviceService` | Service | 3 | Pure, static, CSPRNG-backed |
 | 3 | Swap `_random.Next(...)` for `GenerateSecureActivationCode()` in `GenerateActivationCodeAsync` | Service | 8 | Preserve collision-safe loop |
 | 4 | Insert `code = code?.Trim().ToUpperInvariant() ?? string.Empty;` as first statement of `ActivateAndRegisterDeviceAsync` | Service | — | Before any repo call |
@@ -395,7 +396,7 @@ The interface contract (`GenerateActivationCodeAsync`, `ActivateAndRegisterDevic
 
 | # | Criterion | Verification |
 |---|---|---|
-| AC-1 | Generated codes consist exclusively of `DeviceActivationAlphabet.Chars` | Unit test: generate 10⁵ codes, all match `^[A-HJKMNP-TV-Z2-9]{6}$` |
+| AC-1 | Generated codes consist exclusively of `SecureCodeAlphabet.Chars` | Unit test: generate 10⁵ codes, all match `^[A-HJKMNP-TV-Z2-9]{6}$` |
 | AC-2 | Distribution of characters is statistically uniform | Chi-square goodness-of-fit over 10⁵ generations (per-character bucket counts) |
 | AC-3 | DTO rejects codes outside the alphabet with 400 | Integration: `"abc123"` (contains `1`), `"AAAAA0"` (contains `0`), `"AAAAA"` (length 5) all return 400 ModelState |
 | AC-4 | Service accepts whitespace and lowercase input | Integration: send `"  abxyz2  "`, expect lookup against `"ABXYZ2"` |

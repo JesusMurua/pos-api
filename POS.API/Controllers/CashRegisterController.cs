@@ -255,6 +255,8 @@ public class CashRegisterController : BaseApiController
 public class RedeemLinkCodeRequest
 {
     [Required]
-    [StringLength(6, MinimumLength = 6)]
+    [RegularExpression(
+        "(?i)^[A-HJKMNP-TV-Z2-9]{6}$",
+        ErrorMessage = "Link code must be exactly 6 characters from the safe alphabet (A-Z and 2-9, excluding 0, O, 1, I, L, U).")]
     public string Code { get; set; } = null!;
 }

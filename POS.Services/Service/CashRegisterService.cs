@@ -7,6 +7,7 @@ using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.Helpers;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
@@ -240,14 +241,14 @@ public class CashRegisterService : ICashRegisterService
             throw new ValidationException(
                 "Cash register is already linked to a device. Unlink it first.");
 
-        // Collision-safe loop: 36^6 ≈ 2.18 billion combinations, but the
-        // birthday-paradox boundary kicks in earlier under heavy concurrency,
-        // so the retry is more than belt-and-braces.
+        // Collision-safe loop: 30^6 ≈ 729 million combinations from the shared
+        // SecureCodeAlphabet; birthday-paradox boundary kicks in earlier under
+        // heavy concurrency, so the retry is more than belt-and-braces.
         string code;
         var attempts = 0;
         do
         {
-            code = GenerateRandomLinkCode();
+            code = SecureCodeGenerator.Generate();
             attempts++;
             if (attempts > 10)
                 throw new ValidationException("Unable to generate unique link code. Please try again.");
@@ -282,6 +283,12 @@ public class CashRegisterService : ICashRegisterService
     /// </summary>
     public async Task<CashRegisterDto> RedeemLinkCodeAsync(string code, int deviceId, int branchId)
     {
+        // ── STEP 0: Sanitize input ────────────────────────────────────────────
+        // Mirrors DeviceService.ActivateAndRegisterDeviceAsync: the DTO regex
+        // accepts mixed case via (?i); the persistence layer is case-sensitive
+        // on PostgreSQL, so we normalize once here before any repo call.
+        code = code?.Trim().ToUpperInvariant() ?? string.Empty;
+
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
         var linkCode = await _unitOfWork.CashRegisterLinkCodes.GetByCodeForUpdateAsync(code)
@@ -552,22 +559,6 @@ public class CashRegisterService : ICashRegisterService
     /// Uses Order.CashRegisterSessionId instead of temporal window to guarantee
     /// exact precision with overlapping multi-till sessions.
     /// </summary>
-    /// <summary>
-    /// Generates a 6-char uppercase alphanumeric link code. The character set
-    /// excludes <c>I</c>, <c>O</c>, <c>0</c>, <c>1</c> so an operator
-    /// dictating the code over the phone cannot confuse them visually.
-    /// </summary>
-    private static string GenerateRandomLinkCode()
-    {
-        const string charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        var bytes = new byte[6];
-        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
-        var chars = new char[6];
-        for (var i = 0; i < 6; i++)
-            chars[i] = charset[bytes[i] % charset.Length];
-        return new string(chars);
-    }
-
     private async Task<int> CalculateCashSalesAsync(int sessionId)
     {
         var orders = await _unitOfWork.Orders.GetAsync(

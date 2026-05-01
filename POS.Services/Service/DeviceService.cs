@@ -1,10 +1,10 @@
-using System.Security.Cryptography;
 using POS.Domain.DTOs.Device;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Services.Helpers;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
@@ -144,7 +144,7 @@ public class DeviceService : IDeviceService
 
         do
         {
-            code = GenerateSecureActivationCode();
+            code = SecureCodeGenerator.Generate();
             attempts++;
 
             if (attempts > 10)
@@ -551,40 +551,6 @@ public class DeviceService : IDeviceService
     #endregion
 
     #region Private Helpers
-
-    /// <summary>
-    /// Generates a cryptographically secure activation code from
-    /// <see cref="DeviceActivationAlphabet"/>. Uses 5-bit rejection sampling
-    /// against <c>Chars.Length</c>: each random byte is masked with
-    /// <c>0x1F</c> (yielding 0-31); bytes whose result is
-    /// <c>&gt;= Chars.Length</c> are discarded and re-drawn. This keeps the
-    /// output uniformly distributed across the alphabet without modulo bias.
-    /// </summary>
-    /// <remarks>
-    /// Cold path — invoked only when an admin issues a new code. The
-    /// per-byte CSPRNG draw is intentionally simple over a buffered approach;
-    /// expected cost is ~6.4 bytes per 6-character code (32/30 acceptance
-    /// ratio).
-    /// </remarks>
-    private static string GenerateSecureActivationCode()
-    {
-        Span<char> result = stackalloc char[DeviceActivationAlphabet.Length];
-        Span<byte> buffer = stackalloc byte[1];
-
-        for (var i = 0; i < DeviceActivationAlphabet.Length; i++)
-        {
-            int index;
-            do
-            {
-                RandomNumberGenerator.Fill(buffer);
-                index = buffer[0] & 0x1F;
-            } while (index >= DeviceActivationAlphabet.Chars.Length);
-
-            result[i] = DeviceActivationAlphabet.Chars[index];
-        }
-
-        return new string(result);
-    }
 
     private static DeviceResponse MapToResponse(Device device, string? deviceToken = null)
     {
