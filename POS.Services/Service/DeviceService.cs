@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using POS.Domain.DTOs.Device;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
@@ -14,7 +15,6 @@ public class DeviceService : IDeviceService
     private readonly IFeatureGateService _featureGate;
     private readonly IAuthService _authService;
     private readonly IDeviceAuthorizationService _deviceAuth;
-    private static readonly Random _random = new();
 
     public DeviceService(
         IUnitOfWork unitOfWork,
@@ -144,7 +144,7 @@ public class DeviceService : IDeviceService
 
         do
         {
-            code = _random.Next(100000, 999999).ToString();
+            code = GenerateSecureActivationCode();
             attempts++;
 
             if (attempts > 10)
@@ -196,6 +196,12 @@ public class DeviceService : IDeviceService
     /// </remarks>
     public async Task<ActivateDeviceResponse> ActivateAndRegisterDeviceAsync(string code, string deviceUuid)
     {
+        // ── STEP 0: Sanitize input ────────────────────────────────────────────
+        // The DTO regex accepts mixed case via (?i); the persistence layer is
+        // case-sensitive on PostgreSQL, so we normalize once here before any
+        // repo call. Trim absorbs accidental whitespace from copy-paste.
+        code = code?.Trim().ToUpperInvariant() ?? string.Empty;
+
         // ── STEP 1: Fail-fast pre-validation (no lock) ────────────────────────
         // Reject obviously bad codes without opening a transaction so brute-force
         // attempts don't pile up FOR UPDATE locks against the table.
@@ -545,6 +551,40 @@ public class DeviceService : IDeviceService
     #endregion
 
     #region Private Helpers
+
+    /// <summary>
+    /// Generates a cryptographically secure activation code from
+    /// <see cref="DeviceActivationAlphabet"/>. Uses 5-bit rejection sampling
+    /// against <c>Chars.Length</c>: each random byte is masked with
+    /// <c>0x1F</c> (yielding 0-31); bytes whose result is
+    /// <c>&gt;= Chars.Length</c> are discarded and re-drawn. This keeps the
+    /// output uniformly distributed across the alphabet without modulo bias.
+    /// </summary>
+    /// <remarks>
+    /// Cold path — invoked only when an admin issues a new code. The
+    /// per-byte CSPRNG draw is intentionally simple over a buffered approach;
+    /// expected cost is ~6.4 bytes per 6-character code (32/30 acceptance
+    /// ratio).
+    /// </remarks>
+    private static string GenerateSecureActivationCode()
+    {
+        Span<char> result = stackalloc char[DeviceActivationAlphabet.Length];
+        Span<byte> buffer = stackalloc byte[1];
+
+        for (var i = 0; i < DeviceActivationAlphabet.Length; i++)
+        {
+            int index;
+            do
+            {
+                RandomNumberGenerator.Fill(buffer);
+                index = buffer[0] & 0x1F;
+            } while (index >= DeviceActivationAlphabet.Chars.Length);
+
+            result[i] = DeviceActivationAlphabet.Chars[index];
+        }
+
+        return new string(result);
+    }
 
     private static DeviceResponse MapToResponse(Device device, string? deviceToken = null)
     {

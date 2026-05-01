@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using POS.Domain.DTOs.Device;
 using POS.Services.IService;
 
@@ -52,8 +53,10 @@ public class DeviceController : BaseApiController
     /// business plan no longer supports the requested mode.</response>
     [HttpPost("activate")]
     [AllowAnonymous]
+    [EnableRateLimiting("DeviceActivationPolicy")]
     [ProducesResponseType(typeof(ActivateDeviceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Activate([FromBody] ActivateDeviceRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -139,7 +142,9 @@ public class GenerateCodeRequest
 public class ActivateDeviceRequest
 {
     [Required]
-    [StringLength(6, MinimumLength = 6)]
+    [RegularExpression(
+        "(?i)^[A-HJKMNP-TV-Z2-9]{6}$",
+        ErrorMessage = "Activation code must be exactly 6 characters from the safe alphabet (A-Z and 2-9, excluding 0, O, 1, I, L, U).")]
     public string Code { get; set; } = null!;
 
     /// <summary>

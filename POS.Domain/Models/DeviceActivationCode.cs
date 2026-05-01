@@ -6,7 +6,12 @@ namespace POS.Domain.Models;
 public class DeviceActivationCode : IBranchScoped
 {
     public int Id { get; set; }
+
+    [Required]
+    [MinLength(6)]
+    [MaxLength(6)]
     public string Code { get; set; } = null!;
+
     public int BusinessId { get; set; }
     public int BranchId { get; set; }
     public string Mode { get; set; } = null!;

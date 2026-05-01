@@ -1,8 +1,10 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
@@ -181,10 +183,42 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Forwarded Headers — required so the rate limiter and request logging see
+// the real client IP behind Render's reverse proxy. KnownNetworks/Proxies are
+// cleared because Render does not expose stable proxy IPs; the container only
+// receives traffic via the platform proxy, so trusting X-Forwarded-For
+// unconditionally is acceptable.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // Rate Limiting
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Surface Retry-After on every 429 globally so clients (especially the
+    // device setup screen) can back off intelligently instead of guessing.
+    // Logs the resolved IP and path for security observability — useful for
+    // spotting brute-force patterns against /api/Device/activate.
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)retryAfter.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        var ipAddress = context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? IPAddress.None.ToString();
+        Log.Warning("Rate limit hit for {IpAddress} on {Path}",
+            ipAddress, context.HttpContext.Request.Path.Value);
+
+        await ValueTask.CompletedTask;
+    };
+
     options.AddFixedWindowLimiter("RegistrationPolicy", limiter =>
     {
         limiter.PermitLimit = 5;
@@ -196,6 +230,26 @@ builder.Services.AddRateLimiter(options =>
         limiter.PermitLimit = 5;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
+    });
+
+    // Sliding-window policy partitioned by real client IP. Sliding (vs fixed)
+    // closes the burst-boundary loophole on an anti-bruteforce endpoint where
+    // 10 requests at second 59 + 10 at second 61 would otherwise count as
+    // "10 per minute" while behaving like 20-in-2-seconds.
+    options.AddPolicy("DeviceActivationPolicy", httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? IPAddress.None.ToString();
+
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey,
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            });
     });
 });
 
@@ -235,6 +289,11 @@ app.Use((context, next) =>
     context.Request.EnableBuffering();
     return next();
 });
+
+// Forwarded headers MUST run before any middleware that reads the client IP
+// (rate limiter, request logging) so partition keys and audit logs reflect the
+// real caller, not the Render proxy.
+app.UseForwardedHeaders();
 
 // Middleware order matters — exception handler first
 app.UseExceptionMiddleware();
