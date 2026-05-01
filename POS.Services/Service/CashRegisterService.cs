@@ -597,6 +597,7 @@ public class CashRegisterService : ICashRegisterService
             BranchId = register.BranchId,
             Name = register.Name,
             DeviceId = register.DeviceId,
+            DeviceUuid = register.Device?.DeviceUuid,
             IsActive = register.IsActive,
             CreatedAt = register.CreatedAt,
             Device = register.Device == null ? null : new DeviceDto
