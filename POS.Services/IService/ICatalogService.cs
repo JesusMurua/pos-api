@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Tax;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Services.IService;
@@ -23,6 +24,15 @@ public interface ICatalogService
     /// string is identical to what the JWT <c>features</c> claim carries.
     /// </summary>
     Task<IReadOnlyList<PlanCatalogDto>> GetPlanCatalogAsync();
+
+    /// <summary>
+    /// Returns the <see cref="POS.Domain.Models.Tax"/> catalog rows. When
+    /// <paramref name="countryCode"/> is provided (ISO 3166-1 alpha-2), the
+    /// list is filtered to that country; otherwise every seeded tax is
+    /// returned. Used by the frontend to populate per-product tax selectors
+    /// without having to know the catalog's internal ids.
+    /// </summary>
+    Task<IEnumerable<TaxDto>> GetTaxCatalogAsync(string? countryCode = null);
 }
 
 /// <summary>

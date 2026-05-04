@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using POS.Domain.DTOs.Tax;
 using POS.Domain.Models.Catalogs;
 using POS.Repository;
 using POS.Services.IService;
@@ -54,6 +55,20 @@ public class CatalogService : ICatalogService
             entry.AbsoluteExpirationRelativeToNow = PlanCatalogCacheTtl;
             return await BuildPlanCatalogAsync();
         })!;
+    }
+
+    public async Task<IEnumerable<TaxDto>> GetTaxCatalogAsync(string? countryCode = null)
+    {
+        var taxes = string.IsNullOrWhiteSpace(countryCode)
+            ? await _unitOfWork.Taxes.GetAsync()
+            : await _unitOfWork.Taxes.GetAsync(t => t.CountryCode == countryCode);
+
+        return taxes
+            .OrderBy(t => t.CountryCode)
+            .ThenByDescending(t => t.IsDefault)
+            .ThenBy(t => t.Rate)
+            .Select(t => new TaxDto(t.Id, t.Code, t.CountryCode, t.IsDefault, t.Name, t.Rate))
+            .ToList();
     }
 
     private async Task<IReadOnlyList<PlanCatalogDto>> BuildPlanCatalogAsync()
