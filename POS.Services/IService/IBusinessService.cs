@@ -60,13 +60,14 @@ public interface IBusinessService
 
     /// <summary>
     /// Updates the business display name together with the matrix branch's
-    /// address and phone in a single SaveChanges call.
+    /// address and phone in a single SaveChanges call. When <paramref name="defaultTaxId"/>
+    /// is provided, it overrides the resting tax policy.
     /// </summary>
     /// <exception cref="POS.Domain.Exceptions.NotFoundException">
     /// Thrown when the business or its matrix branch cannot be located.
     /// </exception>
     Task<BusinessSettingsResult> UpdateSettingsAsync(
-        int businessId, string businessName, string? address, string? phone);
+        int businessId, string businessName, string? address, string? phone, int? defaultTaxId);
 }
 
 /// <summary>
@@ -78,6 +79,7 @@ public class BusinessSettingsResult
     public string BusinessName { get; set; } = null!;
     public string? Address { get; set; }
     public string? Phone { get; set; }
+    public int DefaultTaxId { get; set; }
 }
 
 /// <summary>

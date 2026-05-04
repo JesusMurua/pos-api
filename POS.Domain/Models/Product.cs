@@ -51,9 +51,6 @@ public partial class Product : IBranchScoped
     [MaxLength(5)]
     public string? SatUnitCode { get; set; }
 
-    /// <summary>IVA tax rate for this product. 0.16 (16%), 0.08 (border zone), 0 (exempt). Null = default 16%.</summary>
-    public decimal? TaxRate { get; set; }
-
     /// <summary>Whether PriceCents includes tax. Default true (Mexican standard).</summary>
     public bool IsTaxIncluded { get; set; } = true;
 

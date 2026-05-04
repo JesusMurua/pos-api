@@ -18,6 +18,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Include(p => p.ModifierGroups!)
                 .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
+            .Include(p => p.ProductTaxes)
+                .ThenInclude(pt => pt.Tax)
             .ToListAsync();
     }
 
@@ -28,6 +30,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Include(p => p.ModifierGroups!)
                 .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
+            .Include(p => p.ProductTaxes)
+                .ThenInclude(pt => pt.Tax)
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
@@ -40,6 +44,8 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .Include(p => p.ModifierGroups!)
                 .ThenInclude(g => g.Extras)
             .Include(p => p.Images)
+            .Include(p => p.ProductTaxes)
+                .ThenInclude(pt => pt.Tax)
             .FirstOrDefaultAsync();
     }
 

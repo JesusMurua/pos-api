@@ -31,8 +31,8 @@ public static class ProductMapping
             LowStockThreshold = entity.LowStockThreshold,
             SatProductCode = entity.SatProductCode,
             SatUnitCode = entity.SatUnitCode,
-            TaxRate = entity.TaxRate,
             IsTaxIncluded = entity.IsTaxIncluded,
+            EffectiveIsTaxIncluded = entity.IsTaxIncluded,
             PrintingDestination = entity.PrintingDestination,
             Metadata = entity.Metadata,
             Sizes = entity.Sizes?.Select(s => new ProductSizeResponse
@@ -102,7 +102,6 @@ public static class ProductMapping
             LowStockThreshold = request.LowStockThreshold,
             SatProductCode = request.SatProductCode,
             SatUnitCode = request.SatUnitCode,
-            TaxRate = request.TaxRate,
             IsTaxIncluded = request.IsTaxIncluded,
             PrintingDestination = request.PrintingDestination,
             Metadata = request.Metadata,
@@ -159,7 +158,6 @@ public static class ProductMapping
         entity.LowStockThreshold = request.LowStockThreshold;
         entity.SatProductCode = request.SatProductCode;
         entity.SatUnitCode = request.SatUnitCode;
-        entity.TaxRate = request.TaxRate;
         entity.IsTaxIncluded = request.IsTaxIncluded;
         entity.PrintingDestination = request.PrintingDestination;
         entity.Metadata = request.Metadata;

@@ -45,11 +45,13 @@ public partial class OrderItem
     [MaxLength(5)]
     public string? SatUnitCode { get; set; }
 
-    /// <summary>IVA tax rate frozen from Product at order creation. 0.16, 0.08, or 0. Null = default 16%.</summary>
-    public decimal? TaxRatePercent { get; set; }
-
-    /// <summary>Calculated tax amount in cents: floor(UnitPriceCents * Quantity * TaxRate / (1 + TaxRate)).</summary>
-    public int TaxAmountCents { get; set; }
+    /// <summary>
+    /// Whether <see cref="UnitPriceCents"/> is gross (tax included) or net.
+    /// Frozen at sale time so the tax math survives any subsequent change to
+    /// <see cref="POS.Domain.Models.Product.IsTaxIncluded"/>. Drives the
+    /// <c>tax_included</c> field sent to Facturapi.
+    /// </summary>
+    public bool IsTaxIncluded { get; set; } = true;
 
     #endregion
 

@@ -14,8 +14,6 @@ namespace POS.Services.Service;
 /// </summary>
 public class InvoicingService : IInvoicingService
 {
-    private const decimal DefaultTaxRate = 0.16m;
-
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFacturapiClient _facturapiClient;
 
@@ -42,7 +40,7 @@ public class InvoicingService : IInvoicingService
                 && o.InvoiceId == null
                 && o.IsPaid
                 && o.CancellationReason == null,
-            "Items,Payments")).ToList();
+            "Items.AppliedTaxes,Payments")).ToList();
 
         if (orders.Count == 0)
             throw new ValidationException("No uninvoiced orders found for the specified period.");
@@ -59,12 +57,14 @@ public class InvoicingService : IInvoicingService
             Items = facItems
         });
 
-        // Calculate totals
+        // Calculate totals from the relational OrderItemTax snapshots — the
+        // single source of truth for fiscal numbers.
         var totalCents = orders.Sum(o => o.TotalCents);
         var taxCents = orders
             .Where(o => o.Items != null)
             .SelectMany(o => o.Items!)
-            .Sum(i => i.TaxAmountCents);
+            .SelectMany(i => i.AppliedTaxes)
+            .Sum(t => t.TaxAmountCents);
         var subtotalCents = totalCents - taxCents;
 
         // Create Invoice entity
@@ -116,7 +116,7 @@ public class InvoicingService : IInvoicingService
     public async Task<IndividualInvoiceResult> RequestIndividualInvoiceAsync(
         string orderId, int fiscalCustomerId, int branchId)
     {
-        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Items,Payments");
+        var results = await _unitOfWork.Orders.GetAsync(o => o.Id == orderId, "Items.AppliedTaxes,Payments");
         var order = results.FirstOrDefault()
             ?? throw new NotFoundException($"Order with id {orderId} not found");
 
@@ -164,8 +164,10 @@ public class InvoicingService : IInvoicingService
             Items = facItems
         });
 
-        // Calculate tax breakdown
-        var taxCents = order.Items?.Sum(i => i.TaxAmountCents) ?? 0;
+        // Calculate tax breakdown from the relational snapshots.
+        var taxCents = order.Items?
+            .SelectMany(i => i.AppliedTaxes)
+            .Sum(t => t.TaxAmountCents) ?? 0;
         var subtotalCents = order.TotalCents - taxCents;
 
         // Create Invoice entity
@@ -495,7 +497,9 @@ public class InvoicingService : IInvoicingService
     }
 
     /// <summary>
-    /// Builds Facturapi invoice line items from order items, using frozen SAT fields.
+    /// Builds Facturapi invoice line items from order items, using frozen SAT
+    /// fields and the aggregate rate from the <see cref="OrderItem.AppliedTaxes"/>
+    /// snapshots. Items with no applied taxes are emitted at rate 0 (exempt).
     /// </summary>
     private static List<FacturapiInvoiceItem> BuildInvoiceItems(IEnumerable<Order> orders)
     {
@@ -509,7 +513,8 @@ public class InvoicingService : IInvoicingService
                 Description = item.ProductName,
                 Quantity = item.Quantity,
                 UnitPrice = item.UnitPriceCents / 100m,
-                TaxRate = item.TaxRatePercent ?? DefaultTaxRate
+                TaxRate = item.AppliedTaxes.Sum(t => t.TaxRate),
+                IsTaxIncluded = item.IsTaxIncluded
             })
             .ToList();
     }

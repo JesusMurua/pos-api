@@ -245,17 +245,6 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        if (!await context.Taxes.AnyAsync())
-        {
-            context.Taxes.AddRange(
-                new Tax { CountryCode = "MX", Name = "IVA 16%", Rate = 0.16m, Code = "002", IsDefault = true },
-                new Tax { CountryCode = "MX", Name = "IVA 8%", Rate = 0.08m, Code = "002", IsDefault = false },
-                new Tax { CountryCode = "MX", Name = "IVA 0%", Rate = 0.00m, Code = "002", IsDefault = false },
-                new Tax { CountryCode = "MX", Name = "IEPS 8%", Rate = 0.08m, Code = "003", IsDefault = false }
-            );
-            await context.SaveChangesAsync();
-        }
-
         await UpsertFeatureMatrixAsync(context);
     }
 
@@ -282,6 +271,7 @@ public static class DbInitializer
             Name = "Fonda La Esperanza",
             PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage,
             PlanTypeId = PlanTypeIds.Pro,
+            DefaultTaxId = await ResolveCountryDefaultTaxIdAsync(context, "MX"),
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -367,6 +357,7 @@ public static class DbInitializer
             Name = "Café Nogales Specialty",
             PrimaryMacroCategoryId = MacroCategoryIds.QuickService,
             PlanTypeId = PlanTypeIds.Basic,
+            DefaultTaxId = await ResolveCountryDefaultTaxIdAsync(context, "MX"),
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -427,6 +418,7 @@ public static class DbInitializer
             Name = "Minisuper El Progreso",
             PrimaryMacroCategoryId = MacroCategoryIds.Retail,
             PlanTypeId = PlanTypeIds.Basic,
+            DefaultTaxId = await ResolveCountryDefaultTaxIdAsync(context, "MX"),
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -488,6 +480,7 @@ public static class DbInitializer
             Name = "Papelería El Estudiante",
             PrimaryMacroCategoryId = MacroCategoryIds.Retail,
             PlanTypeId = PlanTypeIds.Free,
+            DefaultTaxId = await ResolveCountryDefaultTaxIdAsync(context, "MX"),
             OnboardingCompleted = true,
             OnboardingStatusId = 3,
             IsActive = true,
@@ -1085,6 +1078,25 @@ public static class DbInitializer
         }
 
         await context.SaveChangesAsync();
+    }
+
+    #endregion
+
+    #region Tax Helpers
+
+    /// <summary>
+    /// Resolves the country's default <see cref="Tax"/> id seeded via
+    /// <c>HasData</c>. Used by test seeders to satisfy the NOT NULL
+    /// <see cref="Business.DefaultTaxId"/> constraint without hardcoding ids.
+    /// </summary>
+    private static async Task<int> ResolveCountryDefaultTaxIdAsync(
+        ApplicationDbContext context, string countryCode)
+    {
+        var defaultTax = await context.Taxes
+            .FirstOrDefaultAsync(t => t.CountryCode == countryCode && t.IsDefault)
+            ?? throw new InvalidOperationException(
+                $"No default Tax row is seeded for country '{countryCode}'.");
+        return defaultTax.Id;
     }
 
     #endregion

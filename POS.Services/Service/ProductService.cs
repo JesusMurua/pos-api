@@ -11,11 +11,16 @@ public class ProductService : IProductService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFeatureGateService _featureGate;
+    private readonly ITaxResolverService _taxResolver;
 
-    public ProductService(IUnitOfWork unitOfWork, IFeatureGateService featureGate)
+    public ProductService(
+        IUnitOfWork unitOfWork,
+        IFeatureGateService featureGate,
+        ITaxResolverService taxResolver)
     {
         _unitOfWork = unitOfWork;
         _featureGate = featureGate;
+        _taxResolver = taxResolver;
     }
 
     #region Public API Methods
@@ -26,12 +31,13 @@ public class ProductService : IProductService
     public async Task<IEnumerable<ProductResponse>> GetAllActiveAsync(int branchId)
     {
         var categories = await _unitOfWork.Categories.GetActiveBranchCategoriesAsync(branchId);
+        var ctx = await LoadTaxContextAsync(branchId);
         var responses = new List<ProductResponse>();
 
         foreach (var category in categories)
         {
             var categoryProducts = await _unitOfWork.Products.GetActiveWithExtrasAsync(category.Id);
-            responses.AddRange(categoryProducts.Select(p => p.ToResponse()));
+            responses.AddRange(categoryProducts.Select(p => MapWithEffectiveTax(p, ctx)));
         }
 
         return responses;
@@ -43,7 +49,8 @@ public class ProductService : IProductService
     public async Task<ProductResponse> GetByIdAsync(int id)
     {
         var product = await LoadWithRelationsOrThrowAsync(id);
-        return product.ToResponse();
+        var ctx = await LoadTaxContextAsync(product.BranchId);
+        return MapWithEffectiveTax(product, ctx);
     }
 
     /// <summary>
@@ -58,7 +65,8 @@ public class ProductService : IProductService
         await _unitOfWork.Products.AddAsync(entity);
         await _unitOfWork.SaveChangesAsync();
 
-        return entity.ToResponse();
+        var ctx = await LoadTaxContextAsync(entity.BranchId);
+        return MapWithEffectiveTax(entity, ctx);
     }
 
     /// <summary>
@@ -96,7 +104,8 @@ public class ProductService : IProductService
         _unitOfWork.Products.Update(existing);
         await _unitOfWork.SaveChangesAsync();
 
-        return existing.ToResponse();
+        var ctx = await LoadTaxContextAsync(existing.BranchId);
+        return MapWithEffectiveTax(existing, ctx);
     }
 
     /// <summary>
@@ -113,7 +122,8 @@ public class ProductService : IProductService
         _unitOfWork.Products.Update(product);
         await _unitOfWork.SaveChangesAsync();
 
-        return product.ToResponse();
+        var ctx = await LoadTaxContextAsync(product.BranchId);
+        return MapWithEffectiveTax(product, ctx);
     }
 
     /// <summary>
@@ -124,6 +134,7 @@ public class ProductService : IProductService
     public async Task<ProductResponse> UpdateStockAsync(int id, string type, decimal quantity)
     {
         var product = await LoadWithRelationsOrThrowAsync(id);
+        var ctx = await LoadTaxContextAsync(product.BranchId);
 
         if (!product.TrackStock)
             throw new ValidationException("Product does not have stock tracking enabled");
@@ -153,7 +164,7 @@ public class ProductService : IProductService
         _unitOfWork.Products.Update(product);
         await _unitOfWork.SaveChangesAsync();
 
-        return product.ToResponse();
+        return MapWithEffectiveTax(product, ctx);
     }
 
     public async Task AddImageAsync(int productId, ProductImage image)
@@ -195,7 +206,10 @@ public class ProductService : IProductService
     public async Task<ProductResponse?> GetByBarcodeAsync(int branchId, string barcode)
     {
         var product = await _unitOfWork.Products.GetByBarcodeAsync(branchId, barcode);
-        return product?.ToResponse();
+        if (product == null) return null;
+
+        var ctx = await LoadTaxContextAsync(branchId);
+        return MapWithEffectiveTax(product, ctx);
     }
 
     #endregion
@@ -238,6 +252,40 @@ public class ProductService : IProductService
         if (existing != null && existing.Id != excludeProductId)
             throw new ValidationException("Este código de barras ya está registrado en otro producto");
     }
+
+    /// <summary>
+    /// Eager-loads the inputs the resolver needs once per request. Pass the
+    /// returned context through to <see cref="MapWithEffectiveTax"/> so each
+    /// product is resolved in-memory without extra round-trips.
+    /// </summary>
+    private async Task<TaxContext> LoadTaxContextAsync(int branchId)
+    {
+        var branch = (await _unitOfWork.Branches.GetAsync(
+            b => b.Id == branchId, "Business.DefaultTax"))
+            .FirstOrDefault()
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
+
+        var business = branch.Business
+            ?? throw new ValidationException(
+                $"Branch {branchId} is detached from any business — cannot resolve tax policy.");
+
+        var countryDefaults = (await _unitOfWork.Taxes.GetAsync(
+            t => t.CountryCode == business.CountryCode && t.IsDefault))
+            .ToList();
+
+        return new TaxContext(business, countryDefaults);
+    }
+
+    private ProductResponse MapWithEffectiveTax(Product product, TaxContext ctx)
+    {
+        var resolution = _taxResolver.ResolveTax(product, ctx.Business, ctx.CountryDefaults);
+        var response = product.ToResponse();
+        response.EffectiveTaxRate = resolution.Rate;
+        response.EffectiveIsTaxIncluded = product.IsTaxIncluded;
+        return response;
+    }
+
+    private sealed record TaxContext(Business Business, IReadOnlyList<Tax> CountryDefaults);
 
     #endregion
 }

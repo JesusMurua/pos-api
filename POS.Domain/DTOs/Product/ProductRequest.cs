@@ -45,8 +45,6 @@ public class ProductRequest
     [MaxLength(5)]
     public string? SatUnitCode { get; set; }
 
-    public decimal? TaxRate { get; set; }
-
     public bool IsTaxIncluded { get; set; } = true;
 
     public PrintingDestination PrintingDestination { get; set; } = PrintingDestination.Kitchen;

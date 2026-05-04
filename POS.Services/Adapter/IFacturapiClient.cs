@@ -51,6 +51,12 @@ public class FacturapiInvoiceItem
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TaxRate { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="UnitPrice"/> already contains the tax. Mirrored from
+    /// the frozen <see cref="POS.Domain.Models.OrderItem.IsTaxIncluded"/>.
+    /// </summary>
+    public bool IsTaxIncluded { get; set; }
 }
 
 public class FacturapiInvoiceRequest

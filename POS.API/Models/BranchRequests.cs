@@ -86,6 +86,13 @@ public class CreateBusinessRequest
     [Required]
     [Range(1, 4)]
     public int PrimaryMacroCategoryId { get; set; }
+
+    /// <summary>
+    /// Optional resting tax policy. When omitted, <c>BusinessService.CreateAsync</c>
+    /// auto-resolves the country's <c>IsDefault</c> tax row so the frontend never
+    /// needs to know about the tax catalog during onboarding.
+    /// </summary>
+    public int? DefaultTaxId { get; set; }
 }
 
 /// <summary>
@@ -100,6 +107,13 @@ public class BusinessSettingsDto
     public string? Address { get; set; }
 
     public string? Phone { get; set; }
+
+    /// <summary>
+    /// FK to the <see cref="POS.Domain.Models.Tax"/> row applied as the
+    /// resting policy. Surfaced so the Settings screen can let the operator
+    /// switch verticals without bouncing through the tax catalog.
+    /// </summary>
+    public int DefaultTaxId { get; set; }
 }
 
 /// <summary>
@@ -117,4 +131,11 @@ public class UpdateBusinessSettingsRequest
 
     [MaxLength(30)]
     public string? Phone { get; set; }
+
+    /// <summary>
+    /// Optional override for the resting tax policy. When null the service
+    /// leaves the existing <see cref="POS.Domain.Models.Business.DefaultTaxId"/>
+    /// untouched.
+    /// </summary>
+    public int? DefaultTaxId { get; set; }
 }

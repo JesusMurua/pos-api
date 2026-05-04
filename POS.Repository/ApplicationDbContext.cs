@@ -196,6 +196,11 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(b => b.OnboardingStatusId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(b => b.DefaultTax)
+                .WithMany()
+                .HasForeignKey(b => b.DefaultTaxId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<BusinessGiro>(entity =>
@@ -379,7 +384,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.Barcode).HasMaxLength(100);
             entity.Property(p => p.SatProductCode).HasMaxLength(10);
             entity.Property(p => p.SatUnitCode).HasMaxLength(5);
-            entity.Property(p => p.TaxRate).HasPrecision(5, 2);
             entity.Property(p => p.IsTaxIncluded).HasDefaultValue(true);
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
@@ -613,6 +617,7 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<OrderItem>(entity =>
         {
+            entity.Property(oi => oi.IsTaxIncluded).HasDefaultValue(true);
             entity.Property(i => i.OrderId)
                 .HasMaxLength(36);
 
@@ -1259,12 +1264,20 @@ public class ApplicationDbContext : DbContext
 
         #region Seed Data
 
+        modelBuilder.Entity<Tax>().HasData(
+            new Tax { Id = 1, CountryCode = "MX", Name = "IVA 16%", Rate = 0.16m, Code = "002", IsDefault = true },
+            new Tax { Id = 2, CountryCode = "MX", Name = "IVA 8%", Rate = 0.08m, Code = "002", IsDefault = false },
+            new Tax { Id = 3, CountryCode = "MX", Name = "IVA 0%", Rate = 0.00m, Code = "002", IsDefault = false },
+            new Tax { Id = 4, CountryCode = "MX", Name = "IEPS 8%", Rate = 0.08m, Code = "003", IsDefault = false }
+        );
+
         modelBuilder.Entity<Business>().HasData(new Business
         {
             Id = 1,
             Name = "POS Táctil Demo",
             PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage,
             PlanTypeId = PlanTypeIds.Basic,
+            DefaultTaxId = 1,
             IsActive = true,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });

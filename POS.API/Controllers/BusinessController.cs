@@ -78,7 +78,8 @@ public class BusinessController : BaseApiController
         {
             Name = request.Name,
             PlanTypeId = request.PlanTypeId,
-            PrimaryMacroCategoryId = request.PrimaryMacroCategoryId
+            PrimaryMacroCategoryId = request.PrimaryMacroCategoryId,
+            DefaultTaxId = request.DefaultTaxId ?? 0
         };
 
         var created = await _businessService.CreateAsync(business, UserId);
@@ -210,7 +211,8 @@ public class BusinessController : BaseApiController
         {
             BusinessName = settings.BusinessName,
             Address = settings.Address,
-            Phone = settings.Phone
+            Phone = settings.Phone,
+            DefaultTaxId = settings.DefaultTaxId
         });
     }
 
@@ -236,13 +238,15 @@ public class BusinessController : BaseApiController
             BusinessId,
             request.BusinessName,
             request.Address,
-            request.Phone);
+            request.Phone,
+            request.DefaultTaxId);
 
         return Ok(new BusinessSettingsDto
         {
             BusinessName = settings.BusinessName,
             Address = settings.Address,
-            Phone = settings.Phone
+            Phone = settings.Phone,
+            DefaultTaxId = settings.DefaultTaxId
         });
     }
 

@@ -38,9 +38,24 @@ public class BusinessService : IBusinessService
 
     /// <summary>
     /// Creates a new business with its matrix branch and assigns the owner to it.
+    /// If <see cref="Business.DefaultTaxId"/> is unset, auto-resolves it from the
+    /// country's <c>IsDefault</c> tax row so the NOT NULL constraint never reaches
+    /// the frontend.
     /// </summary>
     public async Task<Business> CreateAsync(Business business, int ownerUserId)
     {
+        if (business.DefaultTaxId == 0)
+        {
+            var countryDefault = (await _unitOfWork.Taxes.GetAsync(
+                t => t.CountryCode == business.CountryCode && t.IsDefault))
+                .FirstOrDefault()
+                ?? throw new ValidationException(
+                    $"No default tax is configured for country '{business.CountryCode}'. " +
+                    "Seed the Tax catalog before creating a business in that country.");
+
+            business.DefaultTaxId = countryDefault.Id;
+        }
+
         await _unitOfWork.Business.AddAsync(business);
         await _unitOfWork.SaveChangesAsync();
 
@@ -155,13 +170,14 @@ public class BusinessService : IBusinessService
         {
             BusinessName = business.Name,
             Address = branch.Address,
-            Phone = branch.Phone
+            Phone = branch.Phone,
+            DefaultTaxId = business.DefaultTaxId
         };
     }
 
     /// <inheritdoc />
     public async Task<BusinessSettingsResult> UpdateSettingsAsync(
-        int businessId, string businessName, string? address, string? phone)
+        int businessId, string businessName, string? address, string? phone, int? defaultTaxId)
     {
         var business = await LoadBusinessOrThrowAsync(businessId);
         var branch = ResolvePrimaryBranch(business);
@@ -169,6 +185,20 @@ public class BusinessService : IBusinessService
         business.Name = businessName;
         branch.Address = address;
         branch.Phone = phone;
+
+        if (defaultTaxId.HasValue && defaultTaxId.Value != business.DefaultTaxId)
+        {
+            var tax = await _unitOfWork.Taxes.GetByIdAsync(defaultTaxId.Value)
+                ?? throw new ValidationException(
+                    $"Tax with id {defaultTaxId.Value} does not exist.");
+
+            if (tax.CountryCode != business.CountryCode)
+                throw new ValidationException(
+                    $"Tax '{tax.Name}' belongs to country '{tax.CountryCode}' and cannot " +
+                    $"be set on a business registered in '{business.CountryCode}'.");
+
+            business.DefaultTaxId = tax.Id;
+        }
 
         _unitOfWork.Business.Update(business);
         _unitOfWork.Branches.Update(branch);
@@ -178,7 +208,8 @@ public class BusinessService : IBusinessService
         {
             BusinessName = business.Name,
             Address = branch.Address,
-            Phone = branch.Phone
+            Phone = branch.Phone,
+            DefaultTaxId = business.DefaultTaxId
         };
     }
 

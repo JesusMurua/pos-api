@@ -1,3 +1,9 @@
+> **SUPERSEDED by AUDIT-051 + Slice 1 implementation** (2026-05-03).
+> The `0.16m` fallbacks, `Product.TaxRate` scalar, and `OrderItem.TaxRatePercent`/`TaxAmountCents`
+> legacy fields described below have been purged. The relational `OrderItemTax` engine
+> plus `Business.DefaultTaxId` are the single source of truth. Remaining open items
+> (CFDI discount node, rounding, Stripe IVA) survive untouched.
+
 # AUDIT-014: Tax (IVA) & Fiscal Compliance — Gap Analysis
 
 **Date:** 2026-04-07

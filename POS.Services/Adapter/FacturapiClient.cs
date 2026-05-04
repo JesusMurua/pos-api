@@ -68,7 +68,7 @@ public class FacturapiClient : IFacturapiClient
                     unit_key = i.UnitCode,
                     unit_name = "Pieza",
                     price = i.UnitPrice,
-                    tax_included = true,
+                    tax_included = i.IsTaxIncluded,
                     taxes = new[]
                     {
                         new { type = "IVA", rate = i.TaxRate }
@@ -115,7 +115,7 @@ public class FacturapiClient : IFacturapiClient
                     unit_key = i.UnitCode,
                     unit_name = "Pieza",
                     price = i.UnitPrice,
-                    tax_included = true,
+                    tax_included = i.IsTaxIncluded,
                     taxes = new[]
                     {
                         new { type = "IVA", rate = i.TaxRate }

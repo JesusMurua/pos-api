@@ -202,13 +202,22 @@ public class AuthService : IAuthService
         // fall back in every per-day query.
         var resolvedTimeZoneId = ResolveTimeZoneId(request.TimeZoneId);
 
+        var countryCode = request.CountryCode ?? "MX";
+        var defaultTax = (await _unitOfWork.Taxes.GetAsync(
+            t => t.CountryCode == countryCode && t.IsDefault))
+            .FirstOrDefault()
+            ?? throw new ValidationException(
+                $"No default tax is configured for country '{countryCode}'. " +
+                "Seed the Tax catalog before registering a business in that country.");
+
         // ── Build entire entity graph with navigation properties ──
         var business = new Business
         {
             Name = request.BusinessName,
             PrimaryMacroCategoryId = primaryMacro.Id,
             PlanTypeId = planTypeId,
-            CountryCode = request.CountryCode ?? "MX",
+            CountryCode = countryCode,
+            DefaultTaxId = defaultTax.Id,
             TrialEndsAt = trialEndsAt,
             TrialUsed = false,
             OnboardingStatusId = 1,

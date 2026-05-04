@@ -46,6 +46,7 @@ public class UnitOfWork : IUnitOfWork
     private IInvoiceRepository? _invoices;
     private IDeviceRepository? _devices;
     private ICashRegisterLinkCodeRepository? _cashRegisterLinkCodes;
+    private ITaxRepository? _taxes;
 
     public UnitOfWork(ApplicationDbContext context)
     {
@@ -165,6 +166,9 @@ public class UnitOfWork : IUnitOfWork
 
     public ICashRegisterLinkCodeRepository CashRegisterLinkCodes =>
         _cashRegisterLinkCodes ??= new CashRegisterLinkCodeRepository(_context);
+
+    public ITaxRepository Taxes =>
+        _taxes ??= new TaxRepository(_context);
 
     public async Task<int> SaveChangesAsync()
     {

@@ -16,19 +16,22 @@ public class OrderService : IOrderService
     private readonly IPromotionService _promotionService;
     private readonly IInventoryService _inventoryService;
     private readonly ICustomerService _customerService;
+    private readonly ITaxResolverService _taxResolver;
 
     public OrderService(
         IUnitOfWork unitOfWork,
         IPushNotificationService pushService,
         IPromotionService promotionService,
         IInventoryService inventoryService,
-        ICustomerService customerService)
+        ICustomerService customerService,
+        ITaxResolverService taxResolver)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
         _promotionService = promotionService;
         _inventoryService = inventoryService;
         _customerService = customerService;
+        _taxResolver = taxResolver;
     }
 
     #region Public API Methods
@@ -152,9 +155,9 @@ public class OrderService : IOrderService
             }
         }
 
-        // ── Phase 2a-fiscal: Freeze SAT fields from Product onto OrderItem ──
-        // Batch-fetch all products referenced by new orders (with their taxes),
-        // then enrich each item with immutable fiscal data and OrderItemTax snapshots.
+        // ── Phase 2a-fiscal: Freeze SAT fields and create OrderItemTax snapshots ──
+        // Batch-fetch every input once, then process in-memory per item.
+        // Snapshot-only — there are no legacy scalar tax fields on OrderItem.
         if (ordersToInsert.Count > 0)
         {
             var allProductIds = ordersToInsert
@@ -168,63 +171,111 @@ public class OrderService : IOrderService
                 "ProductTaxes.Tax"))
                 .ToDictionary(p => p.Id);
 
+            // The sync batch is JWT-scoped to a single business via branchId;
+            // load that business once with its DefaultTax, plus the country's
+            // IsDefault tax catalog rows for the resolver fallback chain.
+            var business = (await _unitOfWork.Branches.GetAsync(
+                b => b.Id == branchId, "Business.DefaultTax"))
+                .FirstOrDefault()?.Business
+                ?? throw new ValidationException(
+                    $"Branch {branchId} has no business — cannot resolve tax policy.");
+
+            var countryDefaults = (await _unitOfWork.Taxes.GetAsync(
+                t => t.CountryCode == business.CountryCode && t.IsDefault))
+                .ToList();
+
+            // ── Slice 2: batch-validate every distinct OverrideTaxId. ──
+            // Frontend trust ends here: an unknown override id fails the whole
+            // sync batch loudly rather than silently falling back to the chain.
+            var insertedRequestsById = requests
+                .Where(r => ordersToInsert.Any(o => o.Id == r.Id))
+                .ToDictionary(r => r.Id);
+
+            var overrideTaxIds = insertedRequestsById.Values
+                .SelectMany(r => r.Items)
+                .Where(i => i.OverrideTaxId.HasValue)
+                .Select(i => i.OverrideTaxId!.Value)
+                .Distinct().ToList();
+
+            var overrideTaxMap = overrideTaxIds.Count == 0
+                ? new Dictionary<int, Tax>()
+                : (await _unitOfWork.Taxes.GetAsync(t => overrideTaxIds.Contains(t.Id)))
+                    .ToDictionary(t => t.Id);
+
+            var missingOverrides = overrideTaxIds
+                .Where(id => !overrideTaxMap.ContainsKey(id)).ToList();
+            if (missingOverrides.Count > 0)
+                throw new ValidationException(
+                    $"OverrideTaxId(s) not found in the Tax catalog: " +
+                    $"{string.Join(", ", missingOverrides)}.");
+
             foreach (var order in ordersToInsert)
             {
                 if (order.Items == null) continue;
-                foreach (var item in order.Items)
+                if (!insertedRequestsById.TryGetValue(order.Id, out var origReq)) continue;
+
+                // MapToOrder preserves request item order, so the two collections
+                // zip 1:1. Materializing as List avoids ICollection indexing quirks.
+                var orderItems = order.Items.ToList();
+                var origItems = origReq.Items;
+
+                for (var idx = 0; idx < orderItems.Count; idx++)
                 {
-                    if (productFiscalMap.TryGetValue(item.ProductId, out var product))
+                    var item = orderItems[idx];
+                    var origItem = origItems[idx];
+                    productFiscalMap.TryGetValue(item.ProductId, out var product);
+
+                    // Server-Wins trust policy: Product.IsTaxIncluded wins when
+                    // a catalogued product exists; the client flag is honored
+                    // only for custom keypad items.
+                    item.IsTaxIncluded = product != null
+                        ? product.IsTaxIncluded
+                        : (origItem.IsTaxIncluded ?? true);
+
+                    if (product != null)
                     {
                         item.SatProductCode = product.SatProductCode;
                         item.SatUnitCode = product.SatUnitCode;
+                    }
 
-                        var lineTotal = item.UnitPriceCents * item.Quantity;
+                    var lineTotal = item.UnitPriceCents * item.Quantity;
 
-                        // New relational tax engine: create OrderItemTax snapshots
-                        if (product.ProductTaxes.Count > 0)
+                    // ── Slice 2: explicit override bypasses the resolver. ──
+                    // The resolver's signature stays pure; OverrideTaxId is
+                    // OrderService's concern, not the resolver's.
+                    if (origItem.OverrideTaxId.HasValue)
+                    {
+                        var overrideTax = overrideTaxMap[origItem.OverrideTaxId.Value];
+                        AppendTaxSnapshot(item, overrideTax, lineTotal);
+                        continue;
+                    }
+
+                    // No override and no product → no way to resolve. Custom
+                    // items without an OverrideTaxId stay tax-exempt.
+                    if (product == null) continue;
+
+                    if (product.ProductTaxes is { Count: > 0 })
+                    {
+                        // Multi-tax products (e.g. IVA + IEPS): one snapshot
+                        // per associated Tax row so the CFDI breaks down per
+                        // impuesto.
+                        foreach (var pt in product.ProductTaxes.Where(pt => pt.Tax != null))
                         {
-                            int itemTaxTotal = 0;
-                            foreach (var pt in product.ProductTaxes)
-                            {
-                                if (pt.Tax == null) continue;
-
-                                var taxCents = product.IsTaxIncluded
-                                    ? TaxCalculator.CalculateInclusiveTax(lineTotal, pt.Tax.Rate)
-                                    : TaxCalculator.CalculateExclusiveTax(lineTotal, pt.Tax.Rate);
-
-                                item.AppliedTaxes.Add(new OrderItemTax
-                                {
-                                    TaxId = pt.Tax.Id,
-                                    TaxName = pt.Tax.Name,
-                                    TaxRate = pt.Tax.Rate,
-                                    TaxAmountCents = taxCents
-                                });
-
-                                itemTaxTotal += taxCents;
-                            }
-
-                            // Legacy fields — keep in sync for backward compatibility
-                            item.TaxRatePercent = product.ProductTaxes
-                                .Where(pt => pt.Tax != null)
-                                .Sum(pt => pt.Tax!.Rate);
-                            item.TaxAmountCents = itemTaxTotal;
+                            AppendTaxSnapshot(item, pt.Tax!, lineTotal);
                         }
-                        else
-                        {
-                            // Fallback: product has no ProductTaxes yet (legacy data).
-                            // Use the old TaxRate scalar field.
-                            item.TaxRatePercent = product.TaxRate;
-                            var taxRate = product.TaxRate ?? 0.16m;
-                            if (taxRate > 0)
-                            {
-                                item.TaxAmountCents = TaxCalculator.CalculateInclusiveTax(lineTotal, taxRate);
-                            }
-                        }
+                    }
+                    else
+                    {
+                        // Fall back through Business.DefaultTax → country IsDefault → exempt.
+                        var resolution = _taxResolver.ResolveTax(product, business, countryDefaults);
+                        if (resolution.Tax == null || resolution.Rate <= 0m) continue;
+                        AppendTaxSnapshot(item, resolution.Tax, lineTotal);
                     }
                 }
 
-                // Populate order-level tax total
-                order.TaxAmountCents = order.Items.Sum(i => i.TaxAmountCents);
+                order.TaxAmountCents = order.Items
+                    .SelectMany(i => i.AppliedTaxes)
+                    .Sum(t => t.TaxAmountCents);
             }
         }
 
@@ -1420,6 +1471,31 @@ public class OrderService : IOrderService
         };
     }
 
+    /// <summary>
+    /// Computes the tax cents for <paramref name="item"/> at <paramref name="lineTotalCents"/>
+    /// against <paramref name="tax"/> and appends an <see cref="OrderItemTax"/> snapshot when
+    /// the resulting amount is positive. The inclusivity is read from the OrderItem (frozen
+    /// at sale time per the Server-Wins trust policy).
+    /// </summary>
+    private static void AppendTaxSnapshot(OrderItem item, Tax tax, int lineTotalCents)
+    {
+        if (tax.Rate <= 0m) return;
+
+        var taxCents = item.IsTaxIncluded
+            ? TaxCalculator.CalculateInclusiveTax(lineTotalCents, tax.Rate)
+            : TaxCalculator.CalculateExclusiveTax(lineTotalCents, tax.Rate);
+
+        if (taxCents == 0) return;
+
+        item.AppliedTaxes.Add(new OrderItemTax
+        {
+            TaxId = tax.Id,
+            TaxName = tax.Name,
+            TaxRate = tax.Rate,
+            TaxAmountCents = taxCents
+        });
+    }
+
     private static void RecalculateTotals(Order order)
     {
         if (order.Items == null) return;
@@ -1429,7 +1505,9 @@ public class OrderService : IOrderService
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
         if (order.TotalCents < 0) order.TotalCents = 0;
-        order.TaxAmountCents = order.Items.Sum(i => i.TaxAmountCents);
+        order.TaxAmountCents = order.Items
+            .SelectMany(i => i.AppliedTaxes)
+            .Sum(t => t.TaxAmountCents);
     }
 
     private async Task AutoSeatReservationAsync(int tableId, int branchId)

@@ -42,6 +42,14 @@ public partial class Business
     [MaxLength(2)]
     public string CountryCode { get; set; } = "MX";
 
+    /// <summary>
+    /// FK to the <see cref="Tax"/> row applied as the resting policy for this tenant.
+    /// Drives the tax resolver fallback chain when a product has no explicit
+    /// <see cref="ProductTax"/> association. Required at create time — onboarding
+    /// auto-resolves it from the country's <c>IsDefault</c> tax row.
+    /// </summary>
+    public int DefaultTaxId { get; set; }
+
     #region Fiscal / Invoicing Fields
 
     /// <summary>RFC of the business (tax ID). 12 chars for companies, 13 for individuals.</summary>
@@ -86,6 +94,8 @@ public partial class Business
     public PlanTypeCatalog? PlanTypeCatalog { get; set; }
 
     public OnboardingStatusCatalog? OnboardingStatus { get; set; }
+
+    public virtual Tax? DefaultTax { get; set; }
 
     public virtual ICollection<BusinessGiro> BusinessGiros { get; set; } = new List<BusinessGiro>();
 

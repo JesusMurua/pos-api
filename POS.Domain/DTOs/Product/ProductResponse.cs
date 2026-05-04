@@ -38,9 +38,20 @@ public class ProductResponse
 
     public string? SatUnitCode { get; set; }
 
-    public decimal? TaxRate { get; set; }
-
     public bool IsTaxIncluded { get; set; }
+
+    /// <summary>
+    /// Resolved tax rate for this product at read time. Always populated by
+    /// <see cref="POS.Services.IService.ITaxResolverService"/> so the frontend
+    /// never needs to hardcode a fallback. <c>0</c> means tax-exempt.
+    /// </summary>
+    public decimal EffectiveTaxRate { get; set; }
+
+    /// <summary>
+    /// Mirrors <see cref="POS.Domain.Models.Product.IsTaxIncluded"/> verbatim,
+    /// regardless of where <see cref="EffectiveTaxRate"/> was sourced from.
+    /// </summary>
+    public bool EffectiveIsTaxIncluded { get; set; }
 
     public PrintingDestination PrintingDestination { get; set; }
 

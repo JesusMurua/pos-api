@@ -44,6 +44,7 @@ public static class ServiceDependencies
         services.AddScoped<IPrintJobService, PrintJobService>();
         services.AddScoped<ICatalogService, CatalogService>();
         services.AddScoped<IFeatureGateService, FeatureGateService>();
+        services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();
         services.AddSingleton<DataProtectionHelper>();

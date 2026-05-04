@@ -75,6 +75,25 @@ public class SyncOrderItemRequest
 
     /// <summary>Vertical-specific JSON payload (e.g. <c>{"BeneficiaryCustomerId": 123}</c> for memberships).</summary>
     public string? Metadata { get; set; }
+
+    /// <summary>
+    /// Optional FK to <see cref="POS.Domain.Models.Tax"/> declaring the exact tax
+    /// rule the client wants applied to this line. Required when the line has no
+    /// catalogued <c>ProductId</c> (custom keypad items) and useful when the
+    /// frontend wants to freeze a specific rate against rate-change races.
+    /// When supplied, the backend bypasses the resolver chain and uses this Tax
+    /// directly. The id is validated against the Tax catalog — invalid ids fail
+    /// the entire sync batch.
+    /// </summary>
+    public int? OverrideTaxId { get; set; }
+
+    /// <summary>
+    /// Optional client-declared tax-inclusion flag. Only honored for custom
+    /// items (no catalogued <c>ProductId</c>). When a Product exists, the
+    /// server uses <see cref="POS.Domain.Models.Product.IsTaxIncluded"/> and
+    /// silently ignores this value (Server-Wins trust policy).
+    /// </summary>
+    public bool? IsTaxIncluded { get; set; }
 }
 
 public class SyncPaymentRequest
