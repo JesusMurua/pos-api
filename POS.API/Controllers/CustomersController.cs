@@ -1,8 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 using POS.Services.IService;
+using NotFoundException = POS.Domain.Exceptions.NotFoundException;
+using ValidationException = POS.Domain.Exceptions.ValidationException;
 
 namespace POS.API.Controllers;
 
@@ -258,6 +262,116 @@ public class CustomersController : BaseApiController
         await _customerService.RecalculateBalancesAsync(id);
         return Ok(new { success = true });
     }
+
+    #region BDD-019 P4 — Customer-scoped read endpoints
+
+    /// <summary>
+    /// Returns paginated orders for the given customer scoped to the caller's
+    /// tenant. Pure SQL projection — no entity hydration, no JSON columns
+    /// loaded. Sorted by <c>CreatedAt</c> descending (most recent first).
+    /// </summary>
+    /// <param name="id">Customer identifier.</param>
+    /// <param name="page">1-based page index. Default 1. Values &lt; 1 produce 400.</param>
+    /// <param name="pageSize">Page size. Must be in [1, 100]; values &gt; 100 are silently capped at 100.</param>
+    /// <param name="from">Optional inclusive lower bound on <c>CreatedAt</c> (UTC).</param>
+    /// <param name="to">Optional inclusive upper bound on <c>CreatedAt</c> (UTC). Must satisfy <c>from &lt;= to</c>.</param>
+    /// <response code="200">Returns the paginated order rows.</response>
+    /// <response code="400">Invalid <c>page</c>/<c>pageSize</c> (<c>INVALID_PAGE_SIZE</c>) or invalid date range (<c>INVALID_DATE_RANGE</c>).</response>
+    /// <response code="404">Returned if the customer does not exist OR if the customer belongs to a different tenant (Information Hiding — prevents enumeration).</response>
+    [HttpGet("{id}/orders")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(PageData<CustomerOrderRowDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetOrders(
+        int id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        try
+        {
+            // Validate query params first (cheap, fail-fast).
+            if (page < 1)
+                throw new ValidationException("INVALID_PAGE_SIZE: page must be >= 1.");
+            if (pageSize < 1)
+                throw new ValidationException("INVALID_PAGE_SIZE: pageSize must be >= 1.");
+            if (pageSize > 100) pageSize = 100;
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ValidationException("INVALID_DATE_RANGE: 'from' must be <= 'to'.");
+
+            var result = await _customerService.GetOrdersAsync(id, BusinessId, page, pageSize, from, to);
+            return Ok(result);
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
+        catch (ValidationException ex) { return BadRequest(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
+    /// <summary>
+    /// Returns the customer's memberships sorted by <c>ValidUntil</c> desc.
+    /// Lazy-Expired rows (DB <c>Status = Active</c> but <c>ValidUntil &lt; UtcNow</c>)
+    /// surface with <c>Status = "Expired"</c> in the projection per BDD-019 §6.1.2,
+    /// and the optional <paramref name="status"/> filter respects that semantic.
+    /// </summary>
+    /// <remarks>
+    /// Compound filter logic when <paramref name="status"/> is supplied:
+    /// <list type="bullet">
+    ///   <item><c>Active</c> → only rows with stored <c>Status = Active</c> AND <c>ValidUntil &gt;= UtcNow</c> (excludes lazy-Expired).</item>
+    ///   <item><c>Expired</c> → rows with stored <c>Status = Expired</c> OR (<c>Status = Active</c> AND <c>ValidUntil &lt; UtcNow</c>) (includes lazy-Expired).</item>
+    ///   <item><c>Frozen</c> → rows with stored <c>Status = Frozen</c>.</item>
+    ///   <item><c>Cancelled</c> → rows with stored <c>Status = Cancelled</c>.</item>
+    /// </list>
+    /// Null / empty / whitespace returns all memberships unfiltered.
+    /// </remarks>
+    /// <param name="id">Customer identifier.</param>
+    /// <param name="status">Optional filter: <c>Active</c>, <c>Expired</c>, <c>Frozen</c>, <c>Cancelled</c> (case-insensitive).</param>
+    /// <response code="200">Returns the membership list (may be empty).</response>
+    /// <response code="400">Unknown <paramref name="status"/> value (<c>INVALID_STATUS</c>).</response>
+    /// <response code="404">Returned if the customer does not exist OR if the customer belongs to a different tenant (Information Hiding — prevents enumeration).</response>
+    [HttpGet("{id}/memberships")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(IEnumerable<CustomerMembershipDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMemberships(int id, [FromQuery] string? status = null)
+    {
+        try
+        {
+            var result = await _customerService.GetMembershipsAsync(id, BusinessId, status);
+            return Ok(result);
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
+        catch (ValidationException ex) { return BadRequest(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
+    /// <summary>
+    /// Returns aggregate stats (<c>TotalSpentCents</c>, <c>OrderCount</c>,
+    /// <c>LastOrderAt</c>) for the given customer. Computed via a single
+    /// DB-level aggregation (SUM + COUNT + MAX) over paid, non-cancelled orders.
+    /// Returns zeros / null for customers without qualifying orders.
+    /// </summary>
+    /// <param name="id">Customer identifier.</param>
+    /// <response code="200">Returns the aggregated stats.</response>
+    /// <response code="404">Returned if the customer does not exist OR if the customer belongs to a different tenant (Information Hiding — prevents enumeration).</response>
+    [HttpGet("{id}/stats")]
+    [Authorize(Roles = "Owner,Manager,Cashier")]
+    [ProducesResponseType(typeof(CustomerStatsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetStats(int id)
+    {
+        try
+        {
+            var result = await _customerService.GetStatsAsync(id, BusinessId);
+            return Ok(result);
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
+    #endregion
 }
 
 /// <summary>

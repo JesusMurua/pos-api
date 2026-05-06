@@ -1,5 +1,7 @@
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Enums;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 
 namespace POS.Repository.IRepository;
 
@@ -115,4 +117,29 @@ public interface IOrderRepository : IGenericRepository<Order>
     /// Uses AsNoTracking + Select for SQL-level projection — no .Include().
     /// </summary>
     Task<List<OrphanedOrderDto>> GetOrphanedAsync(int branchId);
+
+    // ──────────────────────────────────────────
+    // BDD-019 P4: Customer-scoped read endpoints
+    // ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns paginated orders for a single customer projected as
+    /// <see cref="CustomerOrderRowDto"/>. Pure SQL projection: no entity
+    /// hydration and no JSON columns loaded. Sorted by <c>CreatedAt</c> desc.
+    /// </summary>
+    /// <param name="customerId">Owner of the orders (caller must have validated tenant ownership).</param>
+    /// <param name="page">1-based page index.</param>
+    /// <param name="pageSize">Page size, expected to be in [1, 100].</param>
+    /// <param name="from">Inclusive lower bound on <c>CreatedAt</c> (UTC). Null = no lower bound.</param>
+    /// <param name="to">Inclusive upper bound on <c>CreatedAt</c> (UTC). Null = no upper bound.</param>
+    Task<PageData<CustomerOrderRowDto>> GetCustomerOrdersPagedAsync(
+        int customerId, int page, int pageSize, DateTime? from, DateTime? to);
+
+    /// <summary>
+    /// Returns aggregated stats for the given customer using a single
+    /// DB-level aggregation (SUM + COUNT + MAX). Filters to paid,
+    /// non-cancelled orders. Null SUM/MAX are coalesced (zero / null) so the
+    /// projection materializes safely for customers with no orders.
+    /// </summary>
+    Task<CustomerStatsDto> GetCustomerStatsAsync(int customerId);
 }

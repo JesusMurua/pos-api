@@ -39,4 +39,13 @@ public class CustomerRepository : GenericRepository<Customer>, ICustomerReposito
         return await _context.Customers
             .FirstOrDefaultAsync(c => c.BusinessId == businessId && c.Phone == phone);
     }
+
+    public async Task<int?> GetBusinessIdAsync(int customerId)
+    {
+        return await _context.Customers
+            .AsNoTracking()
+            .Where(c => c.Id == customerId)
+            .Select(c => (int?)c.BusinessId)
+            .FirstOrDefaultAsync();
+    }
 }

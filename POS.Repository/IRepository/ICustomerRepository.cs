@@ -18,4 +18,13 @@ public interface ICustomerRepository : IGenericRepository<Customer>
     /// Gets a customer by phone number within a business.
     /// </summary>
     Task<Customer?> GetByPhoneAsync(int businessId, string phone);
+
+    /// <summary>
+    /// Lightweight tenant-resolution lookup. Returns the <c>BusinessId</c> of the
+    /// given customer without hydrating the full entity (avoids loading the
+    /// strongly-typed <c>Metadata</c> and <c>ExtensionData</c> jsonb columns for
+    /// what is effectively an ownership probe). Returns <c>null</c> when the
+    /// customer does not exist.
+    /// </summary>
+    Task<int?> GetBusinessIdAsync(int customerId);
 }

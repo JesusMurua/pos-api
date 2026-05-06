@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Repository.IRepository;
+using POS.Repository.Utils;
 
 namespace POS.Repository.Repository;
 
@@ -527,6 +529,86 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             throw new ArgumentException("endUtc must have DateTimeKind.Utc", nameof(endUtc));
         if (endUtc <= startUtc)
             throw new ArgumentException("endUtc must be strictly greater than startUtc", nameof(endUtc));
+    }
+
+    #endregion
+
+    #region BDD-019 P4 — Customer-scoped read endpoints
+
+    /// <inheritdoc />
+    public async Task<PageData<CustomerOrderRowDto>> GetCustomerOrdersPagedAsync(
+        int customerId, int page, int pageSize, DateTime? from, DateTime? to)
+    {
+        var query = _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId);
+
+        if (from.HasValue)
+            query = query.Where(o => o.CreatedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(o => o.CreatedAt <= to.Value);
+
+        // Count BEFORE projection so EF generates a single COUNT(*) without
+        // hauling the columns of the page rows.
+        var totalCount = await query.CountAsync();
+
+        var rows = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(o => new CustomerOrderRowDto
+            {
+                OrderId = o.Id,
+                OrderNumber = o.OrderNumber,
+                CreatedAt = o.CreatedAt,
+                TotalCents = o.TotalCents,
+                ItemCount = o.Items!.Count(),
+                BranchId = o.BranchId,
+                BranchName = o.Branch != null ? o.Branch.Name : string.Empty,
+                IsPaid = o.IsPaid,
+                CancellationReason = o.CancellationReason
+            })
+            .ToListAsync();
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return new PageData<CustomerOrderRowDto>
+        {
+            Data = rows,
+            RowsCount = totalCount,
+            TotalPages = totalPages,
+            CurrentPage = page
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<CustomerStatsDto> GetCustomerStatsAsync(int customerId)
+    {
+        // Single SQL aggregation. Nullable casts protect against the no-rows
+        // case where SUM/MAX would otherwise materialize as NULL → exception.
+        var query = _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId
+                     && o.IsPaid
+                     && o.CancellationReason == null);
+
+        var stats = await query
+            .GroupBy(_ => 1)
+            .Select(g => new CustomerStatsDto
+            {
+                TotalSpentCents = g.Sum(o => (int?)o.TotalCents) ?? 0,
+                OrderCount = g.Count(),
+                LastOrderAt = g.Max(o => (DateTime?)o.CreatedAt)
+            })
+            .FirstOrDefaultAsync();
+
+        return stats ?? new CustomerStatsDto
+        {
+            TotalSpentCents = 0,
+            OrderCount = 0,
+            LastOrderAt = null
+        };
     }
 
     #endregion
