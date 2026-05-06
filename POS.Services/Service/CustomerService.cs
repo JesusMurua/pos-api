@@ -1,7 +1,9 @@
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
+using POS.Repository.Utils;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
@@ -344,33 +346,6 @@ public class CustomerService : ICustomerService
     }
 
     /// <summary>
-    /// Extends a customer's membership validity. Stacks on top of an active period or starts
-    /// from today if the membership is missing/expired.
-    /// </summary>
-    public async Task ExtendMembershipAsync(int customerId, int durationDays, string orderId)
-    {
-        if (durationDays <= 0)
-            throw new ValidationException("Duration days must be greater than zero.");
-
-        var customer = await GetByIdAsync(customerId);
-
-        if (!customer.IsActive)
-            throw new ValidationException("Customer is inactive.");
-
-        var now = DateTime.UtcNow;
-        var baseDate = customer.MembershipValidUntil.HasValue && customer.MembershipValidUntil.Value > now
-            ? customer.MembershipValidUntil.Value
-            : now;
-
-        customer.MembershipValidUntil = baseDate.AddDays(durationDays);
-        customer.LastPaymentAt = now;
-        customer.UpdatedAt = now;
-
-        _unitOfWork.Customers.Update(customer);
-        await _unitOfWork.SaveChangesAsync();
-    }
-
-    /// <summary>
     /// Links a CRM Customer to an existing FiscalCustomer.
     /// Validates both belong to the same business.
     /// </summary>
@@ -388,6 +363,51 @@ public class CustomerService : ICustomerService
         fiscalCustomer.UpdatedAt = DateTime.UtcNow;
         _unitOfWork.FiscalCustomers.Update(fiscalCustomer);
         await _unitOfWork.SaveChangesAsync();
+    }
+
+    #endregion
+
+    #region BDD-019 P4 — Customer-scoped read endpoints
+
+    /// <inheritdoc />
+    public async Task<PageData<CustomerOrderRowDto>> GetOrdersAsync(
+        int customerId, int callerBusinessId, int page, int pageSize, DateTime? from, DateTime? to)
+    {
+        await EnsureCustomerOwnedByCallerAsync(customerId, callerBusinessId);
+        return await _unitOfWork.Orders.GetCustomerOrdersPagedAsync(customerId, page, pageSize, from, to);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<CustomerMembershipDto>> GetMembershipsAsync(
+        int customerId, int callerBusinessId, string? status)
+    {
+        await EnsureCustomerOwnedByCallerAsync(customerId, callerBusinessId);
+        return await _unitOfWork.CustomerMemberships.GetByCustomerAsync(customerId, status);
+    }
+
+    /// <inheritdoc />
+    public async Task<CustomerStatsDto> GetStatsAsync(int customerId, int callerBusinessId)
+    {
+        await EnsureCustomerOwnedByCallerAsync(customerId, callerBusinessId);
+        return await _unitOfWork.Orders.GetCustomerStatsAsync(customerId);
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    /// <summary>
+    /// Tenant-ownership probe with information-hiding semantics: a customer that
+    /// does not exist <em>or</em> belongs to a different business both surface as
+    /// <see cref="NotFoundException"/>. Prevents tenant-enumeration attacks
+    /// (BDD-019 audit A6).
+    /// </summary>
+    private async Task EnsureCustomerOwnedByCallerAsync(int customerId, int callerBusinessId)
+    {
+        var ownerBusinessId = await _unitOfWork.Customers.GetBusinessIdAsync(customerId);
+
+        if (ownerBusinessId is null || ownerBusinessId.Value != callerBusinessId)
+            throw new NotFoundException($"Customer with id {customerId} not found.");
     }
 
     #endregion

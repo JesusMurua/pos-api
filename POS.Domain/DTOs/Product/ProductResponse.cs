@@ -1,4 +1,5 @@
 using POS.Domain.Enums;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.DTOs.Product;
 
@@ -56,11 +57,12 @@ public class ProductResponse
     public PrintingDestination PrintingDestination { get; set; }
 
     /// <summary>
-    /// Vertical-specific extensibility payload (JSON). Mirrors the column on
-    /// the entity so the frontend can hydrate niche fields (e.g. Gym
-    /// memberships: <c>{"MembershipDurationDays": 30}</c>) on catalog sync.
+    /// Strongly-typed vertical-specific payload mirroring
+    /// <see cref="POS.Domain.Models.Product.Metadata"/>. Frontend hydrates
+    /// niche fields (e.g. <see cref="ProductMetadata.MembershipDurationDays"/>)
+    /// directly without parsing raw JSON.
     /// </summary>
-    public string? Metadata { get; set; }
+    public ProductMetadata? Metadata { get; set; }
 
     public List<ProductSizeResponse> Sizes { get; set; } = new();
 

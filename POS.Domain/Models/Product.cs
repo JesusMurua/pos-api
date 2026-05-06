@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
-
 using POS.Domain.Interfaces;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
 
@@ -68,10 +68,20 @@ public partial class Product : IBranchScoped
     #endregion
 
     /// <summary>
-    /// Vertical-specific extensibility payload (JSON). Universal fields stay as strict columns;
-    /// niche fields per vertical (e.g. Gym memberships: <c>{"MembershipDurationDays": 30}</c>) live here.
+    /// Vertical-specific extensibility payload, persisted as PostgreSQL <c>jsonb</c>
+    /// via EF Core 9 owned-type JSON mapping. Universal fields stay as strict
+    /// columns; niche fields per vertical (e.g. gym memberships'
+    /// <see cref="ProductMetadata.MembershipDurationDays"/>) live here as
+    /// strict typed properties.
     /// </summary>
-    public string? Metadata { get; set; }
+    public ProductMetadata? Metadata { get; set; }
+
+    /// <summary>
+    /// Dynamic tenant-specific data. CRITICAL: Lifecycle is managed by EF.
+    /// Access RootElement for reads, but CLONE/COPY values if the entity will
+    /// be detached/disposed to avoid ObjectDisposedException.
+    /// </summary>
+    public System.Text.Json.JsonDocument? ExtensionData { get; set; }
 
     public virtual Category? Category { get; set; }
 

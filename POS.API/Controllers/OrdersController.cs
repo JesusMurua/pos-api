@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Services.IService;
+using PaymentMetadataModel = POS.Domain.Models.Metadata.PaymentMetadata;
 
 namespace POS.API.Controllers;
 
@@ -231,7 +233,8 @@ public class OrdersController : BaseApiController
             Reference = request.Reference,
             PaymentProvider = request.PaymentProvider,
             ExternalTransactionId = request.ExternalTransactionId,
-            PaymentMetadata = request.PaymentMetadata,
+            // Wire format remains string?; deserialize at the boundary into the strict typed shape.
+            PaymentMetadata = MetadataJson.Deserialize<PaymentMetadataModel>(request.PaymentMetadata),
             OperationId = request.OperationId,
             PaymentStatusId = POS.Domain.Helpers.PaymentStatus.FromString(request.Status)
         };

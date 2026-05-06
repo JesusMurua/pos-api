@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
 
@@ -56,11 +57,20 @@ public partial class OrderItem
     #endregion
 
     /// <summary>
-    /// Vertical-specific extensibility payload (JSON) at the line level.
-    /// Used for item-scoped data that does not belong on the global Order, e.g.
-    /// <c>{"BeneficiaryCustomerId": 123}</c> for a gym membership purchased on behalf of another customer.
+    /// Vertical-specific extensibility payload at the line level, persisted as
+    /// PostgreSQL <c>jsonb</c> via EF Core 9 owned-type JSON mapping. Used for
+    /// item-scoped data that does not belong on the global order — most notably
+    /// <see cref="OrderItemMetadata.BeneficiaryCustomerId"/> for memberships
+    /// purchased on behalf of another customer.
     /// </summary>
-    public string? Metadata { get; set; }
+    public OrderItemMetadata? Metadata { get; set; }
+
+    /// <summary>
+    /// Dynamic tenant-specific data. CRITICAL: Lifecycle is managed by EF.
+    /// Access RootElement for reads, but CLONE/COPY values if the entity will
+    /// be detached/disposed to avoid ObjectDisposedException.
+    /// </summary>
+    public System.Text.Json.JsonDocument? ExtensionData { get; set; }
 
     public virtual Order? Order { get; set; }
 

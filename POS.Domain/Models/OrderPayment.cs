@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
 using POS.Domain.Models.Catalogs;
+using PaymentMetadataModel = POS.Domain.Models.Metadata.PaymentMetadata;
 
 namespace POS.Domain.Models;
 
@@ -27,8 +28,19 @@ public class OrderPayment
     [MaxLength(100)]
     public string? ExternalTransactionId { get; set; }
 
-    /// <summary>JSON string with provider-specific data (terminal ID, receipt URL, etc.).</summary>
-    public string? PaymentMetadata { get; set; }
+    /// <summary>
+    /// Provider-specific payment metadata persisted as PostgreSQL <c>jsonb</c>
+    /// via EF Core 9 owned-type JSON mapping. Captures terminal/processor data
+    /// (Clip, MercadoPago, etc.) as strict typed properties.
+    /// </summary>
+    public PaymentMetadataModel? PaymentMetadata { get; set; }
+
+    /// <summary>
+    /// Dynamic tenant-specific data. CRITICAL: Lifecycle is managed by EF.
+    /// Access RootElement for reads, but CLONE/COPY values if the entity will
+    /// be detached/disposed to avoid ObjectDisposedException.
+    /// </summary>
+    public System.Text.Json.JsonDocument? ExtensionData { get; set; }
 
     /// <summary>Internal tracking ID for the terminal operation, assigned by the POS.</summary>
     [MaxLength(100)]

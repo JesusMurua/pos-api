@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
 
@@ -57,15 +58,24 @@ public class Customer
     public bool IsActive { get; set; } = true;
 
     /// <summary>
-    /// Membership validity expiration (UTC). Null when the customer has no active membership.
-    /// Strict column for fast queries (e.g. "memberships expiring this week").
-    /// Updated by <c>ExtendMembershipAsync</c> when a membership product is sold.
+    /// Vertical-specific extensibility payload at the customer aggregate level,
+    /// persisted as PostgreSQL <c>jsonb</c> via EF Core 9 owned-type JSON
+    /// mapping. Carries CRM attributes (date of birth, marketing opt-in,
+    /// emergency contact for fitness verticals).
     /// </summary>
-    public DateTime? MembershipValidUntil { get; set; }
+    public CustomerMetadata? Metadata { get; set; }
 
     /// <summary>
-    /// Timestamp of the last membership/recurring payment (UTC).
-    /// Useful for churn analytics and "last seen paying" reports.
+    /// Dynamic tenant-specific data. CRITICAL: Lifecycle is managed by EF.
+    /// Access RootElement for reads, but CLONE/COPY values if the entity will
+    /// be detached/disposed to avoid ObjectDisposedException.
+    /// </summary>
+    public System.Text.Json.JsonDocument? ExtensionData { get; set; }
+
+    /// <summary>
+    /// Timestamp of the last recurring/membership payment (UTC). Universal CRM
+    /// metric retained on <see cref="Customer"/> for churn analytics; the
+    /// per-period membership history lives on <see cref="CustomerMembership"/>.
     /// </summary>
     public DateTime? LastPaymentAt { get; set; }
 
@@ -80,4 +90,10 @@ public class Customer
     public virtual ICollection<Reservation>? Reservations { get; set; }
 
     public virtual ICollection<CustomerTransaction>? Transactions { get; set; }
+
+    /// <summary>
+    /// Active and historical membership entitlements held by this customer.
+    /// A customer may hold multiple concurrent memberships for different products.
+    /// </summary>
+    public virtual ICollection<CustomerMembership> Memberships { get; set; } = new List<CustomerMembership>();
 }

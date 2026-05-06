@@ -41,6 +41,7 @@ public static class ServiceDependencies
         services.AddScoped<IBranchDeliveryConfigService, BranchDeliveryConfigService>();
         services.AddScoped<IInvoicingService, InvoicingService>();
         services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IPrintJobService, PrintJobService>();
         services.AddScoped<ICatalogService, CatalogService>();
         services.AddScoped<IFeatureGateService, FeatureGateService>();

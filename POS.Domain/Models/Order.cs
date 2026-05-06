@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
-using POS.Domain.Models.Catalogs;
-
 using POS.Domain.Interfaces;
+using POS.Domain.Models.Catalogs;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
 
@@ -104,6 +104,20 @@ public partial class Order : IBranchScoped
 
     /// <summary>FK to Customer for CRM tracking. Null for anonymous sales.</summary>
     public int? CustomerId { get; set; }
+
+    /// <summary>
+    /// Vertical-specific extensibility payload at the order header level,
+    /// persisted as PostgreSQL <c>jsonb</c> via EF Core 9 owned-type JSON
+    /// mapping. Carries restaurant party size, delivery address, etc.
+    /// </summary>
+    public OrderMetadata? Metadata { get; set; }
+
+    /// <summary>
+    /// Dynamic tenant-specific data. CRITICAL: Lifecycle is managed by EF.
+    /// Access RootElement for reads, but CLONE/COPY values if the entity will
+    /// be detached/disposed to avoid ObjectDisposedException.
+    /// </summary>
+    public System.Text.Json.JsonDocument? ExtensionData { get; set; }
 
     #region Invoicing Fields
 

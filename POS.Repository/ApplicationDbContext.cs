@@ -3,6 +3,7 @@ using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.Domain.Models.Catalogs;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Repository;
 
@@ -106,6 +107,7 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<FiscalCustomer> FiscalCustomers { get; set; } = null!;
     public DbSet<Customer> Customers { get; set; } = null!;
+    public DbSet<CustomerMembership> CustomerMemberships { get; set; } = null!;
     public DbSet<CustomerTransaction> CustomerTransactions { get; set; } = null!;
     public DbSet<StripeEventInbox> StripeEventInbox { get; set; } = null!;
     public DbSet<PaymentWebhookInbox> PaymentWebhookInbox { get; set; } = null!;
@@ -388,6 +390,16 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.TrackStock).HasDefaultValue(false);
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
+
+            // Strongly-typed Metadata persisted as PostgreSQL jsonb (EF Core 9 owned-type JSON).
+            entity.OwnsOne(p => p.Metadata, b =>
+            {
+                b.ToJson();
+            });
+
+            // Dynamic tenant-specific data: native PostgreSQL jsonb scalar column,
+            // queryable via the @>, ->, ->> operators without string unwrap.
+            entity.Property(p => p.ExtensionData).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<ProductModifierGroup>(entity =>
@@ -554,6 +566,15 @@ public class ApplicationDbContext : DbContext
                 .HasColumnType("xid")
                 .ValueGeneratedOnAddOrUpdate()
                 .IsConcurrencyToken();
+
+            // Strongly-typed order-level Metadata persisted as PostgreSQL jsonb.
+            entity.OwnsOne(o => o.Metadata, b =>
+            {
+                b.ToJson();
+            });
+
+            // Dynamic tenant-specific data: native PostgreSQL jsonb scalar column.
+            entity.Property(o => o.ExtensionData).HasColumnType("jsonb");
         });
 
         #endregion
@@ -609,6 +630,15 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(p => p.OrderId);
             entity.HasIndex(p => p.ExternalTransactionId);
             entity.HasIndex(p => p.PaymentStatusId);
+
+            // Strongly-typed provider-specific PaymentMetadata persisted as PostgreSQL jsonb.
+            entity.OwnsOne(p => p.PaymentMetadata, b =>
+            {
+                b.ToJson();
+            });
+
+            // Dynamic tenant-specific data: native PostgreSQL jsonb scalar column.
+            entity.Property(p => p.ExtensionData).HasColumnType("jsonb");
         });
 
         #endregion
@@ -627,6 +657,15 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Strongly-typed line-level Metadata persisted as PostgreSQL jsonb.
+            entity.OwnsOne(i => i.Metadata, b =>
+            {
+                b.ToJson();
+            });
+
+            // Dynamic tenant-specific data: native PostgreSQL jsonb scalar column.
+            entity.Property(i => i.ExtensionData).HasColumnType("jsonb");
         });
 
         #endregion
@@ -1306,20 +1345,9 @@ public class ApplicationDbContext : DbContext
             new Category { Id = 4, BranchId = 1, Name = "Postres", Icon = "pi-heart", SortOrder = 4, IsActive = true }
         );
 
-        modelBuilder.Entity<Product>().HasData(
-            new Product { Id = 1, BranchId = 1, CategoryId = 1, Name = "Torta de Milanesa", PriceCents = 8500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 2, BranchId = 1, CategoryId = 1, Name = "Quesadilla", PriceCents = 5500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 3, BranchId = 1, CategoryId = 1, Name = "Enchiladas Verdes", PriceCents = 7500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 4, BranchId = 1, CategoryId = 1, Name = "Pozole Rojo", PriceCents = 9000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 5, BranchId = 1, CategoryId = 2, Name = "Taco de Canasta", PriceCents = 2000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 6, BranchId = 1, CategoryId = 2, Name = "Gordita", PriceCents = 3500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 7, BranchId = 1, CategoryId = 2, Name = "Tostada de Tinga", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 8, BranchId = 1, CategoryId = 3, Name = "Agua de Jamaica", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 9, BranchId = 1, CategoryId = 3, Name = "Café de Olla", PriceCents = 3000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 10, BranchId = 1, CategoryId = 3, Name = "Refresco", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 11, BranchId = 1, CategoryId = 4, Name = "Arroz con Leche", PriceCents = 4000, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 },
-            new Product { Id = 12, BranchId = 1, CategoryId = 4, Name = "Gelatina", PriceCents = 2500, IsAvailable = true, IsPopular = false, TrackStock = false, CurrentStock = 0, LowStockThreshold = 0 }
-        );
+        // Product seed data was previously declared via HasData; EF Core 9 disallows
+        // HasData on entities mapped to JSON via OwnsOne(...).ToJson(). Demo products
+        // are now exclusively seeded at runtime by DbInitializer / TenantSeedingService.
 
         modelBuilder.Entity<User>().HasData(
             new User
@@ -1423,8 +1451,14 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(c => new { c.BusinessId, c.LastName, c.FirstName });
 
-            entity.HasIndex(c => c.MembershipValidUntil)
-                .HasFilter("\"MembershipValidUntil\" IS NOT NULL");
+            // Strongly-typed customer-level Metadata persisted as PostgreSQL jsonb.
+            entity.OwnsOne(c => c.Metadata, b =>
+            {
+                b.ToJson();
+            });
+
+            // Dynamic tenant-specific data: native PostgreSQL jsonb scalar column.
+            entity.Property(c => c.ExtensionData).HasColumnType("jsonb");
         });
 
         #endregion
@@ -1458,6 +1492,65 @@ public class ApplicationDbContext : DbContext
 
             entity.HasIndex(t => t.CustomerId);
             entity.HasIndex(t => new { t.CustomerId, t.CreatedAt });
+        });
+
+        #endregion
+
+        #region CustomerMembership Configuration
+
+        modelBuilder.Entity<CustomerMembership>(entity =>
+        {
+            // Status persisted as a human-readable string (Active / Expired / Frozen / Cancelled).
+            entity.Property(m => m.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .HasDefaultValue(MembershipStatus.Active);
+
+            entity.Property(m => m.OriginatingOrderId).HasMaxLength(36);
+
+            // 1:N — a customer holds multiple concurrent memberships across products.
+            entity.HasOne(m => m.Customer)
+                .WithMany(c => c.Memberships)
+                .HasForeignKey(m => m.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Product reference is nullable; if a product is deleted the entitlement
+            // history is preserved by nulling the FK rather than cascading away.
+            entity.HasOne(m => m.Product)
+                .WithMany()
+                .HasForeignKey(m => m.ProductId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Originating order is the audit-trace link. Preserve the membership
+            // when the order is later removed.
+            entity.HasOne(m => m.OriginatingOrder)
+                .WithMany()
+                .HasForeignKey(m => m.OriginatingOrderId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Index strategy:
+            //   a) CustomerId — list memberships per customer.
+            //   b) (CustomerId, ProductId) filtered by Status='Active' — fast stacking lookup.
+            //   c) ValidUntil filtered by Status='Active' — reactive expiration queries.
+            //   d) OriginatingOrderId — order → entitlement audit trace.
+            entity.HasIndex(m => m.CustomerId);
+
+            entity.HasIndex(m => new { m.CustomerId, m.ProductId })
+                .HasFilter("\"Status\" = 'Active'");
+
+            entity.HasIndex(m => m.ValidUntil)
+                .HasFilter("\"Status\" = 'Active'");
+
+            entity.HasIndex(m => m.OriginatingOrderId);
+
+            // PostgreSQL system column used as the optimistic concurrency token. Keeps
+            // simultaneous extensions from silently overwriting each other.
+            entity.Property<uint>("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
         });
 
         #endregion

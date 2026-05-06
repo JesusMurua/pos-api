@@ -1,4 +1,6 @@
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Models;
+using POS.Repository.Utils;
 
 namespace POS.Services.IService;
 
@@ -96,12 +98,34 @@ public interface ICustomerService
     /// </summary>
     Task LinkFiscalCustomerAsync(int customerId, int fiscalCustomerId);
 
+    // ──────────────────────────────────────────
+    // BDD-019 P4 — Customer-scoped read endpoints
+    // ──────────────────────────────────────────
+
     /// <summary>
-    /// Extends a customer's membership validity by <paramref name="durationDays"/> days.
-    /// If the current <c>MembershipValidUntil</c> is null or already expired, the new period
-    /// starts from today (UTC). If the membership is still active, days are stacked on top
-    /// of the existing expiration to reward early renewals.
-    /// Always updates <c>LastPaymentAt</c> to <c>DateTime.UtcNow</c>.
+    /// Returns paginated orders for the given customer scoped to the caller's
+    /// tenant. Throws <see cref="POS.Domain.Exceptions.NotFoundException"/> when
+    /// the customer is missing or belongs to a different business
+    /// (information-hiding per BDD-019 audit A6).
     /// </summary>
-    Task ExtendMembershipAsync(int customerId, int durationDays, string orderId);
+    Task<PageData<CustomerOrderRowDto>> GetOrdersAsync(
+        int customerId, int callerBusinessId, int page, int pageSize, DateTime? from, DateTime? to);
+
+    /// <summary>
+    /// Returns the customer's memberships sorted by <c>ValidUntil</c> desc.
+    /// Optional <paramref name="status"/> filter accepts <c>Active</c>,
+    /// <c>Expired</c> (includes lazy-expired), <c>Frozen</c>, or <c>Cancelled</c>.
+    /// Throws <see cref="POS.Domain.Exceptions.NotFoundException"/> for
+    /// cross-tenant access.
+    /// </summary>
+    Task<IEnumerable<CustomerMembershipDto>> GetMembershipsAsync(
+        int customerId, int callerBusinessId, string? status);
+
+    /// <summary>
+    /// Returns aggregate spend / order count / last-order-at for the given
+    /// customer. Computed via a single SQL aggregation. Returns zeros / null
+    /// for customers without paid orders. Throws
+    /// <see cref="POS.Domain.Exceptions.NotFoundException"/> for cross-tenant access.
+    /// </summary>
+    Task<CustomerStatsDto> GetStatsAsync(int customerId, int callerBusinessId);
 }

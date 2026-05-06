@@ -1,3 +1,5 @@
+using POS.Domain.Models.Metadata;
+
 namespace POS.Domain.Helpers;
 
 /// <summary>
@@ -13,14 +15,14 @@ public static class MacroCategoryTemplates
 
     /// <summary>
     /// <paramref name="PriceCents"/> matches <c>Product.PriceCents</c> (centavos).
-    /// <paramref name="Metadata"/> carries vertical-specific JSON (e.g.
-    /// <c>{"MembershipDurationDays":30}</c> for the gym vertical).
+    /// <paramref name="Metadata"/> carries vertical-specific data (e.g. gym
+    /// memberships set <see cref="ProductMetadata.MembershipDurationDays"/>).
     /// </summary>
     public sealed record SeedProduct(
         string Name,
         int PriceCents,
         string CategoryName,
-        string? Metadata = null);
+        ProductMetadata? Metadata = null);
 
     public sealed class MacroSeedTemplate
     {
@@ -67,7 +69,7 @@ public static class MacroCategoryTemplates
             Products = new[]
             {
                 new SeedProduct("Membresía Mensual", 50000, "Membresías",
-                    Metadata: """{"MembershipDurationDays":30}"""),
+                    Metadata: new ProductMetadata { MembershipDurationDays = 30 }),
                 new SeedProduct("Visita",            8000,  "Servicios"),
             }
         },

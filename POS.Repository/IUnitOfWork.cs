@@ -37,6 +37,7 @@ public interface IUnitOfWork : IDisposable
     IBranchDeliveryConfigRepository BranchDeliveryConfigs { get; }
     IFiscalCustomerRepository FiscalCustomers { get; }
     ICustomerRepository Customers { get; }
+    ICustomerMembershipRepository CustomerMemberships { get; }
     ICustomerTransactionRepository CustomerTransactions { get; }
     IPrintJobRepository PrintJobs { get; }
     IKdsEventOutboxRepository KdsEventOutbox { get; }

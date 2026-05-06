@@ -40,6 +40,7 @@ public class UnitOfWork : IUnitOfWork
     private IBranchDeliveryConfigRepository? _branchDeliveryConfigs;
     private IFiscalCustomerRepository? _fiscalCustomers;
     private ICustomerRepository? _customers;
+    private ICustomerMembershipRepository? _customerMemberships;
     private ICustomerTransactionRepository? _customerTransactions;
     private IPrintJobRepository? _printJobs;
     private IKdsEventOutboxRepository? _kdsEventOutbox;
@@ -148,6 +149,9 @@ public class UnitOfWork : IUnitOfWork
 
     public ICustomerRepository Customers =>
         _customers ??= new CustomerRepository(_context);
+
+    public ICustomerMembershipRepository CustomerMemberships =>
+        _customerMemberships ??= new CustomerMembershipRepository(_context);
 
     public ICustomerTransactionRepository CustomerTransactions =>
         _customerTransactions ??= new CustomerTransactionRepository(_context);

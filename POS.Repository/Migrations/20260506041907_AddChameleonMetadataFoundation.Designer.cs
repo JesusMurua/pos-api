@@ -3,6 +3,7 @@ using System;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using POS.Repository;
@@ -12,9 +13,11 @@ using POS.Repository;
 namespace POS.Repository.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260506041907_AddChameleonMetadataFoundation")]
+    partial class AddChameleonMetadataFoundation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1391,6 +1394,9 @@ namespace POS.Repository.Migrations
                     b.Property<DateTime?>("LastPaymentAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("MembershipValidUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1409,6 +1415,9 @@ namespace POS.Repository.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MembershipValidUntil")
+                        .HasFilter("\"MembershipValidUntil\" IS NOT NULL");
+
                     b.HasIndex("BusinessId", "Phone")
                         .IsUnique()
                         .HasFilter("\"Phone\" IS NOT NULL");
@@ -1416,66 +1425,6 @@ namespace POS.Repository.Migrations
                     b.HasIndex("BusinessId", "LastName", "FirstName");
 
                     b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("POS.Domain.Models.CustomerMembership", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("OriginatingOrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)");
-
-                    b.Property<int?>("ProductId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Active");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ValidFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ValidUntil")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<uint>("xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("OriginatingOrderId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("ValidUntil")
-                        .HasFilter("\"Status\" = 'Active'");
-
-                    b.HasIndex("CustomerId", "ProductId")
-                        .HasFilter("\"Status\" = 'Active'");
-
-                    b.ToTable("CustomerMemberships");
                 });
 
             modelBuilder.Entity("POS.Domain.Models.CustomerTransaction", b =>
@@ -3807,31 +3756,6 @@ namespace POS.Repository.Migrations
                     b.Navigation("Metadata");
                 });
 
-            modelBuilder.Entity("POS.Domain.Models.CustomerMembership", b =>
-                {
-                    b.HasOne("POS.Domain.Models.Customer", "Customer")
-                        .WithMany("Memberships")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("POS.Domain.Models.Order", "OriginatingOrder")
-                        .WithMany()
-                        .HasForeignKey("OriginatingOrderId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("POS.Domain.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("OriginatingOrder");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("POS.Domain.Models.CustomerTransaction", b =>
                 {
                     b.HasOne("POS.Domain.Models.Branch", "Branch")
@@ -4637,8 +4561,6 @@ namespace POS.Repository.Migrations
 
             modelBuilder.Entity("POS.Domain.Models.Customer", b =>
                 {
-                    b.Navigation("Memberships");
-
                     b.Navigation("Orders");
 
                     b.Navigation("Reservations");

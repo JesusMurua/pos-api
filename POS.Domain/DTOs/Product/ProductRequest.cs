@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
+using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.DTOs.Product;
 
@@ -50,11 +51,11 @@ public class ProductRequest
     public PrintingDestination PrintingDestination { get; set; } = PrintingDestination.Kitchen;
 
     /// <summary>
-    /// Vertical-specific extensibility payload (JSON). E.g. Gym memberships
-    /// send <c>{"MembershipDurationDays": 30}</c>. Stored verbatim.
+    /// Strongly-typed vertical-specific payload (e.g. gym memberships set
+    /// <see cref="ProductMetadata.MembershipDurationDays"/>). Persisted as
+    /// <c>jsonb</c> on the entity.
     /// </summary>
-    [MaxLength(1000)]
-    public string? Metadata { get; set; }
+    public ProductMetadata? Metadata { get; set; }
 
     public List<ProductSizeRequest> Sizes { get; set; } = new();
 

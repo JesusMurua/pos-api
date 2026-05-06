@@ -58,8 +58,10 @@ public class ClipService : IClipService
             AmountCents = amountCents,
             PaymentProvider = "clip",
             ExternalTransactionId = externalTransactionId,
-            PaymentMetadata = config.TerminalId != null
-                ? JsonSerializer.Serialize(new { terminalId = config.TerminalId })
+            // Tenant-specific terminal id lives on the parent entity's dynamic
+            // ExtensionData jsonb column for native PostgreSQL queryability.
+            ExtensionData = config.TerminalId != null
+                ? JsonDocument.Parse(JsonSerializer.Serialize(new { terminalId = config.TerminalId }))
                 : null,
             PaymentStatusId = PaymentStatus.Pending
         };
