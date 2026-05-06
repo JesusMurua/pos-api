@@ -16,9 +16,9 @@
 | **Branch** | BusinessId, Name, LocationName, PinHash, IsMatrix, FolioPrefix, FolioCounter, FolioFormat, HasKitchen, HasTables, HasDelivery, FiscalZipCode, TimeZoneId | Business, Categories, Orders, UserBranches, Reservations, Suppliers, StockReceipts, DeliveryConfigs, CashRegisters, PaymentConfigs, Devices, Products, Zones, Promotions | — |
 | **User** | BusinessId, BranchId, Name, Email, PasswordHash, PinHash, RoleId | RoleCatalog, Business, Branch, Orders, UserBranches | UserRole |
 | **Order** | BranchId, UserId, OrderNumber, TotalCents, PaidCents, ChangeCents, SubtotalCents, TaxAmountCents, OrderDiscountCents, TotalDiscountCents, KitchenStatusId, FolioNumber, OrderSource, ExternalOrderId, DeliveryStatus, DeliveryCustomerName, EstimatedPickupAt, TableId, TableName, CashRegisterSessionId, IsOrphaned, CustomerId, InvoiceStatus, FacturapiId, InvoiceUrl, FiscalCustomerId, InvoiceId | KitchenStatusCatalog, SyncStatusCatalog, Branch, User, Table, CashRegisterSession, FiscalCustomer, Invoice, Customer, Items, Payments | OrderSource, DeliveryStatus, KitchenStatus, OrderSyncStatus, InvoiceStatus |
-| **OrderItem** | OrderId, ProductId, ProductName, Quantity, UnitPriceCents, SizeName, ExtrasJson, Notes, DiscountCents, PromotionId, SatProductCode, SatUnitCode, TaxRatePercent, TaxAmountCents, **Metadata** (JSON) | Order, Product, AppliedTaxes | — |
-| **OrderPayment** | OrderId, Method, AmountCents, Reference, PaymentProvider, ExternalTransactionId, PaymentMetadata, OperationId, PaymentStatusId, ConfirmedAt | Order, PaymentStatus | PaymentMethod |
-| **Product** | CategoryId, BranchId, Name, PriceCents, ImageUrl, Description, Barcode, IsAvailable, IsPopular, TrackStock, CurrentStock, LowStockThreshold, SatProductCode, SatUnitCode, TaxRate, IsTaxIncluded, PrintingDestination, **Metadata** (JSON) | Category, Branch, Sizes, ModifierGroups, Images, ProductTaxes, ProductConsumptions | PrintingDestination |
+| **OrderItem** | OrderId, ProductId, ProductName, Quantity, UnitPriceCents, SizeName, ExtrasJson, Notes, DiscountCents, PromotionId, SatProductCode, SatUnitCode, TaxRatePercent, TaxAmountCents, **Metadata** (typed `OrderItemMetadata` jsonb), **ExtensionData** (`JsonDocument` jsonb) | Order, Product, AppliedTaxes | — |
+| **OrderPayment** | OrderId, Method, AmountCents, Reference, PaymentProvider, ExternalTransactionId, **PaymentMetadata** (typed `PaymentMetadata` jsonb), **ExtensionData** (`JsonDocument` jsonb), OperationId, PaymentStatusId, ConfirmedAt | Order, PaymentStatus | PaymentMethod |
+| **Product** | CategoryId, BranchId, Name, PriceCents, ImageUrl, Description, Barcode, IsAvailable, IsPopular, TrackStock, CurrentStock, LowStockThreshold, SatProductCode, SatUnitCode, TaxRate, IsTaxIncluded, PrintingDestination, **Metadata** (typed `ProductMetadata` jsonb), **ExtensionData** (`JsonDocument` jsonb) | Category, Branch, Sizes, ModifierGroups, Images, ProductTaxes, ProductConsumptions | PrintingDestination |
 | **Category** | BranchId, Name, Icon, SortOrder, IsActive | Branch, Products | — |
 | **ProductSize** | ProductId, Label, ExtraPriceCents | Product | — |
 | **ProductModifierGroup** | ProductId, Name, SortOrder, IsRequired, MinSelectable, MaxSelectable | Product, Extras | — |
@@ -31,8 +31,10 @@
 | **Supplier** | BranchId, Name, ContactName, Phone, Notes | Branch, StockReceipts | — |
 | **StockReceipt** | BranchId, SupplierId, ReceivedByUserId, ReceivedAt, Notes, TotalCents | Branch, Supplier, ReceivedBy, Items | — |
 | **StockReceiptItem** | StockReceiptId, InventoryItemId, ProductId, Quantity, CostCents, TotalCents | StockReceipt, InventoryItem, Product | — |
-| **Customer** | BusinessId, FirstName, LastName, Phone, Email, PointsBalance, CreditBalanceCents, CreditLimitCents, **MembershipValidUntil**, **LastPaymentAt** | Business, Orders, Reservations, Transactions | — |
+| **Customer** | BusinessId, FirstName, LastName, Phone, Email, PointsBalance, CreditBalanceCents, CreditLimitCents, **LastPaymentAt** (universal CRM), **Metadata** (typed `CustomerMetadata` jsonb), **ExtensionData** (`JsonDocument` jsonb) | Business, Orders, Reservations, Transactions, **Memberships** | — |
+| **CustomerMembership** | CustomerId, ProductId (nullable), ValidFrom, ValidUntil, **Status** (Active/Expired/Frozen/Cancelled), OriginatingOrderId, CreatedAt, UpdatedAt + `xmin` shadow concurrency token | Customer, Product, OriginatingOrder | MembershipStatus |
 | **CustomerTransaction** | CustomerId, BranchId, TransactionType, AmountCents, PointsAmount, BalanceAfterCents, ReferenceOrderId | Customer, Branch, ReferenceOrder | CustomerTransactionType |
+| **Order** | + **Metadata** (typed `OrderMetadata` jsonb), **ExtensionData** (`JsonDocument` jsonb) on top of the existing fields above | (existing relations) | (existing enums) |
 | **FiscalCustomer** | BusinessId, Rfc, BusinessName, TaxRegime, ZipCode, Email, CfdiUse, FacturapiCustomerId, CustomerId | Business, Customer | — |
 | **Invoice** | BusinessId, BranchId, Type, Status, FacturapiId, FiscalCustomerId, Series, FolioNumber, TotalCents, SubtotalCents, TaxCents, PdfUrl, XmlUrl, IssuedAt, CancelledAt | Business, Branch, FiscalCustomer, Orders | InvoiceType, InvoiceStatus |
 | **Tax** | CountryCode, Name, Rate, Code, IsDefault | ProductTaxes | — |
@@ -76,6 +78,44 @@
 | **PromotionScope** | All, Category, Product |
 | **PosExperience** | Restaurant, Counter, Retail, Quick |
 | **ZoneType** | Salon, BarSeats, Other |
+| **MembershipStatus** | Active, Expired, Frozen, Cancelled |
+
+### 1.3 Chameleon Metadata & Memberships Engine
+
+> **Implemented:** P1–P5 of [BDD-019](BDD-019-chameleon-domain-readiness.md), refined by [BDD-020](BDD-020-chameleon-metadata-architecture.md).
+> The domain is reconfigurable per vertical without invasive `ALTER TABLE`s.
+
+#### Hybrid `jsonb` pattern (each carrier entity has two slots)
+
+| Slot | Type | Mapping | Use |
+|------|------|---------|-----|
+| `Metadata` | Strongly-typed C# class (`ProductMetadata`, `OrderItemMetadata`, `OrderMetadata`, `CustomerMetadata`, `PaymentMetadata`) | `OwnsOne(x => x.Metadata, b => b.ToJson())` — single `jsonb` column | Vertical-specific data with known shape (e.g. `MembershipDurationDays`, `BeneficiaryCustomerId`, `IsAlcoholic`, `WeightGrams`). Strict typing → end-to-end IntelliSense + DTO propagation. |
+| `ExtensionData` | `System.Text.Json.JsonDocument?` | `Property(x => x.ExtensionData).HasColumnType("jsonb")` — separate top-level `jsonb` column | Tenant-specific dynamic keys with no known shape. Native PostgreSQL queryability via `@>`, `->`, `->>`, `?`, `?|`, `?&`, plus optional GIN indexing. |
+
+**Carrier entities (5):** `Product`, `OrderItem`, `Order`, `Customer`, `OrderPayment`. The split keeps the typed `Metadata` clean for IDE-friendly access while letting `ExtensionData` absorb tenant-specific keys without touching the schema.
+
+#### `CustomerMembership` aggregate (1:N from `Customer`)
+
+The legacy single-tier model (`Customer.MembershipValidUntil` / `Customer.LastPaymentAt`) was replaced by a dedicated entity supporting **concurrent multi-product memberships per customer**:
+
+| Concern | Implementation |
+|---------|----------------|
+| Stacking | `MembershipService.ProcessOrderEntitlementsAsync` (called from `OrderService.SyncOrdersAsync`) creates a new row per purchase. `ValidFrom` is clamped to `MAX(existing Active ValidUntil, UtcNow)` to preserve continuous coverage without backdating. |
+| Status | Enum `MembershipStatus` persisted as string (`HasConversion<string>()`). `Active → Expired` is **lazy**: query callers project `Expired` whenever `Status = Active AND ValidUntil < UtcNow`. `Frozen` and `Cancelled` are explicit writes. |
+| Frozen freeze rule | Any `Frozen` row for `(CustomerId, ProductId)` blocks new entitlement creation — surfaces as `400 FROZEN_MEMBERSHIP_NOT_EXTENDABLE` from sync. |
+| Concurrency | PostgreSQL `xmin` shadow token + `IsConcurrencyToken()`. `OrderService` translates `DbUpdateConcurrencyException` to `ConcurrencyConflictException("MEMBERSHIP_BUSY")` → `HTTP 409`. POS sync queue retries the batch naturally; no internal retry loop. |
+| Cross-tenant safety | `Customer.BusinessId == Branch.BusinessId` validated in `MembershipService` before any write — surfaces as `400 CROSS_TENANT_BENEFICIARY`. |
+| Audit trail | `OriginatingOrderId` (FK to `Orders`, `OnDelete=SetNull`) on every membership row — 1 order ↔ 1 entitlement, no ambiguity. |
+
+#### Customer-scoped read endpoints (BDD-019 §5.1)
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/api/customers/{id}/orders` | Paginated, date-filterable history (pure SQL projection, no entity hydration). |
+| `GET` | `/api/customers/{id}/memberships` | Active + historical memberships sorted by `ValidUntil` desc; lazy-Expired filter respected. |
+| `GET` | `/api/customers/{id}/stats` | Single-aggregation `TotalSpentCents` / `OrderCount` / `LastOrderAt` over paid, non-cancelled orders. |
+
+All three apply **404 information-hiding**: a customer that does not exist or belongs to a different tenant produces the same response, blocking tenant enumeration.
 
 ---
 
