@@ -25,4 +25,22 @@ public interface ICustomerMembershipRepository : IGenericRepository<CustomerMemb
     /// (<c>INVALID_STATUS</c>) for unknown values.
     /// </param>
     Task<IEnumerable<CustomerMembershipDto>> GetByCustomerAsync(int customerId, string? status);
+
+    /// <summary>
+    /// Returns memberships expiring within the given window for the caller's
+    /// tenant — projected to <see cref="CustomerMembershipDto"/> and sorted by
+    /// <c>ValidUntil</c> ascending (closest-to-expire first). Powers the Admin
+    /// Dashboard "Expiring Soon" widget without any client-side iteration.
+    /// </summary>
+    /// <remarks>
+    /// Filter contract:
+    /// <list type="bullet">
+    ///   <item>Tenant scoping: <c>m.Customer.BusinessId == businessId</c>.</item>
+    ///   <item>Only stored <c>Status = Active</c>; lazy-Expired rows are
+    ///         excluded automatically by the <c>ValidUntil &gt;= UtcNow</c>
+    ///         floor. <c>Frozen</c> rows are excluded by design (paused clock).</item>
+    ///   <item>Window: <c>UtcNow &lt;= ValidUntil &lt;= UtcNow + windowDays</c>.</item>
+    /// </list>
+    /// </remarks>
+    Task<IEnumerable<CustomerMembershipDto>> GetExpiringSoonAsync(int businessId, int windowDays);
 }

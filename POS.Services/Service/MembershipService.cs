@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
@@ -174,6 +175,15 @@ public class MembershipService : IMembershipService
         // ── Step 9: NO SaveChangesAsync here. The caller commits. Concurrency
         // (DbUpdateConcurrencyException → ConcurrencyConflictException) is
         // handled at the caller's commit boundary.
+    }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<CustomerMembershipDto>> GetExpiringSoonAsync(int callerBusinessId, int windowDays)
+    {
+        // Pure passthrough — repository owns the tenant-scoped SQL projection.
+        // The controller is responsible for clamping windowDays to its policy
+        // bounds (default 7, max 30) before delegating here.
+        return _unitOfWork.CustomerMemberships.GetExpiringSoonAsync(callerBusinessId, windowDays);
     }
 
     #endregion

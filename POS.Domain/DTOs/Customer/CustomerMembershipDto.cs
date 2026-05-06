@@ -11,6 +11,17 @@ public class CustomerMembershipDto
 {
     public int Id { get; set; }
 
+    /// <summary>Owner of the membership. Populated by every projection so the
+    /// dashboard "Expiring Soon" widget can render rows without an extra
+    /// round-trip per customer.</summary>
+    public int CustomerId { get; set; }
+
+    /// <summary>Display name for the customer. Concatenated as
+    /// <c>FirstName + " " + LastName</c> with null-safe handling when the
+    /// customer has no last name. Empty string is never returned for a valid
+    /// customer.</summary>
+    public string CustomerName { get; set; } = string.Empty;
+
     public int? ProductId { get; set; }
 
     public string? ProductName { get; set; }

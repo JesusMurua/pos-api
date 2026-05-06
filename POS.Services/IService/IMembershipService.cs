@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Customer;
 using POS.Domain.Models;
 
 namespace POS.Services.IService;
@@ -28,4 +29,14 @@ public interface IMembershipService
     ///   </list>
     /// </exception>
     Task ProcessOrderEntitlementsAsync(IEnumerable<Order> orders);
+
+    /// <summary>
+    /// Returns memberships expiring within the given window, scoped to the
+    /// caller's tenant. Sorted by <c>ValidUntil</c> ascending so the closest
+    /// expirations surface first. The repository handles the SQL projection;
+    /// the service layer's responsibility is purely tenant-passthrough.
+    /// </summary>
+    /// <param name="callerBusinessId">Resolved by the controller from the JWT/auth context.</param>
+    /// <param name="windowDays">Lookahead window in days. Caller is expected to clamp to a sane upper bound.</param>
+    Task<IEnumerable<CustomerMembershipDto>> GetExpiringSoonAsync(int callerBusinessId, int windowDays);
 }

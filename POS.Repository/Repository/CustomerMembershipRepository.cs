@@ -64,6 +64,10 @@ public class CustomerMembershipRepository : GenericRepository<CustomerMembership
             .Select(m => new CustomerMembershipDto
             {
                 Id = m.Id,
+                CustomerId = m.CustomerId,
+                CustomerName = m.Customer!.LastName != null
+                    ? m.Customer.FirstName + " " + m.Customer.LastName
+                    : m.Customer.FirstName,
                 ProductId = m.ProductId,
                 ProductName = m.Product != null ? m.Product.Name : null,
                 ValidFrom = m.ValidFrom,
@@ -74,6 +78,44 @@ public class CustomerMembershipRepository : GenericRepository<CustomerMembership
                             : m.Status == MembershipStatus.Expired ? "Expired"
                             : m.Status == MembershipStatus.Frozen ? "Frozen"
                             : "Cancelled",
+                OriginatingOrderId = m.OriginatingOrderId,
+                CreatedAt = m.CreatedAt
+            })
+            .ToListAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<CustomerMembershipDto>> GetExpiringSoonAsync(int businessId, int windowDays)
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddDays(windowDays);
+
+        // Tenant-scoped, status=Active, with the lazy-Expired floor (UtcNow)
+        // and the window ceiling. The partial index
+        // IX_CustomerMemberships_ValidUntil filtered by Status='Active' powers
+        // this query directly.
+        return await _context.CustomerMemberships
+            .AsNoTracking()
+            .Where(m => m.Customer!.BusinessId == businessId
+                     && m.Status == MembershipStatus.Active
+                     && m.ValidUntil >= now
+                     && m.ValidUntil <= cutoff)
+            .OrderBy(m => m.ValidUntil)
+            .Select(m => new CustomerMembershipDto
+            {
+                Id = m.Id,
+                CustomerId = m.CustomerId,
+                CustomerName = m.Customer!.LastName != null
+                    ? m.Customer.FirstName + " " + m.Customer.LastName
+                    : m.Customer.FirstName,
+                ProductId = m.ProductId,
+                ProductName = m.Product != null ? m.Product.Name : null,
+                ValidFrom = m.ValidFrom,
+                ValidUntil = m.ValidUntil,
+                // Filter guarantees Status == Active here, so the projection
+                // can short-circuit to "Active" — but we keep the same
+                // CASE WHEN shape for consistency with GetByCustomerAsync.
+                Status = "Active",
                 OriginatingOrderId = m.OriginatingOrderId,
                 CreatedAt = m.CreatedAt
             })
