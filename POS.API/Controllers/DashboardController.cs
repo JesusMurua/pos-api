@@ -20,10 +20,10 @@ public class DashboardController : BaseApiController
     }
 
     /// <summary>
-    /// Returns dashboard summary for a specific local calendar day in the
-    /// branch's timezone. Defaults to today in UTC wall-clock when omitted.
+    /// Returns dashboard summary for a local calendar day in the branch's timezone.
+    /// When <paramref name="date"/> is omitted, defaults to today in the branch's timezone.
     /// </summary>
-    /// <param name="date">Local calendar date to summarize.</param>
+    /// <param name="date">Local calendar date to summarize. Optional.</param>
     /// <returns>Dashboard summary with sales, cancellations, top products, recent orders.</returns>
     /// <response code="200">Returns the dashboard summary.</response>
     [HttpGet("summary")]
@@ -31,8 +31,7 @@ public class DashboardController : BaseApiController
     [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSummary([FromQuery] DateOnly? date)
     {
-        var target = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var summary = await _dashboardService.GetSummaryAsync(BranchId, target);
+        var summary = await _dashboardService.GetSummaryAsync(BranchId, date);
         return Ok(summary);
     }
 }

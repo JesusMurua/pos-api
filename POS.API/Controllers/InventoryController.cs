@@ -358,8 +358,8 @@ public class InventoryController : BaseApiController
     /// </summary>
     /// <param name="inventoryItemId">Filter to a specific ingredient. Omit for all items.</param>
     /// <param name="type">Filter by transaction type (Purchase, ConsumeFromSale, Waste, ManualAdjustment, InitialCount).</param>
-    /// <param name="from">Start date, UTC (inclusive).</param>
-    /// <param name="to">End date, UTC (inclusive).</param>
+    /// <param name="from">Start date. Inclusive at the local calendar day level (branch's timezone). Format: <c>yyyy-MM-dd</c>.</param>
+    /// <param name="to">End date. Inclusive at the local calendar day level (branch's timezone). Format: <c>yyyy-MM-dd</c>.</param>
     /// <returns>A list of inventory movements ordered by date descending.</returns>
     /// <response code="200">Returns the list of movements.</response>
     [HttpGet("movements/history")]
@@ -368,8 +368,8 @@ public class InventoryController : BaseApiController
     public async Task<IActionResult> GetMovementHistory(
         [FromQuery] int? inventoryItemId,
         [FromQuery] InventoryTransactionType? type,
-        [FromQuery] DateTime? from,
-        [FromQuery] DateTime? to)
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to)
     {
         var movements = await _inventoryService.GetMovementHistoryAsync(
             BranchId, inventoryItemId, type, from, to);

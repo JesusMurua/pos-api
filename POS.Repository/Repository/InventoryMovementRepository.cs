@@ -17,8 +17,8 @@ public class InventoryMovementRepository : GenericRepository<InventoryMovement>,
         int branchId,
         int? inventoryItemId,
         InventoryTransactionType? type,
-        DateTime? from,
-        DateTime? to)
+        DateTime? startUtc,
+        DateTime? endUtc)
     {
         // Only movements that have an InventoryItem (ingredient path).
         // TrackStock direct-path movements (ProductId only) are excluded;
@@ -34,11 +34,11 @@ public class InventoryMovementRepository : GenericRepository<InventoryMovement>,
         if (type.HasValue)
             query = query.Where(m => m.TransactionType == type.Value);
 
-        if (from.HasValue)
-            query = query.Where(m => m.CreatedAt >= from.Value);
+        if (startUtc.HasValue)
+            query = query.Where(m => m.CreatedAt >= startUtc.Value);
 
-        if (to.HasValue)
-            query = query.Where(m => m.CreatedAt <= to.Value);
+        if (endUtc.HasValue)
+            query = query.Where(m => m.CreatedAt < endUtc.Value);
 
         return await query
             .OrderByDescending(m => m.CreatedAt)

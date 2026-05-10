@@ -118,14 +118,14 @@ public interface IInventoryService
     /// <param name="branchId">Branch scope.</param>
     /// <param name="inventoryItemId">Filter to a specific ingredient. <c>null</c> returns all.</param>
     /// <param name="type">Filter by transaction type. <c>null</c> returns all types.</param>
-    /// <param name="from">Lower bound for <c>CreatedAt</c> (inclusive). UTC.</param>
-    /// <param name="to">Upper bound for <c>CreatedAt</c> (inclusive). UTC.</param>
+    /// <param name="from">Lower bound. Inclusive at the local calendar day level (branch's timezone).</param>
+    /// <param name="to">Upper bound. Inclusive at the local calendar day level (branch's timezone).</param>
     Task<IEnumerable<InventoryMovement>> GetMovementHistoryAsync(
         int branchId,
         int? inventoryItemId,
         InventoryTransactionType? type,
-        DateTime? from,
-        DateTime? to);
+        DateOnly? from,
+        DateOnly? to);
 
     /// <summary>
     /// Returns a paginated, projected global ledger of all ingredient-path movements for a branch.

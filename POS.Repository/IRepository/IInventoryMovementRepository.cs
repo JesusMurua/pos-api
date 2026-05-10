@@ -18,14 +18,14 @@ public interface IInventoryMovementRepository : IGenericRepository<InventoryMove
     /// <param name="branchId">Branch to scope the query to.</param>
     /// <param name="inventoryItemId">When provided, returns movements for that specific item only.</param>
     /// <param name="type">When provided, filters by transaction type.</param>
-    /// <param name="from">Lower bound for <c>CreatedAt</c> (inclusive). UTC.</param>
-    /// <param name="to">Upper bound for <c>CreatedAt</c> (inclusive). UTC.</param>
+    /// <param name="startUtc">Lower bound for <c>CreatedAt</c> (inclusive). UTC.</param>
+    /// <param name="endUtc">Upper bound for <c>CreatedAt</c> (EXCLUSIVE half-open). UTC.</param>
     Task<IEnumerable<InventoryMovement>> GetHistoryAsync(
         int branchId,
         int? inventoryItemId,
         InventoryTransactionType? type,
-        DateTime? from,
-        DateTime? to);
+        DateTime? startUtc,
+        DateTime? endUtc);
 
     /// <summary>
     /// Returns a paginated, projected ledger of inventory movements for a branch.

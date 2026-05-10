@@ -301,11 +301,34 @@ public class InventoryService : IInventoryService
         int branchId,
         int? inventoryItemId,
         InventoryTransactionType? type,
-        DateTime? from,
-        DateTime? to)
+        DateOnly? from,
+        DateOnly? to)
     {
+        DateTime? startUtc = null;
+        DateTime? endUtc = null;
+
+        if (from.HasValue || to.HasValue)
+        {
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+                throw new ValidationException("From date cannot be later than To date.");
+
+            var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+                ?? throw new NotFoundException($"Branch {branchId} not found");
+
+            if (from.HasValue)
+            {
+                var (start, _) = TimeZoneHelper.GetUtcRangeForLocalDate(from.Value, branch.TimeZoneId);
+                startUtc = start;
+            }
+            if (to.HasValue)
+            {
+                var (_, end) = TimeZoneHelper.GetUtcRangeForLocalDate(to.Value, branch.TimeZoneId);
+                endUtc = end;
+            }
+        }
+
         return await _unitOfWork.InventoryMovements.GetHistoryAsync(
-            branchId, inventoryItemId, type, from, to);
+            branchId, inventoryItemId, type, startUtc, endUtc);
     }
 
     /// <inheritdoc/>

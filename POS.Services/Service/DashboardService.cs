@@ -17,15 +17,19 @@ public class DashboardService : IDashboardService
     }
 
     /// <summary>
-    /// Returns dashboard summary for a specific local calendar day.
+    /// Returns dashboard summary for a local calendar day in the branch's timezone.
+    /// When <paramref name="localDate"/> is <c>null</c>, defaults to today in the
+    /// branch's timezone — never the server's UTC wall-clock.
     /// Uses SQL-level aggregation via repository projections — no .Include() or entity tracking.
     /// </summary>
-    public async Task<DashboardSummaryDto> GetSummaryAsync(int branchId, DateOnly localDate)
+    public async Task<DashboardSummaryDto> GetSummaryAsync(int branchId, DateOnly? localDate)
     {
         var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
             ?? throw new NotFoundException($"Branch with id {branchId} not found");
 
-        var (startUtc, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(localDate, branch.TimeZoneId);
+        var targetDate = localDate ?? TimeZoneHelper.GetLocalToday(branch.TimeZoneId);
+
+        var (startUtc, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(targetDate, branch.TimeZoneId);
 
         var dailyMetrics = await _unitOfWork.Orders.GetDailyMetricsAsync(branchId, startUtc, endUtc);
         var paymentTotals = await _unitOfWork.Orders.GetPaymentTotalsAsync(branchId, startUtc, endUtc);
@@ -57,7 +61,7 @@ public class DashboardService : IDashboardService
 
         return new DashboardSummaryDto
         {
-            Date = localDate.ToDateTime(TimeOnly.MinValue),
+            Date = targetDate.ToDateTime(TimeOnly.MinValue),
             Sales = new DashboardSales
             {
                 TotalCents = totalCents,
