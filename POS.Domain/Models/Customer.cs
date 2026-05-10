@@ -55,6 +55,13 @@ public class Customer
     [MaxLength(500)]
     public string? Notes { get; set; }
 
+    // TODO (Milestone 2): HMAC deterministic hashing server-side (preserves equality lookup).
+    [MaxLength(100)]
+    public string? QrToken { get; set; }
+
+    // TODO (Milestone 2): Symmetric encryption with IDataProtectionProvider (recoverable for matching).
+    public byte[]? BiometricTemplate { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     /// <summary>

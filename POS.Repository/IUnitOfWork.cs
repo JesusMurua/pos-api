@@ -45,6 +45,7 @@ public interface IUnitOfWork : IDisposable
     IDeviceRepository Devices { get; }
     ICashRegisterLinkCodeRepository CashRegisterLinkCodes { get; }
     ITaxRepository Taxes { get; }
+    IAccessLogRepository AccessLogs { get; }
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();

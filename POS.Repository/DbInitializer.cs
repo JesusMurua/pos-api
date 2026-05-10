@@ -124,7 +124,11 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        if (!await context.DeviceModeCatalogs.AnyAsync())
+        // Per-Code guard so additive rows in future migrations (e.g. "bridge") do
+        // not suppress the initial-mode seed on fresh databases. The previous
+        // global AnyAsync() guard caused empty-DBs to skip the standard modes
+        // whenever a migration had already inserted a single additive row first.
+        if (!await context.DeviceModeCatalogs.AnyAsync(d => d.Code == "cashier"))
         {
             context.DeviceModeCatalogs.AddRange(
                 new DeviceModeCatalog { Code = "cashier", Name = "Cajero", Description = "POS estándar de cobro" },
@@ -241,6 +245,31 @@ public static class DbInitializer
                 new TableStatusCatalog { Id = 2, Code = "occupied", Name = "Ocupada" },
                 new TableStatusCatalog { Id = 3, Code = "reserved", Name = "Reservada" },
                 new TableStatusCatalog { Id = 4, Code = "maintenance", Name = "Mantenimiento" }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        // Access Control catalogs — IDs intentionally left to PostgreSQL
+        // identity sequence (1,2,3...) so they align with the AccessReasonIds
+        // and AccessMethodIds helper constants. Do not assign explicit Ids.
+        if (!await context.AccessReasonCatalogs.AnyAsync())
+        {
+            context.AccessReasonCatalogs.AddRange(
+                new AccessReasonCatalog { Code = "membership_active",  Name = "Membresía Activa",  SortOrder = 1 },
+                new AccessReasonCatalog { Code = "payment_overdue",    Name = "Pago Vencido",      SortOrder = 2 },
+                new AccessReasonCatalog { Code = "membership_expired", Name = "Membresía Vencida", SortOrder = 3 },
+                new AccessReasonCatalog { Code = "no_membership",      Name = "Sin Membresía",     SortOrder = 4 },
+                new AccessReasonCatalog { Code = "manual_override",    Name = "Acceso Manual",     SortOrder = 5 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        if (!await context.AccessMethodCatalogs.AnyAsync())
+        {
+            context.AccessMethodCatalogs.AddRange(
+                new AccessMethodCatalog { Code = "qr",        Name = "QR",        SortOrder = 1 },
+                new AccessMethodCatalog { Code = "biometric", Name = "Biometría", SortOrder = 2 },
+                new AccessMethodCatalog { Code = "manual",    Name = "Manual",    SortOrder = 3 }
             );
             await context.SaveChangesAsync();
         }

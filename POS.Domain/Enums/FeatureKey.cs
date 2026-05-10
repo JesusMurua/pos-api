@@ -57,5 +57,9 @@ public enum FeatureKey
     ProviderPayments = 100,
 
     // Logistics — external delivery platform integrations (UberEats, Rappi, DidiFood).
-    DeliveryPlatforms = 110
+    DeliveryPlatforms = 110,
+
+    // Access Control — gym / wellness vertical hardware bridge (biometrics, turnstiles, printers).
+    // Range 120-129 is reserved for Access Control features.
+    RealtimeAccessControl = 120
 }

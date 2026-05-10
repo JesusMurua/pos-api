@@ -116,6 +116,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<KdsEventOutbox> KdsEventOutbox { get; set; } = null!;
     public DbSet<Invoice> Invoices { get; set; } = null!;
     public DbSet<Device> Devices { get; set; } = null!;
+    public DbSet<AccessLog> AccessLogs { get; set; } = null!;
+    public DbSet<AccessReasonCatalog> AccessReasonCatalogs { get; set; } = null!;
+    public DbSet<AccessMethodCatalog> AccessMethodCatalogs { get; set; } = null!;
     public DbSet<Tax> Taxes { get; set; } = null!;
     public DbSet<ProductTax> ProductTaxes { get; set; } = null!;
     public DbSet<OrderItemTax> OrderItemTaxes { get; set; } = null!;
@@ -1247,6 +1250,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<OrderStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<InventoryMovementTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<TableStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<AccessReasonCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<AccessMethodCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
 
         #endregion
 
@@ -1449,6 +1454,10 @@ public class ApplicationDbContext : DbContext
                 .IsUnique()
                 .HasFilter("\"Phone\" IS NOT NULL");
 
+            entity.HasIndex(c => new { c.BusinessId, c.QrToken })
+                .IsUnique()
+                .HasFilter("\"QrToken\" IS NOT NULL");
+
             entity.HasIndex(c => new { c.BusinessId, c.LastName, c.FirstName });
 
             // Strongly-typed customer-level Metadata persisted as PostgreSQL jsonb.
@@ -1551,6 +1560,54 @@ public class ApplicationDbContext : DbContext
                 .HasColumnType("xid")
                 .ValueGeneratedOnAddOrUpdate()
                 .IsConcurrencyToken();
+        });
+
+        #endregion
+
+        #region AccessLog Configuration
+
+        modelBuilder.Entity<AccessLog>(entity =>
+        {
+            entity.HasOne(a => a.Branch)
+                .WithMany()
+                .HasForeignKey(a => a.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.Customer)
+                .WithMany()
+                .HasForeignKey(a => a.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.Device)
+                .WithMany()
+                .HasForeignKey(a => a.DeviceId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.CustomerMembership)
+                .WithMany()
+                .HasForeignKey(a => a.CustomerMembershipId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.AccessReason)
+                .WithMany()
+                .HasForeignKey(a => a.AccessReasonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.AccessMethod)
+                .WithMany()
+                .HasForeignKey(a => a.AccessMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Performance indexes for the two dominant query shapes:
+            //   a) "history of customer X" — paginated by most recent first.
+            //   b) "events at branch Y today" — paginated by most recent first.
+            entity.HasIndex(x => new { x.CustomerId, x.OccurredAt })
+                .IsDescending(false, true);
+
+            entity.HasIndex(x => new { x.BranchId, x.OccurredAt })
+                .IsDescending(false, true);
         });
 
         #endregion
