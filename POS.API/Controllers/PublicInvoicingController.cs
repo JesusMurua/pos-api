@@ -8,7 +8,7 @@ namespace POS.API.Controllers;
 
 /// <summary>
 /// Public (unauthenticated) endpoints for customer self-invoicing.
-/// Accessed via the ticket URL (e.g., kaja.mx/factura?orderId=abc-123).
+/// Accessed via the ticket URL (e.g., fino.mx/factura?orderId=abc-123).
 /// Secured by receipt proof (TotalCents match) and rate limiting.
 /// </summary>
 [Route("api/public/invoicing")]

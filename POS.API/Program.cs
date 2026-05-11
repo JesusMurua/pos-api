@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using POS.API.Adapter;
 using POS.API.Filters;
 using POS.API.Hubs;
 using POS.API.Middleware;
@@ -19,6 +20,7 @@ using POS.Repository;
 using POS.Repository.Dependencies;
 using POS.Services.Adapter;
 using POS.Services.Dependencies;
+using POS.Services.IService;
 using Serilog;
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -66,6 +68,10 @@ var resendApiKey = Environment.GetEnvironmentVariable("RESEND_API_KEY");
 if (!string.IsNullOrEmpty(resendApiKey))
     builder.Configuration["Email:ApiKey"] = resendApiKey;
 
+var hmacSecret = Environment.GetEnvironmentVariable("ACCESS_CONTROL_QR_TOKEN_HMAC_SECRET");
+if (!string.IsNullOrEmpty(hmacSecret))
+    builder.Configuration["AccessControl:QrTokenHmacSecret"] = hmacSecret;
+
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
@@ -112,6 +118,9 @@ builder.Services.Configure<SupabaseSettings>(builder.Configuration.GetSection("S
 
 // Email Configuration (Resend)
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
+// Access Control Configuration (gym/access-control cryptography secrets).
+builder.Services.Configure<AccessControlSettings>(builder.Configuration.GetSection("AccessControl"));
 
 // Facturapi Configuration
 builder.Services.Configure<FacturapiSettings>(builder.Configuration.GetSection("Facturapi"));
@@ -253,13 +262,44 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// Data Protection (used for encrypting delivery API keys)
-builder.Services.AddDataProtection()
-    .SetApplicationName("KajaPOS");
+// Data Protection — persists keys to a directory configurable via the
+// DATA_PROTECTION_KEYS_PATH env var. Without persistence, keys regenerate on
+// every container restart, making any column cifrado con IDataProtector
+// (BranchDeliveryConfig.ApiKeyEncrypted, Customer.BiometricTemplate, ...)
+// permanently undecryptable after a redeploy. Production fail-fasts when the
+// path is missing so a misconfigured deploy never reaches the request pipeline.
+// WARNING: changing the application name invalidates every column already
+// encrypted under the previous name ("KajaPOS"). On environments holding real
+// encrypted data (BranchDeliveryConfig.ApiKeyEncrypted, BranchPaymentConfig.
+// AccessToken, Customer.BiometricTemplate), re-encrypt those values before
+// deploying this change — otherwise IDataProtector.Unprotect will fail.
+var dataProtectionBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName("FinoPOS");
+
+var keysPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
+if (string.IsNullOrEmpty(keysPath))
+{
+    if (builder.Environment.IsProduction())
+    {
+        throw new InvalidOperationException(
+            "DATA_PROTECTION_KEYS_PATH must be set in Production. Mount a " +
+            "persistent volume and point this variable at it, or every redeploy " +
+            "will silently invalidate every encrypted column in the database.");
+    }
+}
+else
+{
+    Directory.CreateDirectory(keysPath);
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+}
 
 // Register dependencies
 builder.Services.AddRepositoryDependencies(builder.Configuration);
 builder.Services.AddServiceDependencies();
+
+// SignalR-backed adapter that lets POS.Services push commands to the bridge
+// without taking a project reference back to POS.API.
+builder.Services.AddSingleton<IBridgeNotifier, BridgeNotifier>();
 
 // Background workers
 builder.Services.AddHostedService<StripeEventProcessorWorker>();
@@ -271,6 +311,11 @@ var app = builder.Build();
 // Apply pending migrations automatically on startup
 using (var scope = app.Services.CreateScope())
 {
+    // Eagerly resolve cryptography singletons so any constructor fail-fast
+    // (missing/short HMAC secret, etc.) trips the process before HTTP traffic
+    // arrives — instead of surfacing as 500s on the first access-control call.
+    _ = scope.ServiceProvider.GetRequiredService<IHmacService>();
+
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 
@@ -322,5 +367,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<KdsHub>("/hubs/kds");
+app.MapHub<BridgeHub>("/hubs/bridge");
 
 app.Run();

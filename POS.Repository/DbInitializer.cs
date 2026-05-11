@@ -17,8 +17,10 @@ public interface ISeedEncryptor
 public static class DbInitializer
 {
     private static readonly DateTime SeedDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-    // Pre-computed BCrypt hashes for "Kaja2024!" and "1234"
-    private const string SeedPasswordHash = "$2a$11$bvzWRKS52z4IaCQp9Mc6T.sazNlm8M2rufyPm82D/Ph9migBYj.aC";
+    // Pre-computed BCrypt hashes for "Fino2024!" and "1234". The password hash
+    // was regenerated when the brand was renamed from Kaja → Fino so the seed
+    // comment and the actual decoded value stay in sync.
+    private const string SeedPasswordHash = "$2a$11$dLwniv/EJsK9DiQAE.m3aekDc0Aegsy0jTR/iAqiMUPBOB3C1qhIy";
     private const string SeedPinHash = "$2a$11$7cjv37Hi2RKFIasBx1KtIO8muTOKzPQ1pQMnnDACjMwIYpTzGJSci";
 
     // Canonical sub-giro identifiers used by seeded test businesses. Match the order
@@ -270,6 +272,20 @@ public static class DbInitializer
                 new AccessMethodCatalog { Code = "qr",        Name = "QR",        SortOrder = 1 },
                 new AccessMethodCatalog { Code = "biometric", Name = "Biometría", SortOrder = 2 },
                 new AccessMethodCatalog { Code = "manual",    Name = "Manual",    SortOrder = 3 }
+            );
+            await context.SaveChangesAsync();
+        }
+
+        // Phase 3 additive seed — distinguishes Frozen/Cancelled from the
+        // generic Expired bucket so the bridge UI can render the correct
+        // denial copy. Per-Code guard so re-runs on already-seeded databases
+        // append only the missing rows; PostgreSQL identity sequence advances
+        // from 6 → 7 to align with AccessReasonIds.MembershipFrozen / Cancelled.
+        if (!await context.AccessReasonCatalogs.AnyAsync(r => r.Code == "membership_frozen"))
+        {
+            context.AccessReasonCatalogs.AddRange(
+                new AccessReasonCatalog { Code = "membership_frozen",    Name = "Membresía Congelada", SortOrder = 6 },
+                new AccessReasonCatalog { Code = "membership_cancelled", Name = "Membresía Cancelada", SortOrder = 7 }
             );
             await context.SaveChangesAsync();
         }

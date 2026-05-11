@@ -49,6 +49,9 @@ public static class ServiceDependencies
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();
         services.AddSingleton<DataProtectionHelper>();
+        services.AddSingleton<BiometricDataProtector>();
+        services.AddSingleton<IHmacService, HmacService>();
+        services.AddScoped<IAccessControlService, AccessControlService>();
 
         return services;
     }

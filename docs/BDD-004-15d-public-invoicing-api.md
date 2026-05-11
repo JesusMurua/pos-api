@@ -9,7 +9,7 @@
 
 ## 1. Resumen Ejecutivo
 
-El landing page de Kaja (Next.js) necesita permitir que los clientes se auto-facturen usando la URL del ticket impreso (e.g., `kaja.mx/factura?orderId=abc-123`). El cliente no esta autenticado — no tiene JWT ni cuenta en el sistema. Se necesitan endpoints publicos con seguridad por validacion de datos del recibo fisico.
+El landing page de Fino (Next.js) necesita permitir que los clientes se auto-facturen usando la URL del ticket impreso (e.g., `fino.mx/factura?orderId=abc-123`). El cliente no esta autenticado — no tiene JWT ni cuenta en el sistema. Se necesitan endpoints publicos con seguridad por validacion de datos del recibo fisico.
 
 ---
 

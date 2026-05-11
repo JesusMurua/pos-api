@@ -122,5 +122,20 @@ public class CustomerMembershipRepository : GenericRepository<CustomerMembership
             .ToListAsync();
     }
 
+    /// <inheritdoc />
+    public Task<CustomerMembership?> GetLatestForCustomerAsync(int customerId)
+    {
+        // Ordering by ValidUntil DESC handles the common linear history
+        // (Active → Expired → next Active → Expired). CreatedAt DESC breaks
+        // ties so identical ValidUntil values (rare: two products with the
+        // same duration purchased the same day) yield a deterministic pick.
+        return _context.CustomerMemberships
+            .AsNoTracking()
+            .Where(m => m.CustomerId == customerId)
+            .OrderByDescending(m => m.ValidUntil)
+            .ThenByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     #endregion
 }

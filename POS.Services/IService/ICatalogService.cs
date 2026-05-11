@@ -16,6 +16,8 @@ public interface ICatalogService
     Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync();
     Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync();
     Task<IEnumerable<PlanTypeCatalog>> GetPlanTypesAsync();
+    Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync();
+    Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync();
 
     /// <summary>
     /// Returns the full Plan × Feature catalog as the single source of truth for

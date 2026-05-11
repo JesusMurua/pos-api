@@ -43,7 +43,7 @@ public class EmailService : IEmailService
             {
                 from = $"{_settings.FromName} <{_settings.FromEmail}>",
                 to = new[] { email },
-                subject = "Bienvenido a Kaja POS",
+                subject = "Bienvenido a Fino POS",
                 html = htmlBody
             };
 
@@ -93,14 +93,14 @@ public class EmailService : IEmailService
                     <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
                       <tr>
                         <td style="background-color: #6366f1; padding: 32px; text-align: center;">
-                          <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Kaja POS</h1>
+                          <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Fino POS</h1>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding: 40px 32px;">
                           <h2 style="color: #1f2937; margin: 0 0 16px;">Hola, {name}!</h2>
                           <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                            Bienvenido a <strong>Kaja POS</strong>! Tu cuenta ha sido creada con exito
+                            Bienvenido a <strong>Fino POS</strong>! Tu cuenta ha sido creada con exito
                             para el negocio <strong>{businessName}</strong>.
                           </p>
                           <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
@@ -115,7 +115,7 @@ public class EmailService : IEmailService
                       <tr>
                         <td style="background-color: #f9fafb; padding: 24px 32px; text-align: center;">
                           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-                            Kaja POS &mdash; Tu punto de venta inteligente
+                            Fino POS &mdash; Tu punto de venta inteligente
                           </p>
                         </td>
                       </tr>

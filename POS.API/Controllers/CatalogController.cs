@@ -56,4 +56,12 @@ public class CatalogController : ControllerBase
     [HttpGet("plans")]
     public async Task<IActionResult> GetPlanCatalog() =>
         Ok(await _catalogService.GetPlanCatalogAsync());
+
+    [HttpGet("access-reasons")]
+    public async Task<IActionResult> GetAccessReasons() =>
+        Ok(await _catalogService.GetAccessReasonsAsync());
+
+    [HttpGet("access-methods")]
+    public async Task<IActionResult> GetAccessMethods() =>
+        Ok(await _catalogService.GetAccessMethodsAsync());
 }

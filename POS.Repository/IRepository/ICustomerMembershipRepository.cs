@@ -43,4 +43,14 @@ public interface ICustomerMembershipRepository : IGenericRepository<CustomerMemb
     /// </list>
     /// </remarks>
     Task<IEnumerable<CustomerMembershipDto>> GetExpiringSoonAsync(int businessId, int windowDays);
+
+    /// <summary>
+    /// Returns the customer's most recent membership entity (not DTO) ordered
+    /// by <c>ValidUntil</c> descending with <c>CreatedAt</c> as deterministic
+    /// tie-breaker. Powers the access-control "why was access denied?" branch:
+    /// callers switch on the raw <see cref="POS.Domain.Enums.MembershipStatus"/>
+    /// enum to distinguish Frozen, Cancelled, and Expired. Returns <c>null</c>
+    /// when the customer has no membership history at all.
+    /// </summary>
+    Task<CustomerMembership?> GetLatestForCustomerAsync(int customerId);
 }

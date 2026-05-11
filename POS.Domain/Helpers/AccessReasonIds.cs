@@ -13,4 +13,6 @@ public static class AccessReasonIds
     public const int MembershipExpired = 3;
     public const int NoMembership = 4;
     public const int ManualOverride = 5;
+    public const int MembershipFrozen = 6;
+    public const int MembershipCancelled = 7;
 }

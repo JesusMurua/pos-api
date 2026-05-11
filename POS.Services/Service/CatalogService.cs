@@ -48,6 +48,12 @@ public class CatalogService : ICatalogService
     public async Task<IEnumerable<PlanTypeCatalog>> GetPlanTypesAsync() =>
         await _unitOfWork.Catalog.GetPlanTypesAsync();
 
+    public async Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync() =>
+        await _unitOfWork.Catalog.GetAccessReasonsAsync();
+
+    public async Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync() =>
+        await _unitOfWork.Catalog.GetAccessMethodsAsync();
+
     public Task<IReadOnlyList<PlanCatalogDto>> GetPlanCatalogAsync()
     {
         return _cache.GetOrCreateAsync(PlanCatalogCacheKey, async entry =>

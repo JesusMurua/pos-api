@@ -75,6 +75,11 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         };
     }
 
+    public Task<bool> AnyAsync(Expression<Func<T, bool>> filter)
+    {
+        return _dbSet.AnyAsync(filter);
+    }
+
     public async Task<T> AddAsync(T entity)
     {
         await _dbSet.AddAsync(entity);

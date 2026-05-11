@@ -158,3 +158,39 @@ Always follow `.claude/response-guidelines.md`:
 2. **Wait for confirmation** — never implement without approval
 3. **Implement only what was requested** — no extra features
 4. **Summarize** — explain what was done, ask for feedback
+
+---
+
+## Deployment
+
+### Required environment variables
+
+| Variable | Required in | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Production | PostgreSQL connection string (Render injects this automatically) |
+| `JWT_SECRET` | Production | Signs / validates user and device JWTs |
+| `ACCESS_CONTROL_QR_TOKEN_HMAC_SECRET` | Production | HMAC-SHA256 secret for `Customer.QrToken`. Min 32 bytes; `HmacService` fail-fasts on startup if missing or too short |
+| `DATA_PROTECTION_KEYS_PATH` | **Production (mandatory)** | Absolute filesystem path where ASP.NET Data Protection persists its master keys |
+
+Stripe / Vapid / Supabase / Email overrides follow the same pattern documented inline in `Program.cs`.
+
+### `DATA_PROTECTION_KEYS_PATH` — persistent volume requirement
+
+Without this variable, ASP.NET Data Protection generates its master keys in
+process memory. Every container restart (and every Render redeploy) regenerates
+the keys, which **permanently invalidates every encrypted column in the
+database** (`BranchDeliveryConfig.ApiKeyEncrypted`, `BranchPaymentConfig.AccessToken`,
+`Customer.BiometricTemplate`, ...).
+
+Production rules:
+
+1. The variable **must be an absolute path** (e.g. `/var/lib/fino/keys`).
+2. That path **must point at a persistent volume** that survives both restarts
+   and redeploys. On Render, this means a mounted persistent disk; on
+   Docker/K8s, a named volume or PVC; on a VM, a real filesystem path.
+3. Production startup throws `InvalidOperationException` if the variable is
+   unset, so a misconfigured deploy fails loudly during boot instead of
+   silently corrupting encrypted data on the first redeploy.
+
+For local development the variable can be omitted — keys default to in-process
+memory and the warning never fires.

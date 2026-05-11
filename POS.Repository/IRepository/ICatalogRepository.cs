@@ -20,4 +20,7 @@ public interface ICatalogRepository
     Task<IEnumerable<FeatureCatalog>> GetFeatureCatalogsAsync();
     Task<IEnumerable<PlanFeatureMatrix>> GetPlanFeatureMatricesAsync();
     Task<IEnumerable<BusinessTypeFeature>> GetBusinessTypeFeaturesAsync();
+
+    Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync();
+    Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync();
 }

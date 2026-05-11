@@ -57,4 +57,10 @@ public class CatalogRepository : ICatalogRepository
 
     public async Task<IEnumerable<BusinessTypeFeature>> GetBusinessTypeFeaturesAsync() =>
         await _context.BusinessTypeFeatures.AsNoTracking().ToListAsync();
+
+    public async Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync() =>
+        await _context.AccessReasonCatalogs.AsNoTracking().OrderBy(c => c.SortOrder).ToListAsync();
+
+    public async Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync() =>
+        await _context.AccessMethodCatalogs.AsNoTracking().OrderBy(c => c.SortOrder).ToListAsync();
 }
