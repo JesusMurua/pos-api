@@ -48,4 +48,6 @@ public static class FeatureIds
     public const int ProviderPayments = (int)FeatureKey.ProviderPayments;
 
     public const int DeliveryPlatforms = (int)FeatureKey.DeliveryPlatforms;
+
+    public const int RealtimeAccessControl = (int)FeatureKey.RealtimeAccessControl;
 }

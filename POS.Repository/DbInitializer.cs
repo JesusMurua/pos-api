@@ -788,6 +788,8 @@ public static class DbInitializer
             new() { Id = FeatureIds.MultiBranch,             Key = FeatureKey.MultiBranch,             Code = "MultiBranch",             Name = "Multi-sucursal",                    Description = "Administración de más de una sucursal (Franquicias)",          IsQuantitative = false, SortOrder = 91, Scope = EnforcementScope.Global },
             new() { Id = FeatureIds.ProviderPayments,        Key = FeatureKey.ProviderPayments,        Code = "ProviderPayments",        Name = "Proveedores de pago externos",      Description = "Integración con procesadores de pago (Clip, MercadoPago) y flujos de intent + webhook", IsQuantitative = false, SortOrder = 100, Scope = EnforcementScope.Global },
             new() { Id = FeatureIds.DeliveryPlatforms,       Key = FeatureKey.DeliveryPlatforms,       Code = "DeliveryPlatforms",       Name = "Plataformas de delivery",           Description = "Integración con plataformas de reparto (UberEats, Rappi, DidiFood) con ingesta de webhooks", IsQuantitative = false, SortOrder = 110, Scope = EnforcementScope.Global },
+
+            new() { Id = FeatureIds.RealtimeAccessControl,   Key = FeatureKey.RealtimeAccessControl,   Code = "RealtimeAccessControl",   Name = "Control de acceso en tiempo real", Description = "Bridge SignalR para biometría, torniquetes y QR de membresía",  IsQuantitative = false, SortOrder = 120, Scope = EnforcementScope.Global },
         };
 
         var existingFeatures = await context.FeatureCatalogs.ToListAsync();
@@ -865,6 +867,11 @@ public static class DbInitializer
             (PlanTypeIds.Basic,      FeatureIds.RealtimeKds, false, null),
             (PlanTypeIds.Pro,        FeatureIds.RealtimeKds, true,  null),
             (PlanTypeIds.Enterprise, FeatureIds.RealtimeKds, true,  null),
+
+            (PlanTypeIds.Free,       FeatureIds.RealtimeAccessControl, false, null),
+            (PlanTypeIds.Basic,      FeatureIds.RealtimeAccessControl, false, null),
+            (PlanTypeIds.Pro,        FeatureIds.RealtimeAccessControl, true,  null),
+            (PlanTypeIds.Enterprise, FeatureIds.RealtimeAccessControl, true,  null),
 
             (PlanTypeIds.Free,       FeatureIds.PrintedCommandaTickets, true, null),
             (PlanTypeIds.Basic,      FeatureIds.PrintedCommandaTickets, true, null),
@@ -1042,6 +1049,7 @@ public static class DbInitializer
         AddAll(allMacros, FeatureIds.CustomFolios);
         AddAll(services, FeatureIds.AppointmentReminders);
         AddAll(services, FeatureIds.MaxReceptionsPerBranch);
+        AddAll(services, FeatureIds.RealtimeAccessControl);
 
         // BDD-015 applicability:
         // TableService — only where seated service exists (restaurant-style macros).

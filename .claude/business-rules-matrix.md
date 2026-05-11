@@ -29,7 +29,7 @@ No todos los giros requieren los 4 planes. La UI y el API deben adaptarse a esta
 ### 1.4 Specialized Services (Estéticas, Consultorios, Talleres)
 *Baja complejidad. Enfoque en agenda y cobro.*
 - **Free ($0):** 1 Caja, Hardware Core, Folios simples, Base de clientes.
-- **Pro ($99) [RECOMMENDED]:** Facturación CFDI, Folios personalizados, Historial CRM, Recordatorios, **Multi-Till (Ilimitado)**.
+- **Pro ($99) [RECOMMENDED]:** Facturación CFDI, Folios personalizados, Historial CRM, Recordatorios, **Multi-Till (Ilimitado)**, **Control de acceso en tiempo real (RealtimeAccessControl)** — bridge SignalR para biometría, QR de membresía y torniquetes en gimnasios.
 *(Basic y Enterprise NO APLICAN)*
 
 ## 2. Architectural Constraints
