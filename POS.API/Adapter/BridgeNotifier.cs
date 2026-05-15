@@ -23,12 +23,12 @@ public class BridgeNotifier : IBridgeNotifier
     /// <inheritdoc />
     public Task NotifyAccessGrantedAsync(int branchId, int customerId)
         => _hub.Clients
-            .Group(BridgeHub.BuildGroupName(branchId))
+            .Group(BridgeHub.BuildHardwareGroupName(branchId))
             .SendAsync("OpenTurnstile", customerId);
 
     /// <inheritdoc />
     public Task NotifyAccessAttemptAsync(int branchId, AccessResultDto result)
         => _hub.Clients
-            .Group(BridgeHub.BuildGroupName(branchId))
+            .Group(BridgeHub.BuildDashboardGroupName(branchId))
             .SendAsync("AccessAttempted", result);
 }
