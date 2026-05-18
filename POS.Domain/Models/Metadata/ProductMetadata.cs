@@ -41,15 +41,4 @@ public class ProductMetadata
     public bool? IsAlcoholic { get; set; }
 
     #endregion
-
-    #region Retail Vertical
-
-    /// <summary>
-    /// Whether this product is sold by weight (Enterprise plan scale support).
-    /// Triggers the POS to capture the actual weight at sale time, populating
-    /// <see cref="OrderItemMetadata.WeightGrams"/>.
-    /// </summary>
-    public bool? IsSoldByWeight { get; set; }
-
-    #endregion
 }

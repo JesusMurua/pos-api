@@ -26,15 +26,4 @@ public class OrderItemMetadata
     public DateTime? AppointmentAt { get; set; }
 
     #endregion
-
-    #region Retail Vertical
-
-    /// <summary>
-    /// Actual weight measured at sale time when the corresponding product has
-    /// <see cref="ProductMetadata.IsSoldByWeight"/> = true. Drives the variable
-    /// line price for weight-based items.
-    /// </summary>
-    public decimal? WeightGrams { get; set; }
-
-    #endregion
 }
