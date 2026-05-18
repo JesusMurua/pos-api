@@ -29,6 +29,7 @@ public static class ProductMapping
             TrackStock = entity.TrackStock,
             CurrentStock = entity.CurrentStock,
             LowStockThreshold = entity.LowStockThreshold,
+            Type = entity.Type,
             SatProductCode = entity.SatProductCode,
             SatUnitCode = entity.SatUnitCode,
             IsTaxIncluded = entity.IsTaxIncluded,
@@ -100,6 +101,7 @@ public static class ProductMapping
             TrackStock = request.TrackStock,
             CurrentStock = request.CurrentStock,
             LowStockThreshold = request.LowStockThreshold,
+            Type = request.Type,
             SatProductCode = request.SatProductCode,
             SatUnitCode = request.SatUnitCode,
             IsTaxIncluded = request.IsTaxIncluded,
@@ -156,6 +158,7 @@ public static class ProductMapping
         entity.TrackStock = request.TrackStock;
         entity.CurrentStock = request.CurrentStock;
         entity.LowStockThreshold = request.LowStockThreshold;
+        entity.Type = request.Type;
         entity.SatProductCode = request.SatProductCode;
         entity.SatUnitCode = request.SatUnitCode;
         entity.IsTaxIncluded = request.IsTaxIncluded;

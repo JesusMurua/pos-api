@@ -118,6 +118,8 @@ public class DeliveryService : IDeliveryService
                 Id = i.Id,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
+                ProductType = i.ProductType,
+                SatUnitCode = i.SatUnitCode,
                 UnitPriceCents = i.UnitPriceCents,
                 Notes = i.Notes,
                 SizeName = i.SizeName
@@ -150,6 +152,7 @@ public class DeliveryService : IDeliveryService
             IsPaid = isPrepaidByPlatform,
             SyncStatusId = SyncStatusIds.Synced,
             CreatedAt = DateTime.UtcNow,
+            // ProductType defaults to Standard for webhook-ingested items (no ProductId reference from external platforms).
             Items = request.Items.Select(i => new OrderItem
             {
                 ProductName = i.ProductName,

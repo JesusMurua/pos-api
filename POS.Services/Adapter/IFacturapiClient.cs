@@ -48,7 +48,7 @@ public class FacturapiInvoiceItem
     public string ProductCode { get; set; } = null!;
     public string UnitCode { get; set; } = null!;
     public string Description { get; set; } = null!;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TaxRate { get; set; }
 

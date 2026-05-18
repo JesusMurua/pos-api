@@ -40,6 +40,12 @@ public class ProductRequest
 
     public decimal LowStockThreshold { get; set; } = 0;
 
+    /// <summary>
+    /// Universal classification driving backend dispatch. Defaults to
+    /// <see cref="ProductType.Standard"/> when omitted.
+    /// </summary>
+    public ProductType Type { get; set; } = ProductType.Standard;
+
     [MaxLength(10)]
     public string? SatProductCode { get; set; }
 

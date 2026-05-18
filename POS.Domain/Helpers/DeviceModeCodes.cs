@@ -14,6 +14,7 @@ public static class DeviceModeCodes
     public const string Kiosk = "kiosk";
     public const string Reception = "reception";
     public const string Bridge = "bridge";
+    public const string Mobile = "mobile";
 
     /// <summary>
     /// All accepted device mode codes. Iteration order is the canonical order
@@ -26,7 +27,8 @@ public static class DeviceModeCodes
         Kitchen,
         Kiosk,
         Reception,
-        Bridge
+        Bridge,
+        Mobile
     };
 
     /// <summary>

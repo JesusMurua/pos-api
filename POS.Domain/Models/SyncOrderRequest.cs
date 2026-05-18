@@ -54,7 +54,7 @@ public class SyncOrderItemRequest
     [MaxLength(150)]
     public string ProductName { get; set; } = null!;
 
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
 
     public int UnitPriceCents { get; set; }
 

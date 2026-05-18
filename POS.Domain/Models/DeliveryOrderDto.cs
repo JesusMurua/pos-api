@@ -1,3 +1,5 @@
+using POS.Domain.Enums;
+
 namespace POS.Domain.Models;
 
 /// <summary>
@@ -25,7 +27,9 @@ public class DeliveryOrderItemDto
 {
     public int Id { get; set; }
     public string ProductName { get; set; } = null!;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
+    public ProductType ProductType { get; set; }
+    public string? SatUnitCode { get; set; }
     public int UnitPriceCents { get; set; }
     public string? Notes { get; set; }
     public string? SizeName { get; set; }

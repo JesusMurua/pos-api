@@ -1,3 +1,4 @@
+using POS.Domain.Enums;
 using POS.Domain.Models;
 
 namespace POS.Services.IService;
@@ -191,7 +192,9 @@ public class OrderPullItemDto
 {
     public int Id { get; set; }
     public string ProductName { get; set; } = null!;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
+    public ProductType ProductType { get; set; }
+    public string? SatUnitCode { get; set; }
     public int UnitPriceCents { get; set; }
     public string? SizeName { get; set; }
     public string? Notes { get; set; }

@@ -139,22 +139,33 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         EnsureUtcRange(startUtc, endUtc);
 
-        return await _context.OrderItems
+        // Materialize raw decimal aggregates first to avoid PostgreSQL banker's
+        // rounding when EF Core translates Math.Round to SQL. The in-memory
+        // (int)Math.Round(..., MidpointRounding.AwayFromZero) below preserves
+        // half-away-from-zero semantics for cent totals.
+        var rawRows = await _context.OrderItems
             .AsNoTracking()
             .Where(i => i.Order!.BranchId == branchId
                      && i.Order.CreatedAt >= startUtc
                      && i.Order.CreatedAt < endUtc
                      && i.Order.CancellationReason == null)
             .GroupBy(i => i.ProductName)
-            .Select(g => new TopProduct
+            .Select(g => new
             {
                 Name = g.Key,
                 Quantity = g.Sum(i => i.Quantity),
-                TotalCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
+                RawTotalCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
             })
-            .OrderByDescending(p => p.Quantity)
+            .OrderByDescending(g => g.Quantity)
             .Take(top)
             .ToListAsync();
+
+        return rawRows.Select(r => new TopProduct
+        {
+            Name = r.Name,
+            Quantity = r.Quantity,
+            TotalCents = (int)Math.Round(r.RawTotalCents, MidpointRounding.AwayFromZero)
+        }).ToList();
     }
 
     /// <inheritdoc />
@@ -305,7 +316,11 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         EnsureUtcRange(startUtc, endUtc);
 
-        return await _context.OrderItems
+        // Materialize raw decimal aggregates first to avoid PostgreSQL banker's
+        // rounding when EF Core translates Math.Round to SQL. The in-memory
+        // (int)Math.Round(..., MidpointRounding.AwayFromZero) below preserves
+        // half-away-from-zero semantics for revenue cent totals.
+        var rawRows = await _context.OrderItems
             .AsNoTracking()
             .Where(i => i.Order!.BranchId == branchId
                      && i.Order.IsPaid
@@ -313,15 +328,22 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                      && i.Order.CreatedAt >= startUtc
                      && i.Order.CreatedAt < endUtc)
             .GroupBy(i => i.ProductName)
-            .Select(g => new TopProductDto
+            .Select(g => new
             {
                 ProductName = g.Key,
                 QuantitySold = g.Sum(i => i.Quantity),
-                TotalRevenueCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
+                RawTotalRevenueCents = g.Sum(i => i.Quantity * i.UnitPriceCents)
             })
-            .OrderByDescending(p => p.QuantitySold)
+            .OrderByDescending(g => g.QuantitySold)
             .Take(top)
             .ToListAsync();
+
+        return rawRows.Select(r => new TopProductDto
+        {
+            ProductName = r.ProductName,
+            QuantitySold = r.QuantitySold,
+            TotalRevenueCents = (int)Math.Round(r.RawTotalRevenueCents, MidpointRounding.AwayFromZero)
+        }).ToList();
     }
 
     /// <inheritdoc />
@@ -436,7 +458,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .Select(o => new
             {
                 o.OrderNumber,
-                ItemCount = o.Items!.Sum(i => i.Quantity),
+                ItemCount = o.Items!.Count(),
                 o.TotalCents,
                 o.KitchenStatusId,
                 o.CancelledAt,
@@ -484,7 +506,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 o.CustomerId,
                 CustomerFirstName = o.Customer != null ? o.Customer.FirstName : null,
                 CustomerLastName = o.Customer != null ? o.Customer.LastName : null,
-                ItemCount = o.Items!.Sum(i => i.Quantity),
+                ItemCount = o.Items!.Count(),
                 PaymentMethods = o.Payments.Select(p => p.Method).ToList(),
                 o.ReconciliationNote
             })

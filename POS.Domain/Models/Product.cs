@@ -41,6 +41,13 @@ public partial class Product : IBranchScoped
 
     public decimal LowStockThreshold { get; set; } = 0;
 
+    /// <summary>
+    /// Universal classification used by the backend to dispatch behavior
+    /// (stock deduction path, fiscal defaults, UI rendering) without inferring
+    /// from metadata. Persisted as a string for SQL self-description.
+    /// </summary>
+    public ProductType Type { get; set; } = ProductType.Standard;
+
     #region Fiscal / SAT Fields
 
     /// <summary>SAT product/service code (clave de producto/servicio). E.g., "90101500" for food.</summary>

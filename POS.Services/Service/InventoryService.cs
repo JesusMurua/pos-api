@@ -397,7 +397,7 @@ public class InventoryService : IInventoryService
         try
         {
             var orderItems = items
-                .Select(i => (OrderId: orderId, i.ProductId, Quantity: (decimal)i.Quantity))
+                .Select(i => (OrderId: orderId, i.ProductId, Quantity: i.Quantity))
                 .ToList();
 
             await DeductBatchCoreAsync(orderItems);
@@ -416,7 +416,7 @@ public class InventoryService : IInventoryService
             var orderItems = orders
                 .Where(o => o.Items != null)
                 .SelectMany(o => o.Items!.Select(i =>
-                    (OrderId: o.Id, i.ProductId, Quantity: (decimal)i.Quantity)))
+                    (OrderId: o.Id, i.ProductId, Quantity: i.Quantity)))
                 .ToList();
 
             if (orderItems.Count == 0) return;

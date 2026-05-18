@@ -137,7 +137,8 @@ public static class DbInitializer
                 new DeviceModeCatalog { Code = "kiosk", Name = "Kiosk", Description = "Autoservicio para clientes" },
                 new DeviceModeCatalog { Code = "tables", Name = "Mesas", Description = "Vista de mesas para meseros" },
                 new DeviceModeCatalog { Code = "kitchen", Name = "Cocina", Description = "Pantalla de cocina KDS" },
-                new DeviceModeCatalog { Code = "reception", Name = "Recepción", Description = "Control de acceso (gym)" }
+                new DeviceModeCatalog { Code = "reception", Name = "Recepción", Description = "Control de acceso (gym)" },
+                new DeviceModeCatalog { Code = "mobile", Name = "Mobile POS / Mesero", Description = "App móvil para meseros (BYOD)" }
             );
             await context.SaveChangesAsync();
         }

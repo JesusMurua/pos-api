@@ -1,0 +1,458 @@
+version=1
+
+# This file caches language service data to improve the performance of C# Dev Kit.
+# It is not intended for manual editing. It can safely be deleted and will be
+# regenerated automatically. For more information, see https://aka.ms/lscache
+#
+# To control where cache files are stored, use the following VS Code setting:
+#   "dotnet.projectsystem.cacheInProjectFolder": true
+
+[project]
+language=C#
+primary
+lastDtbSucceeded
+
+[properties]
+AssemblyName=POS.Domain
+CommandLineArgsForDesignTimeEvaluation=-langversion:14.0 -define:TRACE
+CompilerGeneratedFilesOutputPath=
+MaxSupportedLangVersion=14.0
+ProjectAssetsFile=<PATH>obj/project.assets.json
+RootNamespace=POS.Domain
+RunAnalyzers=
+RunAnalyzersDuringLiveAnalysis=
+SolutionPath=<PATH>../pos-api.slnx
+TargetFrameworkIdentifier=.NETCoreApp
+TargetPath=<PATH>bin/Debug/net10.0/POS.Domain.dll
+TargetRefPath=<PATH>obj/Debug/net10.0/ref/POS.Domain.dll
+TemporaryDependencyNodeTargetIdentifier=net10.0
+
+[commandLineArguments]
+/noconfig
+/unsafe-
+/checked-
+/nowarn:1701,1702,1701,1702
+/fullpaths
+/nostdlib+
+/errorreport:prompt
+/warn:10
+/define:TRACE;DEBUG;NET;NET10_0;NETCOREAPP;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NET9_0_OR_GREATER;NET10_0_OR_GREATER;NETCOREAPP1_0_OR_GREATER;NETCOREAPP1_1_OR_GREATER;NETCOREAPP2_0_OR_GREATER;NETCOREAPP2_1_OR_GREATER;NETCOREAPP2_2_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER
+/highentropyva+
+/nullable:enable
+/features:"InterceptorsNamespaces=;Microsoft.Extensions.Validation.Generated"
+/debug+
+/debug:portable
+/filealign:512
+/optimize-
+/out:obj\Debug\net10.0\POS.Domain.dll
+/refout:obj\Debug\net10.0\refint\POS.Domain.dll
+/target:library
+/warnaserror-
+/utf8output
+/deterministic+
+/langversion:14.0
+/warnaserror+:NU1605,SYSLIB0011
+
+[sourceFiles]
+DTOs/AccessControl/
+ AccessResultDto.cs
+ EnrollQrRequestDto.cs
+ QrStatusResponseDto.cs
+ ScanQrRequestDto.cs
+DTOs/Bridge/
+ HealthStatusDto.cs
+ ScanPayloadDto.cs
+ SyncAccessRecordDto.cs
+ WeightPayloadDto.cs
+DTOs/CashRegister/
+ CashMovementDto.cs
+ CashRegisterDto.cs
+ CashRegisterSessionDto.cs
+ GenerateLinkCodeResponse.cs
+DTOs/Customer/
+ CustomerMembershipDto.cs
+ CustomerOrderRowDto.cs
+ CustomerStatsDto.cs
+DTOs/Device/
+ DeviceDto.cs
+ DeviceLimitsDto.cs
+ DeviceListItemResponse.cs
+ DeviceModeQuotaDto.cs
+ DeviceRegistrationRequest.cs
+ DeviceResponse.cs
+ PendingDeviceCodeDto.cs
+ UpdateDeviceRequest.cs
+DTOs/Product/
+ ProductMapping.cs
+ ProductRequest.cs
+ ProductResponse.cs
+DTOs/
+ Tax/TaxDto.cs
+ User/UserSummaryDto.cs
+Enums/
+ CustomerTransactionType.cs
+ DeliveryStatus.cs
+ EnforcementScope.cs
+ FeatureKey.cs
+ InventoryTransactionType.cs
+ InvoiceStatus.cs
+ InvoiceType.cs
+ KitchenStatus.cs
+ MembershipStatus.cs
+ OrderSource.cs
+ OrderSyncStatus.cs
+ PaymentMethod.cs
+ PlanType.cs
+ PosExperience.cs
+ PrintingDestination.cs
+ PrintJobStatus.cs
+ ProductType.cs
+ PromotionScope.cs
+ PromotionType.cs
+ ReservationStatus.cs
+ StripeEventStatus.cs
+ UnitOfMeasure.cs
+ UserRole.cs
+ ZoneType.cs
+Exceptions/
+ ConcurrencyConflictException.cs
+ NotFoundException.cs
+ PlanLimitExceededException.cs
+ RegisterNameTakenException.cs
+ UnauthorizedException.cs
+ ValidationException.cs
+Extensions/CustomerMembershipExtensions.cs
+Helpers/
+ AccessMethodIds.cs
+ AccessReasonIds.cs
+ CashMovementType.cs
+ CashRegisterStatus.cs
+ DeviceModeCodes.cs
+ FeatureIds.cs
+ InventoryMovementTypeIds.cs
+ KitchenStatusIds.cs
+ MacroCategoryIds.cs
+ MacroCategoryTemplates.cs
+ MetadataJson.cs
+ PaymentStatus.cs
+ PlanTypeIds.cs
+ PromotionTypeIds.cs
+ SatPaymentForm.cs
+ SecureCodeAlphabet.cs
+ StripeConstants.cs
+ StripeSubscriptionStatus.cs
+ SyncStatusIds.cs
+ TableStatusIds.cs
+ TaxCalculator.cs
+ TimeZoneHelper.cs
+ UserRoleIds.cs
+ WebhookInboxStatus.cs
+Interfaces/IBranchScoped.cs
+Models/
+ AccessLog.cs
+ AuditLog.cs
+ Branch.cs
+ BranchDeliveryConfig.cs
+ BranchDeliveryConfigDto.cs
+ BranchDeliveryConfigRequests.cs
+ BranchPaymentConfig.cs
+ BranchPaymentConfigRequest.cs
+ Business.cs
+ BusinessGiro.cs
+ CancelOrderRequest.cs
+ CashMovement.cs
+ CashRegister.cs
+ CashRegisterLinkCode.cs
+ CashRegisterSession.cs
+ CashRegisterSessionRequest.cs
+ Catalogs/
+  AccessMethodCatalog.cs
+  AccessReasonCatalog.cs
+  BusinessTypeCatalog.cs
+  BusinessTypeFeature.cs
+  CashMovementTypeCatalog.cs
+  CashRegisterStatusCatalog.cs
+  DeviceModeCatalog.cs
+  DisplayStatusCatalog.cs
+  FeatureCatalog.cs
+  InventoryMovementTypeCatalog.cs
+  KitchenStatusCatalog.cs
+  MacroCategory.cs
+  OnboardingStatusCatalog.cs
+  OrderStatusCatalog.cs
+  OrderSyncStatusCatalog.cs
+  PaymentMethodCatalog.cs
+  PaymentStatusCatalog.cs
+  PlanBusinessTypeFeatureOverride.cs
+  PlanFeatureMatrix.cs
+  PlanTypeCatalog.cs
+  PromotionScopeCatalog.cs
+  PromotionTypeCatalog.cs
+  TableStatusCatalog.cs
+  UserRoleCatalog.cs
+  ZoneTypeCatalog.cs
+ Category.cs
+ Customer.cs
+ CustomerMembership.cs
+ CustomerTransaction.cs
+ DashboardSummaryDto.cs
+ DeductSaleRequest.cs
+ DeliveryOrderDto.cs
+ Device.cs
+ DeviceActivationCode.cs
+ DiscountPreset.cs
+ FiscalCustomer.cs
+ IngestDeliveryOrderItemRequest.cs
+ IngestDeliveryOrderRequest.cs
+ InventoryItem.cs
+ InventoryLedgerDto.cs
+ InventoryMovement.cs
+ Invoice.cs
+ KdsEventOutbox.cs
+ Metadata/
+  CustomerMetadata.cs
+  OrderItemMetadata.cs
+  OrderMetadata.cs
+  PaymentMetadata.cs
+  ProductMetadata.cs
+ Order.cs
+ OrderItem.cs
+ OrderItemTax.cs
+ OrderPayment.cs
+ OrphanedOrderDto.cs
+ PaymentWebhookInbox.cs
+ PrintJob.cs
+ Product.cs
+ ProductConsumption.cs
+ ProductExtra.cs
+ ProductImage.cs
+ ProductImportModels.cs
+ ProductModifierGroup.cs
+ ProductSize.cs
+ ProductTax.cs
+ Promotion.cs
+ PromotionUsage.cs
+ PushSubscription.cs
+ ReportModels.cs
+ Reservation.cs
+ RestaurantTable.cs
+ StockReceipt.cs
+ StockReceiptItem.cs
+ StockReceiptRequests.cs
+ StripeEventInbox.cs
+ Subscription.cs
+ SubscriptionItem.cs
+ SubscriptionStatusDto.cs
+ Supplier.cs
+ SupplierRequests.cs
+ SyncOrderRequest.cs
+ TableStatusDto.cs
+ TableStatusProjection.cs
+ Tax.cs
+ User.cs
+ UserBranch.cs
+ UserModels.cs
+ Zone.cs
+obj/Debug/net10.0/
+ .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
+ POS.Domain.AssemblyInfo.cs
+ POS.Domain.GlobalUsings.g.cs
+PartialModels/
+ Branch.partial.cs
+ BranchConfigDto.cs
+ Business.partial.cs
+ Order.partial.cs
+Settings/
+ AccessControlSettings.cs
+ EmailSettings.cs
+ FacturapiSettings.cs
+ JwtSettings.cs
+ StripeSettings.cs
+ SupabaseSettings.cs
+ VapidSettings.cs
+
+[metadataReferences]
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
+ Microsoft.CSharp.dll
+ Microsoft.VisualBasic.Core.dll
+ Microsoft.VisualBasic.dll
+ Microsoft.Win32.Primitives.dll
+ Microsoft.Win32.Registry.dll
+ mscorlib.dll
+ netstandard.dll
+ System.AppContext.dll
+ System.Buffers.dll
+ System.Collections.Concurrent.dll
+ System.Collections.dll
+ System.Collections.Immutable.dll
+ System.Collections.NonGeneric.dll
+ System.Collections.Specialized.dll
+ System.ComponentModel.Annotations.dll
+ System.ComponentModel.DataAnnotations.dll
+ System.ComponentModel.dll
+ System.ComponentModel.EventBasedAsync.dll
+ System.ComponentModel.Primitives.dll
+ System.ComponentModel.TypeConverter.dll
+ System.Configuration.dll
+ System.Console.dll
+ System.Core.dll
+ System.Data.Common.dll
+ System.Data.DataSetExtensions.dll
+ System.Data.dll
+ System.Diagnostics.Contracts.dll
+ System.Diagnostics.Debug.dll
+ System.Diagnostics.DiagnosticSource.dll
+ System.Diagnostics.FileVersionInfo.dll
+ System.Diagnostics.Process.dll
+ System.Diagnostics.StackTrace.dll
+ System.Diagnostics.TextWriterTraceListener.dll
+ System.Diagnostics.Tools.dll
+ System.Diagnostics.TraceSource.dll
+ System.Diagnostics.Tracing.dll
+ System.dll
+ System.Drawing.dll
+ System.Drawing.Primitives.dll
+ System.Dynamic.Runtime.dll
+ System.Formats.Asn1.dll
+ System.Formats.Tar.dll
+ System.Globalization.Calendars.dll
+ System.Globalization.dll
+ System.Globalization.Extensions.dll
+ System.IO.Compression.Brotli.dll
+ System.IO.Compression.dll
+ System.IO.Compression.FileSystem.dll
+ System.IO.Compression.ZipFile.dll
+ System.IO.dll
+ System.IO.FileSystem.AccessControl.dll
+ System.IO.FileSystem.dll
+ System.IO.FileSystem.DriveInfo.dll
+ System.IO.FileSystem.Primitives.dll
+ System.IO.FileSystem.Watcher.dll
+ System.IO.IsolatedStorage.dll
+ System.IO.MemoryMappedFiles.dll
+ System.IO.Pipelines.dll
+ System.IO.Pipes.AccessControl.dll
+ System.IO.Pipes.dll
+ System.IO.UnmanagedMemoryStream.dll
+ System.Linq.AsyncEnumerable.dll
+ System.Linq.dll
+ System.Linq.Expressions.dll
+ System.Linq.Parallel.dll
+ System.Linq.Queryable.dll
+ System.Memory.dll
+ System.Net.dll
+ System.Net.Http.dll
+ System.Net.Http.Json.dll
+ System.Net.HttpListener.dll
+ System.Net.Mail.dll
+ System.Net.NameResolution.dll
+ System.Net.NetworkInformation.dll
+ System.Net.Ping.dll
+ System.Net.Primitives.dll
+ System.Net.Quic.dll
+ System.Net.Requests.dll
+ System.Net.Security.dll
+ System.Net.ServerSentEvents.dll
+ System.Net.ServicePoint.dll
+ System.Net.Sockets.dll
+ System.Net.WebClient.dll
+ System.Net.WebHeaderCollection.dll
+ System.Net.WebProxy.dll
+ System.Net.WebSockets.Client.dll
+ System.Net.WebSockets.dll
+ System.Numerics.dll
+ System.Numerics.Vectors.dll
+ System.ObjectModel.dll
+ System.Reflection.DispatchProxy.dll
+ System.Reflection.dll
+ System.Reflection.Emit.dll
+ System.Reflection.Emit.ILGeneration.dll
+ System.Reflection.Emit.Lightweight.dll
+ System.Reflection.Extensions.dll
+ System.Reflection.Metadata.dll
+ System.Reflection.Primitives.dll
+ System.Reflection.TypeExtensions.dll
+ System.Resources.Reader.dll
+ System.Resources.ResourceManager.dll
+ System.Resources.Writer.dll
+ System.Runtime.CompilerServices.Unsafe.dll
+ System.Runtime.CompilerServices.VisualC.dll
+ System.Runtime.dll
+ System.Runtime.Extensions.dll
+ System.Runtime.Handles.dll
+ System.Runtime.InteropServices.dll
+ System.Runtime.InteropServices.JavaScript.dll
+ System.Runtime.InteropServices.RuntimeInformation.dll
+ System.Runtime.Intrinsics.dll
+ System.Runtime.Loader.dll
+ System.Runtime.Numerics.dll
+ System.Runtime.Serialization.dll
+ System.Runtime.Serialization.Formatters.dll
+ System.Runtime.Serialization.Json.dll
+ System.Runtime.Serialization.Primitives.dll
+ System.Runtime.Serialization.Xml.dll
+ System.Security.AccessControl.dll
+ System.Security.Claims.dll
+ System.Security.Cryptography.Algorithms.dll
+ System.Security.Cryptography.Cng.dll
+ System.Security.Cryptography.Csp.dll
+ System.Security.Cryptography.dll
+ System.Security.Cryptography.Encoding.dll
+ System.Security.Cryptography.OpenSsl.dll
+ System.Security.Cryptography.Primitives.dll
+ System.Security.Cryptography.X509Certificates.dll
+ System.Security.dll
+ System.Security.Principal.dll
+ System.Security.Principal.Windows.dll
+ System.Security.SecureString.dll
+ System.ServiceModel.Web.dll
+ System.ServiceProcess.dll
+ System.Text.Encoding.CodePages.dll
+ System.Text.Encoding.dll
+ System.Text.Encoding.Extensions.dll
+ System.Text.Encodings.Web.dll
+ System.Text.Json.dll
+ System.Text.RegularExpressions.dll
+ System.Threading.AccessControl.dll
+ System.Threading.Channels.dll
+ System.Threading.dll
+ System.Threading.Overlapped.dll
+ System.Threading.Tasks.Dataflow.dll
+ System.Threading.Tasks.dll
+ System.Threading.Tasks.Extensions.dll
+ System.Threading.Tasks.Parallel.dll
+ System.Threading.Thread.dll
+ System.Threading.ThreadPool.dll
+ System.Threading.Timer.dll
+ System.Transactions.dll
+ System.Transactions.Local.dll
+ System.ValueTuple.dll
+ System.Web.dll
+ System.Web.HttpUtility.dll
+ System.Windows.dll
+ System.Xml.dll
+ System.Xml.Linq.dll
+ System.Xml.ReaderWriter.dll
+ System.Xml.Serialization.dll
+ System.Xml.XDocument.dll
+ System.Xml.XmlDocument.dll
+ System.Xml.XmlSerializer.dll
+ System.Xml.XPath.dll
+ System.Xml.XPath.XDocument.dll
+ WindowsBase.dll
+
+[analyzerReferences]
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
+ Microsoft.Interop.ComInterfaceGenerator.dll
+ Microsoft.Interop.JavaScript.JSImportGenerator.dll
+ Microsoft.Interop.LibraryImportGenerator.dll
+ Microsoft.Interop.SourceGeneration.dll
+ System.Text.Json.SourceGeneration.dll
+ System.Text.RegularExpressions.Generator.dll
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
+ Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
+ Microsoft.CodeAnalysis.NetAnalyzers.dll
+
+[analyzerConfigFiles]
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+obj/Debug/net10.0/POS.Domain.GeneratedMSBuildEditorConfig.editorconfig

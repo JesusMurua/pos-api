@@ -38,7 +38,7 @@ public class CancellationReasonDto
 public class DashboardTopProduct
 {
     public string Name { get; set; } = null!;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
     public int TotalCents { get; set; }
 }
 

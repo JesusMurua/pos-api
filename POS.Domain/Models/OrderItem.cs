@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Enums;
 using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
@@ -17,7 +18,17 @@ public partial class OrderItem
     [MaxLength(150)]
     public string ProductName { get; set; } = null!;
 
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
+
+    /// <summary>
+    /// Universal product classification frozen at sale time from
+    /// <see cref="POS.Domain.Models.Product.Type"/>. Drives line-item rendering
+    /// (kg vs units), report categorization, and KDS/print formatting without
+    /// requiring a navigation to <see cref="Product"/>. Webhook-ingested items
+    /// (UberEats/Rappi/etc.) default to <see cref="ProductType.Standard"/>
+    /// because external platforms send no <c>ProductId</c> reference.
+    /// </summary>
+    public ProductType ProductType { get; set; } = ProductType.Standard;
 
     public int UnitPriceCents { get; set; }
 

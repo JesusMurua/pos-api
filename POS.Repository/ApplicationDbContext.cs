@@ -394,6 +394,13 @@ public class ApplicationDbContext : DbContext
             entity.Property(p => p.CurrentStock).HasDefaultValue(0m).HasPrecision(18, 4);
             entity.Property(p => p.LowStockThreshold).HasDefaultValue(0m).HasPrecision(18, 4);
 
+            entity.Property(p => p.Type)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(ProductType.Standard);
+
+            entity.HasIndex(p => p.Type);
+
             // Strongly-typed Metadata persisted as PostgreSQL jsonb (EF Core 9 owned-type JSON).
             entity.OwnsOne(p => p.Metadata, b =>
             {
@@ -653,6 +660,14 @@ public class ApplicationDbContext : DbContext
             entity.Property(oi => oi.IsTaxIncluded).HasDefaultValue(true);
             entity.Property(i => i.OrderId)
                 .HasMaxLength(36);
+
+            entity.Property(i => i.Quantity).HasPrecision(18, 4);
+
+            entity.Property(i => i.ProductType)
+                  .HasConversion<string>()
+                  .HasMaxLength(30)
+                  .HasDefaultValue(ProductType.Standard);
+            entity.HasIndex(i => i.ProductType);
 
             entity.Property(i => i.PromotionName).HasMaxLength(100);
 

@@ -9,7 +9,7 @@ public class IngestDeliveryOrderItemRequest
     public string ProductName { get; set; } = null!;
 
     [Required]
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
 
     [Required]
     public int UnitPriceCents { get; set; }

@@ -241,9 +241,10 @@ public class OrderService : IOrderService
                     {
                         item.SatProductCode = product.SatProductCode;
                         item.SatUnitCode = product.SatUnitCode;
+                        item.ProductType = product.Type;
                     }
 
-                    var lineTotal = item.UnitPriceCents * item.Quantity;
+                    var lineTotal = (int)Math.Round(item.UnitPriceCents * item.Quantity, MidpointRounding.AwayFromZero);
 
                     // ── Slice 2: explicit override bypasses the resolver. ──
                     // The resolver's signature stays pure; OverrideTaxId is
@@ -820,7 +821,7 @@ public class OrderService : IOrderService
                 o.OrderNumber,
                 o.TotalCents,
                 o.CreatedAt,
-                Items = o.Items?.Select(i => new { i.Id, i.ProductName, i.Quantity, i.UnitPriceCents })
+                Items = o.Items?.Select(i => new { i.Id, i.ProductName, i.Quantity, i.ProductType, i.SatUnitCode, i.UnitPriceCents })
                     ?? Enumerable.Empty<object>()
             });
     }
@@ -1350,7 +1351,7 @@ public class OrderService : IOrderService
             return;
         }
 
-        order.SubtotalCents = order.Items.Sum(i => i.UnitPriceCents * i.Quantity);
+        order.SubtotalCents = (int)Math.Round(order.Items.Sum(i => i.UnitPriceCents * i.Quantity), MidpointRounding.AwayFromZero);
         var itemDiscounts = order.Items.Sum(i => i.DiscountCents);
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = Math.Max(0, order.SubtotalCents - order.OrderDiscountCents);
@@ -1408,6 +1409,8 @@ public class OrderService : IOrderService
                 Id = i.Id,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
+                ProductType = i.ProductType,
+                SatUnitCode = i.SatUnitCode,
                 UnitPriceCents = i.UnitPriceCents,
                 SizeName = i.SizeName,
                 Notes = i.Notes,
@@ -1520,7 +1523,7 @@ public class OrderService : IOrderService
     {
         if (order.Items == null) return;
 
-        order.SubtotalCents = order.Items.Sum(i => i.UnitPriceCents * i.Quantity);
+        order.SubtotalCents = (int)Math.Round(order.Items.Sum(i => i.UnitPriceCents * i.Quantity), MidpointRounding.AwayFromZero);
         var itemDiscounts = order.Items.Sum(i => i.DiscountCents);
         order.TotalDiscountCents = itemDiscounts + order.OrderDiscountCents;
         order.TotalCents = order.SubtotalCents - order.OrderDiscountCents;
@@ -1720,6 +1723,23 @@ public class OrderService : IOrderService
     }
 
     /// <summary>
+    /// O(1) lookup from SAT c_ClaveUnidad codes (UN/ECE Rec 20, used by CFDI 4.0)
+    /// to short symbols for display on physical thermal receipts. Unknown codes
+    /// fall back to echoing the raw SAT code rather than misleading with "kg".
+    /// Covers weight, volume, length and area — the four continuous-measure
+    /// dimensions <see cref="ProductType.TrackedByMeasure"/> can represent.
+    /// </summary>
+    private static readonly Dictionary<string, string> SatUnitSymbols = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Measures (Continuous)
+        { "KGM", "kg" }, { "GRM", "g" }, { "LBR", "lb" }, { "OZA", "oz" }, { "TNE", "t" },
+        { "LTR", "L" }, { "MLT", "ml" }, { "GLI", "gal" }, { "GLL", "gal" }, { "MTQ", "m3" }, { "CMQ", "cm3" },
+        { "MTR", "m" }, { "CMT", "cm" }, { "MMT", "mm" }, { "INH", "in" }, { "FOT", "ft" }, { "YRD", "yd" }, { "MTK", "m2" }, { "CMK", "cm2" },
+        // Discrete (Pieces / Packages / Services)
+        { "H87", "pza" }, { "EA", "pza" }, { "C62", "pza" }, { "XBX", "caja" }, { "XPK", "paq" }, { "PR", "par" }, { "E48", "serv" }
+    };
+
+    /// <summary>
     /// Renders a plain-text ticket for a subset of <see cref="OrderItem"/>s
     /// routed to a specific <see cref="PrintingDestination"/>.
     /// Format is human-readable ESC/POS-compatible text (Phase 19).
@@ -1750,7 +1770,14 @@ public class OrderService : IOrderService
 
         foreach (var item in items)
         {
-            sb.AppendLine($"{item.Quantity}x  {item.ProductName}");
+            string unit = "x";
+            if (!string.IsNullOrWhiteSpace(item.SatUnitCode))
+            {
+                unit = SatUnitSymbols.TryGetValue(item.SatUnitCode, out var symbol) ? symbol : item.SatUnitCode;
+            }
+
+            string formattedQty = unit == "x" ? $"{item.Quantity:0.###}x" : $"{item.Quantity:0.###} {unit}";
+            sb.AppendLine($"{formattedQty}  {item.ProductName}");
 
             if (!string.IsNullOrWhiteSpace(item.SizeName))
                 sb.AppendLine($"      + Tamaño: {item.SizeName}");
@@ -1780,6 +1807,8 @@ public class OrderService : IOrderService
         var kdsItems = items
             .Select(i => new KdsItem(
                 Quantity: i.Quantity,
+                ProductType: i.ProductType,
+                SatUnitCode: i.SatUnitCode,
                 Name: i.ProductName,
                 Size: string.IsNullOrWhiteSpace(i.SizeName) ? null : i.SizeName,
                 Extras: ParseExtrasNames(i.ExtrasJson),
@@ -1796,7 +1825,8 @@ public class OrderService : IOrderService
 
         return JsonSerializer.Serialize(ticket, new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
         });
     }
 
@@ -1813,7 +1843,9 @@ public class OrderService : IOrderService
         string CreatedAt);
 
     private sealed record KdsItem(
-        int Quantity,
+        decimal Quantity,
+        ProductType ProductType,
+        string? SatUnitCode,
         string Name,
         string? Size,
         IReadOnlyList<string> Extras,

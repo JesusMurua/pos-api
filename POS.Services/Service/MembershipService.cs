@@ -155,7 +155,7 @@ public class MembershipService : IMembershipService
                 ? latestActiveEnd.Value
                 : now;
 
-            var totalDays = entry.DurationDays * entry.Item.Quantity;
+            var totalDays = entry.DurationDays * (double)entry.Item.Quantity;
             var validUntil = validFrom.AddDays(totalDays);
 
             var membership = new CustomerMembership

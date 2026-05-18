@@ -277,6 +277,7 @@ public class BranchService : IBranchService
                     TrackStock = sourceProduct.TrackStock,
                     CurrentStock = 0,
                     LowStockThreshold = sourceProduct.LowStockThreshold,
+                    Type = sourceProduct.Type,
                     Sizes = sourceProduct.Sizes?.Select(s => new ProductSize
                     {
                         Label = s.Label,

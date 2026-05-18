@@ -35,6 +35,12 @@ public class ProductResponse
 
     public decimal LowStockThreshold { get; set; }
 
+    /// <summary>
+    /// Universal classification mirroring <see cref="POS.Domain.Models.Product.Type"/>.
+    /// Serialized as string on the wire via the global JsonStringEnumConverter.
+    /// </summary>
+    public ProductType Type { get; set; }
+
     public string? SatProductCode { get; set; }
 
     public string? SatUnitCode { get; set; }
