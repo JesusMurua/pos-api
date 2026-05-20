@@ -260,6 +260,21 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
+
+    // Print dispatch policy. Partitioned by client IP because UseRateLimiter
+    // runs before UseAuthentication in the pipeline, so User claims are not
+    // yet populated when the policy lambda evaluates. 60 prints/minute per IP
+    // protects the local hardware bridge from flood attacks without blocking
+    // legitimate cashier traffic during peak hours.
+    options.AddPolicy("PrintCommandPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? IPAddress.None.ToString(),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 });
 
 // Data Protection — persists keys to a directory configurable via the
