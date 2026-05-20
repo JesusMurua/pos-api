@@ -25,4 +25,13 @@ public interface IBridgeNotifier
     /// alongside the hardware-only <c>OpenTurnstile</c> command.
     /// </summary>
     Task NotifyAccessAttemptAsync(int branchId, AccessResultDto result);
+
+    /// <summary>
+    /// Sends a raw ESC/POS byte stream to a specific thermal printer attached
+    /// to the local hardware bridge. Bytes are base64-encoded inside an
+    /// <c>EscPosPayloadDto</c> so the SignalR JSON protocol carries them
+    /// natively. Fire-and-forget — without a persistent outbox the message
+    /// is lost if no bridge is connected at the moment of dispatch.
+    /// </summary>
+    Task SendEscPosCommandAsync(int branchId, string printerId, byte[] escPosBytes);
 }

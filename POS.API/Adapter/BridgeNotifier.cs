@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using POS.API.Hubs;
 using POS.Domain.DTOs.AccessControl;
+using POS.Domain.DTOs.Bridge;
 using POS.Services.IService;
 
 namespace POS.API.Adapter;
@@ -31,4 +32,18 @@ public class BridgeNotifier : IBridgeNotifier
         => _hub.Clients
             .Group(BridgeHub.BuildDashboardGroupName(branchId))
             .SendAsync("AccessAttempted", result);
+
+    /// <inheritdoc />
+    public Task SendEscPosCommandAsync(int branchId, string printerId, byte[] escPosBytes)
+    {
+        ArgumentNullException.ThrowIfNull(escPosBytes);
+        var base64 = Convert.ToBase64String(escPosBytes);
+        var payload = new EscPosPayloadDto(printerId, base64);
+
+        // FIRE-AND-FORGET WARNING: Without a persistent Outbox, this message will be lost if the bridge is disconnected.
+        // A full PrintJobOutbox migration is required for guaranteed delivery in future phases.
+        return _hub.Clients
+            .Group(BridgeHub.BuildHardwareGroupName(branchId))
+            .SendAsync("SendEscPosCommand", payload);
+    }
 }

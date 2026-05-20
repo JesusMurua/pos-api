@@ -26,11 +26,13 @@ namespace POS.API.Hubs;
 public class BridgeHub : Hub
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFeatureGateService _featureGate;
     private readonly ILogger<BridgeHub> _logger;
 
-    public BridgeHub(IUnitOfWork unitOfWork, ILogger<BridgeHub> logger)
+    public BridgeHub(IUnitOfWork unitOfWork, IFeatureGateService featureGate, ILogger<BridgeHub> logger)
     {
         _unitOfWork = unitOfWork;
+        _featureGate = featureGate;
         _logger = logger;
     }
 
@@ -91,17 +93,6 @@ public class BridgeHub : Hub
             return;
         }
 
-        // Plan × giro gate. Only businesses with RealtimeAccessControl enabled
-        // can keep a live bridge connection — without this, a downgraded plan
-        // would still receive turnstile commands for free.
-        var httpContext = Context.GetHttpContext();
-        var featureGate = httpContext?.RequestServices.GetRequiredService<IFeatureGateService>();
-        if (featureGate == null || !await featureGate.IsEnabledAsync(businessId, FeatureKey.RealtimeAccessControl))
-        {
-            Context.Abort();
-            return;
-        }
-
         // Segregated grouping: bridges receive hardware commands, everyone else
         // (reception terminals, admin dashboards) receives telemetry.
         var groupName = IsBridgeMode()
@@ -136,6 +127,12 @@ public class BridgeHub : Hub
     {
         ArgumentNullException.ThrowIfNull(payload);
         EnsureBridgeMode();
+
+        if (!await _featureGate.IsEnabledAsync(GetBusinessId(), FeatureKey.RealtimeAccessControl))
+        {
+            _logger.LogWarning("ProcessScan skipped: Business {BusinessId} lacks RealtimeAccessControl.", GetBusinessId());
+            return;
+        }
 
         if (!int.TryParse(payload.Identifier, out var customerId))
         {

@@ -21,17 +21,20 @@ public class AccessControlService : IAccessControlService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IHmacService _hmacService;
     private readonly IBridgeNotifier _bridgeNotifier;
+    private readonly IFeatureGateService _featureGate;
     private readonly ILogger<AccessControlService> _logger;
 
     public AccessControlService(
         IUnitOfWork unitOfWork,
         IHmacService hmacService,
         IBridgeNotifier bridgeNotifier,
+        IFeatureGateService featureGate,
         ILogger<AccessControlService> logger)
     {
         _unitOfWork = unitOfWork;
         _hmacService = hmacService;
         _bridgeNotifier = bridgeNotifier;
+        _featureGate = featureGate;
         _logger = logger;
     }
 
@@ -47,6 +50,15 @@ public class AccessControlService : IAccessControlService
     public async Task<AccessResultDto> EvaluateQrAccessAsync(
         string plainQrToken, int callerBranchId, int callerBusinessId)
     {
+        if (!await _featureGate.IsEnabledAsync(callerBusinessId, FeatureKey.RealtimeAccessControl))
+        {
+            var business = await _unitOfWork.Business.GetByIdAsync(callerBusinessId);
+            throw new PlanLimitExceededException(
+                resource: "RealtimeAccessControl",
+                limit: 0,
+                currentPlan: PlanTypeIds.ToCode(business!.PlanTypeId));
+        }
+
         // (a) Hash incoming token with the server-side HMAC secret. Lookup is
         // O(log n) thanks to the unique partial index IX_Customers_BusinessId_QrToken.
         var hashedToken = _hmacService.ComputeHash(plainQrToken);
