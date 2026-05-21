@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Interfaces;
 
 namespace POS.Domain.Models;
 
@@ -7,7 +8,7 @@ namespace POS.Domain.Models;
 /// Stores RFC and tax data needed to issue individual invoices.
 /// Scoped to Business — a single RFC is unique per emitter.
 /// </summary>
-public class FiscalCustomer
+public class FiscalCustomer : IBusinessScoped
 {
     public int Id { get; set; }
 

@@ -9,7 +9,7 @@ namespace POS.Domain.Models;
 /// Represents a CFDI electronic invoice issued via Facturapi.
 /// Supports both individual invoices (1 order) and global invoices (N orders).
 /// </summary>
-public class Invoice : IBranchScoped
+public class Invoice : IBranchScoped, IBusinessScoped
 {
     public int Id { get; set; }
 

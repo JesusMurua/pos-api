@@ -332,7 +332,18 @@ using (var scope = app.Services.CreateScope())
     _ = scope.ServiceProvider.GetRequiredService<IHmacService>();
 
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
+    // Production (PostgreSQL) walks the migration history. The integration
+    // test host runs on EF Core InMemory which is not relational, has no
+    // migrations, and needs EnsureCreated to apply the HasData seeds baked
+    // into OnModelCreating (Business 1, Branch 1, ...).
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
+    else
+    {
+        db.Database.EnsureCreated();
+    }
 
     await DbInitializer.SeedSystemDataAsync(db);
 
@@ -385,3 +396,7 @@ app.MapHub<KdsHub>("/hubs/kds");
 app.MapHub<BridgeHub>("/hubs/bridge");
 
 app.Run();
+
+// Exposes the implicit top-level-statement Program type to
+// WebApplicationFactory<Program> in POS.IntegrationTests.
+public partial class Program { }

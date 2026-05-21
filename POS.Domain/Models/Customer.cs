@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Interfaces;
 using POS.Domain.Models.Metadata;
 
 namespace POS.Domain.Models;
@@ -7,7 +8,7 @@ namespace POS.Domain.Models;
 /// Represents a known customer of the business for CRM, store credit (fiado), and loyalty.
 /// Scoped to Business — a customer is shared across all branches.
 /// </summary>
-public class Customer
+public class Customer : IBusinessScoped
 {
     public int Id { get; set; }
 

@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using POS.Domain.Interfaces;
 using POS.Repository.Interceptors;
 using POS.Repository.IRepository;
 using POS.Repository.Repository;
+using POS.Repository.Tenancy;
 
 namespace POS.Repository.Dependencies;
 
@@ -14,6 +16,7 @@ public static class RepositoryDependencies
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddScoped<ITenantContext, HttpTenantContext>();
         services.AddSingleton<AuditInterceptor>();
         services.AddSingleton<BranchInjectionInterceptor>();
 

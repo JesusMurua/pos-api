@@ -1,4 +1,5 @@
 using POS.Domain.Helpers;
+using POS.Domain.Interfaces;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
@@ -6,7 +7,7 @@ namespace POS.Domain.Models;
 /// <summary>
 /// Tracks a business's Stripe subscription state, denormalized for quick access.
 /// </summary>
-public class Subscription
+public class Subscription : IBusinessScoped
 {
     public int Id { get; set; }
     public int BusinessId { get; set; }

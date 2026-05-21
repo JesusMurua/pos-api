@@ -3,7 +3,7 @@ using POS.Domain.Interfaces;
 
 namespace POS.Domain.Models;
 
-public class DeviceActivationCode : IBranchScoped
+public class DeviceActivationCode : IBranchScoped, IBusinessScoped
 {
     public int Id { get; set; }
 

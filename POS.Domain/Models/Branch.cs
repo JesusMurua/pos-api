@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using POS.Domain.Interfaces;
 
 namespace POS.Domain.Models;
 
-public partial class Branch
+public partial class Branch : IBusinessScoped
 {
     public int Id { get; set; }
 

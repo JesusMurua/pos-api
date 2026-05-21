@@ -1,3 +1,4 @@
+using POS.Domain.Interfaces;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
@@ -6,7 +7,7 @@ namespace POS.Domain.Models;
 /// Junction entity linking a <see cref="Business"/> to one or more
 /// <see cref="BusinessTypeCatalog"/> sub-giros (N:M identity list).
 /// </summary>
-public class BusinessGiro
+public class BusinessGiro : IBusinessScoped
 {
     public int Id { get; set; }
 

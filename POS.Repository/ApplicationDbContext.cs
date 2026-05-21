@@ -1,6 +1,8 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
+using POS.Domain.Interfaces;
 using POS.Domain.Models;
 using POS.Domain.Models.Catalogs;
 using POS.Domain.Models.Metadata;
@@ -9,9 +11,14 @@ namespace POS.Repository;
 
 public class ApplicationDbContext : DbContext
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    private readonly ITenantContext _tenantContext;
+
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options,
+        ITenantContext tenantContext)
         : base(options)
     {
+        _tenantContext = tenantContext;
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -1666,5 +1673,97 @@ public class ApplicationDbContext : DbContext
         });
 
         #endregion
+
+        ApplyTenantFilters(modelBuilder);
     }
+
+    #region Tenant Isolation
+
+    /// <summary>
+    /// Applies a tenant-scoped global query filter to every entity that
+    /// implements <see cref="IBranchScoped"/> and/or <see cref="IBusinessScoped"/>.
+    /// Filters are composed with logical AND when an entity declares both
+    /// markers (defensive against accidental over-marking) and degrade to a
+    /// no-op when the current <see cref="ITenantContext"/> has no value for
+    /// the matching scope, allowing background jobs / migrations / seeding
+    /// to bypass tenant isolation transparently.
+    /// </summary>
+    private void ApplyTenantFilters(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var clrType = entityType.ClrType;
+            var isBranchScoped = typeof(IBranchScoped).IsAssignableFrom(clrType);
+            var isBusinessScoped = typeof(IBusinessScoped).IsAssignableFrom(clrType);
+
+            if (!isBranchScoped && !isBusinessScoped) continue;
+
+            var entityParameter = Expression.Parameter(clrType, "e");
+            Expression? predicate = null;
+
+            if (isBusinessScoped)
+            {
+                predicate = BuildScopePredicate(
+                    entityParameter,
+                    tenantContextProperty: nameof(ITenantContext.BusinessId),
+                    entityScopeProperty: nameof(IBusinessScoped.BusinessId));
+            }
+
+            if (isBranchScoped)
+            {
+                var branchPredicate = BuildScopePredicate(
+                    entityParameter,
+                    tenantContextProperty: nameof(ITenantContext.BranchId),
+                    entityScopeProperty: nameof(IBranchScoped.BranchId));
+
+                predicate = predicate is null
+                    ? branchPredicate
+                    : Expression.AndAlso(predicate, branchPredicate);
+            }
+
+            var lambda = Expression.Lambda(predicate!, entityParameter);
+            entityType.SetQueryFilter(lambda);
+        }
+    }
+
+    /// <summary>
+    /// Builds the expression:
+    ///   <c>!this._tenantContext.{TenantProp}.HasValue
+    ///      || e.{EntityScopeProp} == this._tenantContext.{TenantProp}.Value</c>
+    /// Capturing <c>this</c> as a constant keeps the field access live —
+    /// EF Core re-reads <c>_tenantContext</c> on every query execution, so a
+    /// scoped HTTP request observes the current claims and an unscoped
+    /// background job sees the filter short-circuit to <c>true</c>.
+    /// </summary>
+    private Expression BuildScopePredicate(
+        ParameterExpression entityParameter,
+        string tenantContextProperty,
+        string entityScopeProperty)
+    {
+        // this._tenantContext
+        var tenantContextAccess = Expression.Field(
+            Expression.Constant(this),
+            nameof(_tenantContext));
+
+        // this._tenantContext.{tenantContextProperty}  -- typed as int?
+        var tenantValueAccess = Expression.Property(tenantContextAccess, tenantContextProperty);
+
+        // !this._tenantContext.{tenantContextProperty}.HasValue
+        var hasValueAccess = Expression.Property(tenantValueAccess, nameof(Nullable<int>.HasValue));
+        var notHasValue = Expression.Not(hasValueAccess);
+
+        // this._tenantContext.{tenantContextProperty}.Value
+        var tenantValue = Expression.Property(tenantValueAccess, nameof(Nullable<int>.Value));
+
+        // e.{entityScopeProperty}
+        var entityScopeAccess = Expression.Property(entityParameter, entityScopeProperty);
+
+        // e.{entityScopeProperty} == this._tenantContext.{tenantContextProperty}.Value
+        var equality = Expression.Equal(entityScopeAccess, tenantValue);
+
+        // !HasValue || equality
+        return Expression.OrElse(notHasValue, equality);
+    }
+
+    #endregion
 }

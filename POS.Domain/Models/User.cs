@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
+using POS.Domain.Interfaces;
 using POS.Domain.Models.Catalogs;
 
 namespace POS.Domain.Models;
 
-public partial class User
+public partial class User : IBusinessScoped
 {
     public int Id { get; set; }
 
