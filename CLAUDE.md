@@ -82,7 +82,7 @@ Business { Id, Name, LocationName, PinHash }
 
 ---
 
-## API Endpoints (MVP)
+## API Endpoints
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -98,6 +98,28 @@ Business { Id, Name, LocationName, PinHash }
 | GET | `/api/orders/summary` | Daily KPIs |
 | GET | `/api/business/config` | Business configuration |
 | PUT | `/api/business/config` | Update business config |
+
+### Catalog endpoints (BDD-021)
+
+Read-only system catalogs with uniform `IMemoryCache` (1 h TTL), strong
+ETag + `If-None-Match` negotiation, and `Cache-Control: public,
+max-age=3600, must-revalidate` headers. See
+[docs/BDD-021-Dynamic-Catalogs-API.md](docs/BDD-021-Dynamic-Catalogs-API.md).
+
+| Method | Route | Auth | Cached | ETag / 304 |
+|--------|-------|------|--------|------------|
+| GET | `/api/Catalog/macro-categories` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/business-types` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/plan-types` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/plans` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/payment-methods` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/kitchen-statuses` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/display-statuses` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/device-modes` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/zone-types` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/access-reasons` | Anonymous | 1 h | Yes |
+| GET | `/api/Catalog/access-methods` | Anonymous | 1 h | Yes |
+| GET | `/api/Taxes?countryCode={iso}` | `[Authorize]` | 1 h per (resource, country) | Yes |
 
 ---
 

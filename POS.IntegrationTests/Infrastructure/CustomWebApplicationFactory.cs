@@ -22,6 +22,15 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"PosTests_{Guid.NewGuid():N}";
 
+    /// <summary>
+    /// Per-factory EF Core materialization counter wired into the test
+    /// DbContext options. Tests assert on cache miss / hit semantics via
+    /// <c>_factory.QueryCounter.Reset()</c> and <c>_factory.QueryCounter.Count</c>.
+    /// Per-factory (not static) so xUnit parallel class execution does not
+    /// produce cross-class counter interference.
+    /// </summary>
+    public EFQueryCounterInterceptor QueryCounter { get; } = new();
+
     static CustomWebApplicationFactory()
     {
         // Program.cs reads these env vars INLINE during top-level execution
@@ -95,6 +104,23 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Strip JsonDocument properties from the test model so the
             // InMemory provider can validate it — see InMemoryModelCustomizer.
             options.ReplaceService<IModelCustomizer, InMemoryModelCustomizer>();
+        });
+
+        // D1 fallback (BDD-021 §9 / Appendix C): the EF Core
+        // IMaterializationInterceptor does NOT fire on the InMemory provider,
+        // so cache miss / hit measurement is moved to the repository boundary
+        // by decorating IUnitOfWork.Catalog with CountingCatalogRepository
+        // inside CountingUnitOfWork.
+        var unitOfWorkDescriptor = services.SingleOrDefault(
+            d => d.ServiceType == typeof(IUnitOfWork));
+        if (unitOfWorkDescriptor is not null)
+        {
+            services.Remove(unitOfWorkDescriptor);
+        }
+        services.AddScoped<IUnitOfWork>(sp =>
+        {
+            var inner = ActivatorUtilities.CreateInstance<UnitOfWork>(sp);
+            return new CountingUnitOfWork(inner, QueryCounter);
         });
     }
 

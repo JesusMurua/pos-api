@@ -1,86 +1,82 @@
+using POS.Domain.DTOs.Catalogs;
 using POS.Domain.DTOs.Tax;
-using POS.Domain.Models.Catalogs;
 
 namespace POS.Services.IService;
 
 /// <summary>
-/// Provides read-only access to system catalogs for dropdowns, setup, and onboarding.
+/// Read-only service that surfaces system catalogs to the public API.
+/// Every method returns a <see cref="CatalogResponse{T}"/> envelope
+/// carrying the projected DTO list and the strong ETag computed by the
+/// cache-aside layer (see BDD-021 §6.1).
+/// <para>
+/// Internal consumers needing entity-level access MUST query the
+/// repository (<c>IUnitOfWork.Catalog.GetXxxAsync</c>) directly — this
+/// service is the public-facing DTO projector, not a general-purpose
+/// catalog gateway (BDD-021 FR-009 / EC-4).
+/// </para>
 /// </summary>
 public interface ICatalogService
 {
-    Task<IEnumerable<KitchenStatusCatalog>> GetKitchenStatusesAsync();
-    Task<IEnumerable<DisplayStatusCatalog>> GetDisplayStatusesAsync();
-    Task<IEnumerable<PaymentMethodCatalog>> GetPaymentMethodsAsync();
-    Task<IEnumerable<DeviceModeCatalog>> GetDeviceModesAsync();
-    Task<IEnumerable<BusinessTypeCatalog>> GetBusinessTypesAsync();
-    Task<IEnumerable<MacroCategory>> GetMacroCategoriesAsync();
-    Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync();
-    Task<IEnumerable<PlanTypeCatalog>> GetPlanTypesAsync();
-    Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync();
-    Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync();
+    /// <summary>Returns the catalog of kitchen statuses.</summary>
+    Task<CatalogResponse<KitchenStatusDto>> GetKitchenStatusesAsync();
+
+    /// <summary>Returns the catalog of display statuses.</summary>
+    Task<CatalogResponse<DisplayStatusDto>> GetDisplayStatusesAsync();
+
+    /// <summary>Returns the catalog of payment methods.</summary>
+    Task<CatalogResponse<PaymentMethodDto>> GetPaymentMethodsAsync();
+
+    /// <summary>Returns the catalog of device modes.</summary>
+    Task<CatalogResponse<DeviceModeDto>> GetDeviceModesAsync();
+
+    /// <summary>Returns the catalog of business sub-giros (types).</summary>
+    Task<CatalogResponse<BusinessTypeDto>> GetBusinessTypesAsync();
+
+    /// <summary>Returns the catalog of macro categories.</summary>
+    Task<CatalogResponse<MacroCategoryDto>> GetMacroCategoriesAsync();
+
+    /// <summary>Returns the catalog of zone types.</summary>
+    Task<CatalogResponse<ZoneTypeDto>> GetZoneTypesAsync();
+
+    /// <summary>Returns the catalog of subscription plan types (flat list).</summary>
+    Task<CatalogResponse<PlanTypeDto>> GetPlanTypesAsync();
+
+    /// <summary>Returns the catalog of access reasons (gym / wellness access control).</summary>
+    Task<CatalogResponse<AccessReasonDto>> GetAccessReasonsAsync();
+
+    /// <summary>Returns the catalog of access methods (gym / wellness access control).</summary>
+    Task<CatalogResponse<AccessMethodDto>> GetAccessMethodsAsync();
 
     /// <summary>
-    /// Returns the full Plan × Feature catalog as the single source of truth for
-    /// which features each plan includes. Feature <c>Code</c> values match the
-    /// <see cref="POS.Domain.Enums.FeatureKey"/> enum names verbatim, so the
-    /// string is identical to what the JWT <c>features</c> claim carries.
+    /// Returns the full Plan × Feature catalog. Single source of truth for
+    /// which features each plan enables. Feature <c>Code</c> values match
+    /// the <see cref="POS.Domain.Enums.FeatureKey"/> enum names verbatim,
+    /// identical to the JWT <c>features</c> claim emitted by the auth flow.
     /// </summary>
-    Task<IReadOnlyList<PlanCatalogDto>> GetPlanCatalogAsync();
+    Task<CatalogResponse<PlanCatalogDto>> GetPlanCatalogAsync();
 
     /// <summary>
-    /// Returns the <see cref="POS.Domain.Models.Tax"/> catalog rows. When
-    /// <paramref name="countryCode"/> is provided (ISO 3166-1 alpha-2), the
-    /// list is filtered to that country; otherwise every seeded tax is
-    /// returned. Used by the frontend to populate per-product tax selectors
-    /// without having to know the catalog's internal ids.
+    /// Returns the catalog of tax rows. When <paramref name="countryCode"/>
+    /// is provided (ISO 3166-1 alpha-2), results are filtered to that
+    /// country; otherwise every tax row is returned. Unknown country codes
+    /// yield an empty payload (200), not 404.
     /// </summary>
-    Task<IEnumerable<TaxDto>> GetTaxCatalogAsync(string? countryCode = null);
-}
-
-/// <summary>
-/// Public catalog entry for a single subscription plan.
-/// </summary>
-public class PlanCatalogDto
-{
-    public int Id { get; set; }
-    public string Code { get; set; } = null!;
-    public string Name { get; set; } = null!;
-    public int SortOrder { get; set; }
+    /// <param name="countryCode">
+    /// Optional ISO 3166-1 alpha-2 filter. When supplied, must be exactly
+    /// 2 alphabetic characters (validated upstream by the controller — see
+    /// VR-001 in BDD-021 §6.2).
+    /// </param>
+    Task<CatalogResponse<TaxDto>> GetTaxCatalogAsync(string? countryCode = null);
 
     /// <summary>
-    /// Public monthly price in <see cref="Currency"/>. Null means the plan is
-    /// not publicly priced (e.g. Enterprise → contact sales).
+    /// Invalidates the cached envelope for a specific catalog resource (when
+    /// <paramref name="resourceName"/> is supplied) or every cached catalog
+    /// (when null). Used by future admin-triggered cache rebuilds.
+    /// Not exposed over HTTP in v1 — see BDD-021 §5.2 / §7.3.
     /// </summary>
-    public decimal? MonthlyPrice { get; set; }
-
-    /// <summary>ISO 4217 currency code for <see cref="MonthlyPrice"/>.</summary>
-    public string Currency { get; set; } = "MXN";
-
-    public List<PlanCatalogFeatureDto> Features { get; set; } = new();
-}
-
-/// <summary>
-/// One enabled feature inside a <see cref="PlanCatalogDto"/>.
-/// </summary>
-public class PlanCatalogFeatureDto
-{
-    /// <summary>
-    /// Stable feature identifier. Exactly the <see cref="POS.Domain.Enums.FeatureKey"/>
-    /// enum name (e.g. <c>"CustomerDatabase"</c>) so the frontend can compare this
-    /// against the JWT <c>features</c> claim with a plain string match.
-    /// </summary>
-    public string Code { get; set; } = null!;
-    public string Name { get; set; } = null!;
-    public string? Description { get; set; }
-    public bool IsQuantitative { get; set; }
-    public string? ResourceLabel { get; set; }
-
-    /// <summary>Numeric cap for quantitative features. Null means unlimited.</summary>
-    public int? DefaultLimit { get; set; }
-
-    /// <summary>
-    /// Macro categories where this feature is applicable. Empty when the feature
-    /// is defined in the catalog but no macro currently exposes it.
-    /// </summary>
-    public List<int> ApplicableMacroCategoryIds { get; set; } = new();
+    /// <param name="resourceName">
+    /// Cache resource name in PascalCase (e.g. <c>MacroCategories</c>,
+    /// <c>BusinessTypes</c>). Null clears every catalog cache key.
+    /// </param>
+    void Invalidate(string? resourceName = null);
 }
