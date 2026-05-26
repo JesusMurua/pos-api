@@ -8,7 +8,9 @@ namespace POS.Services.IService;
 /// in <c>POS.Services</c> so that <c>POS.Services</c> never takes a project
 /// reference to <c>POS.API</c> (which would create a dependency cycle).
 /// The concrete implementation lives in <c>POS.API/Adapter/BridgeNotifier.cs</c>
-/// and wraps <c>IHubContext&lt;BridgeHub&gt;</c>.
+/// and wraps the strongly-typed <c>IHubContext&lt;BridgeHub, IBridgeClient&gt;</c>
+/// (see BDD-022 D5 — the interface signature here is preserved unchanged
+/// even though the adapter switched to the typed hub context).
 /// </summary>
 public interface IBridgeNotifier
 {

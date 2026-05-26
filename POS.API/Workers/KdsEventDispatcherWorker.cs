@@ -15,16 +15,15 @@ namespace POS.API.Workers;
 public class KdsEventDispatcherWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IHubContext<KdsHub> _hubContext;
+    private readonly IHubContext<KdsHub, IKdsClient> _hubContext;
     private readonly ILogger<KdsEventDispatcherWorker> _logger;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(500);
     private const int BatchSize = 50;
-    private const string EventMethodName = "PrintJobCreated";
 
     public KdsEventDispatcherWorker(
         IServiceScopeFactory scopeFactory,
-        IHubContext<KdsHub> hubContext,
+        IHubContext<KdsHub, IKdsClient> hubContext,
         ILogger<KdsEventDispatcherWorker> logger)
     {
         _scopeFactory = scopeFactory;
@@ -69,7 +68,7 @@ public class KdsEventDispatcherWorker : BackgroundService
             {
                 await _hubContext.Clients
                     .Group(groupName)
-                    .SendAsync(EventMethodName, evt.Payload, ct);
+                    .PrintJobCreated(evt.Payload, ct);
 
                 evt.IsProcessed = true;
                 evt.ProcessedAt = DateTime.UtcNow;

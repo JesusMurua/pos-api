@@ -13,7 +13,7 @@ namespace POS.API.Hubs;
 /// query string (e.g. <c>?destination=Kitchen</c>).
 /// </summary>
 [Authorize]
-public class KdsHub : Hub
+public class KdsHub : Hub<IKdsClient>
 {
     /// <summary>
     /// Group name prefix used for broadcasts. A connection is placed in the

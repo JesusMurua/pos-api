@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -144,5 +146,46 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             services.Remove(descriptor);
         }
+    }
+
+    /// <summary>
+    /// Builds a not-yet-started <see cref="HubConnection"/> wired to the
+    /// in-process <see cref="WebApplicationFactory{TEntryPoint}.Server"/>
+    /// for SignalR loopback tests (BDD-022 §5.2.4).
+    /// <para>
+    /// The connection routes every HTTP request through
+    /// <see cref="TestServer.CreateHandler"/> — there is no real network
+    /// socket, so the SignalR client automatically downgrades from
+    /// WebSocket to LongPolling. This is expected and valid for
+    /// integration testing; the JSON Hub Protocol frames are byte-identical
+    /// to those a WebSocket would carry (see BDD-022 §4.1 D6 note).
+    /// </para>
+    /// <para>
+    /// Caller MUST dispose the returned connection (e.g. via
+    /// <c>await using var connection = factory.CreateHubConnection&lt;...&gt;(...)</c>).
+    /// </para>
+    /// </summary>
+    /// <typeparam name="THub">
+    /// Server-side hub type. Documentation-only — the client does not
+    /// reflect on it, the constraint exists to keep call sites
+    /// self-documenting.
+    /// </typeparam>
+    /// <param name="hubPath">Relative hub path, e.g. <c>/hubs/bridge</c>.</param>
+    /// <param name="jwt">
+    /// Optional bearer token. When supplied, the SignalR client appends
+    /// it as <c>?access_token={jwt}</c> on every negotiation / poll
+    /// request, which the configured <c>JwtBearerEvents.OnMessageReceived</c>
+    /// handler picks up for hub paths.
+    /// </param>
+    public HubConnection CreateHubConnection<THub>(string hubPath, string? jwt = null)
+        where THub : Hub
+    {
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(Server.BaseAddress, hubPath), options =>
+            {
+                options.HttpMessageHandlerFactory = _ => Server.CreateHandler();
+                options.AccessTokenProvider = () => Task.FromResult<string?>(jwt);
+            })
+            .Build();
     }
 }

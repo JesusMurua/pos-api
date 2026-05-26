@@ -23,7 +23,7 @@ namespace POS.API.Hubs;
 /// </list>
 /// </summary>
 [Authorize]
-public class BridgeHub : Hub
+public class BridgeHub : Hub<IBridgeClient>
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFeatureGateService _featureGate;
@@ -250,7 +250,7 @@ public class BridgeHub : Hub
 
         await Clients
             .Group(BuildDashboardGroupName(GetBranchId()))
-            .SendAsync("OnWeightUpdated", payload);
+            .OnWeightUpdated(payload);
     }
 
     /// <summary>
@@ -283,6 +283,6 @@ public class BridgeHub : Hub
             })
             .ToList();
 
-        await Clients.Caller.SendAsync("SyncAccessData", records);
+        await Clients.Caller.SyncAccessData(records);
     }
 }
