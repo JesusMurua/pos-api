@@ -1728,12 +1728,24 @@ public class ApplicationDbContext : DbContext
 
     /// <summary>
     /// Builds the expression:
-    ///   <c>!this._tenantContext.{TenantProp}.HasValue
-    ///      || e.{EntityScopeProp} == this._tenantContext.{TenantProp}.Value</c>
+    ///   <c>this._tenantContext.{TenantProp} == null
+    ///      || (int?)e.{EntityScopeProp} == this._tenantContext.{TenantProp}</c>
     /// Capturing <c>this</c> as a constant keeps the field access live —
     /// EF Core re-reads <c>_tenantContext</c> on every query execution, so a
     /// scoped HTTP request observes the current claims and an unscoped
-    /// background job sees the filter short-circuit to <c>true</c>.
+    /// background job (or pre-authentication request) sees the filter
+    /// short-circuit to <c>true</c> via the <c>== null</c> guard.
+    /// <para>
+    /// CRITICAL: the comparison uses the nullable tenant value DIRECTLY and
+    /// never reads <c>Nullable&lt;int&gt;.Value</c>. The relational (Npgsql)
+    /// query pipeline extracts the captured tenant value as a SQL parameter
+    /// eagerly — reading <c>.Value</c> on a null tenant (background workers,
+    /// the login path before claims exist) throws
+    /// <c>InvalidOperationException: "Nullable object must have a value"</c>
+    /// during parameter extraction, BEFORE the SQL runs. The EF Core InMemory
+    /// provider used by the integration tests honours C# short-circuiting and
+    /// therefore could NOT catch this — the bug only surfaced on PostgreSQL.
+    /// </para>
     /// </summary>
     private Expression BuildScopePredicate(
         ParameterExpression entityParameter,
@@ -1748,21 +1760,24 @@ public class ApplicationDbContext : DbContext
         // this._tenantContext.{tenantContextProperty}  -- typed as int?
         var tenantValueAccess = Expression.Property(tenantContextAccess, tenantContextProperty);
 
-        // !this._tenantContext.{tenantContextProperty}.HasValue
-        var hasValueAccess = Expression.Property(tenantValueAccess, nameof(Nullable<int>.HasValue));
-        var notHasValue = Expression.Not(hasValueAccess);
+        // this._tenantContext.{tenantContextProperty} == null
+        // (reads neither .HasValue nor .Value — translates to a SQL IS NULL check)
+        var nullConstant = Expression.Constant(null, typeof(int?));
+        var tenantIsNull = Expression.Equal(tenantValueAccess, nullConstant);
 
-        // this._tenantContext.{tenantContextProperty}.Value
-        var tenantValue = Expression.Property(tenantValueAccess, nameof(Nullable<int>.Value));
-
-        // e.{entityScopeProperty}
+        // e.{entityScopeProperty}  -- typed as int
         var entityScopeAccess = Expression.Property(entityParameter, entityScopeProperty);
 
-        // e.{entityScopeProperty} == this._tenantContext.{tenantContextProperty}.Value
-        var equality = Expression.Equal(entityScopeAccess, tenantValue);
+        // (int?)e.{entityScopeProperty} — lift to nullable so the comparison is int? == int?
+        var entityScopeAsNullable = Expression.Convert(entityScopeAccess, typeof(int?));
 
-        // !HasValue || equality
-        return Expression.OrElse(notHasValue, equality);
+        // (int?)e.{entityScopeProperty} == this._tenantContext.{tenantContextProperty}
+        // Compares the nullable directly; EF parameterizes the tenant value
+        // without ever invoking Nullable<int>.Value.
+        var equality = Expression.Equal(entityScopeAsNullable, tenantValueAccess);
+
+        // tenant == null || e.scope == tenant
+        return Expression.OrElse(tenantIsNull, equality);
     }
 
     #endregion
