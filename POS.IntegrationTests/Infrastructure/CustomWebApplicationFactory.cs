@@ -48,6 +48,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             "ACCESS_CONTROL_QR_TOKEN_HMAC_SECRET", TestConstants.AccessControlHmacSecret);
         Environment.SetEnvironmentVariable(
             "STRIPE_SECRET_KEY", "sk_test_dummy_integration_secret");
+        Environment.SetEnvironmentVariable(
+            "ADMIN_API_TOKEN", TestConstants.AdminApiToken);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -70,6 +72,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Jwt:Audience"] = TestConstants.JwtAudience,
                 ["AccessControl:QrTokenHmacSecret"] = TestConstants.AccessControlHmacSecret,
                 ["Stripe:SecretKey"] = "sk_test_dummy_integration_secret",
+                ["Admin:ApiToken"] = TestConstants.AdminApiToken,
                 ["ConnectionStrings:DefaultConnection"] = string.Empty
             });
         });

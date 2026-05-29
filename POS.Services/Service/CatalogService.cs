@@ -139,7 +139,8 @@ public class CatalogService : ICatalogService
             {
                 var rows = await _unitOfWork.Catalog.GetBusinessTypesAsync();
                 return rows
-                    .Select(x => new BusinessTypeDto(x.Id, x.PrimaryMacroCategoryId, x.Name))
+                    .Select(x => new BusinessTypeDto(
+                        x.Id, x.PrimaryMacroCategoryId, x.Name, x.ClusterCode))
                     .OrderBy(x => x.PrimaryMacroCategoryId)
                     .ThenBy(x => x.Name, StringComparer.Ordinal)
                     .ToList();

@@ -130,12 +130,16 @@ All three apply **404 information-hiding**: a customer that does not exist or be
 | 3 | retail | Tiendas y Comercios | Retail | ✗ | ✗ |
 | 4 | services | Servicios Especializados | Services | ✗ | ✗ |
 
-### 2.2 BusinessTypeCatalog (20 sub-giros)
+### 2.2 BusinessTypeCatalog (123 sub-giros)
 
-**Food & Beverage (Macro 1):** Restaurante (1), Bar/Cantina (2), Sports Bar/Wings (3)
-**Quick Service (Macro 2):** Taquería (4), Dogos (5), Hamburguesas (6), Cafetería (7), Paletería/Nevería (8), Panadería/Repostería (9)
-**Retail (Macro 3):** Abarrotes/Miscelánea (10), Expendio/Cerveza (11), Refaccionaria (12), Ferretería (13), Papelería (14), Farmacia (15), Boutique (16)
-**Services (Macro 4):** Estética/Barbería (17), Taller Mecánico (18), Consultorio/Clínica (19), Gimnasio/Deportes (20)
+IDs 1-20 permanecen byte-identical (origen del catálogo); los IDs 21-123 son la expansión SCIAN INEGI + análisis Square/Loyverse/Toast/Clip. La lista canónica completa con labels, ClusterCode y tags de hibridación vive en [`SUB-GIROS-TAXONOMY.md`](./SUB-GIROS-TAXONOMY.md). Distribución por macro:
+
+- **Food & Beverage (Macro 1):** 15 sub-giros — IDs 1-3 existentes + 100-111 expansión.
+- **Quick Service (Macro 2):** 18 sub-giros — IDs 4-9 existentes + 112-123 expansión.
+- **Retail (Macro 3):** 24 sub-giros — IDs 10-16 existentes + 83-99 expansión.
+- **Services (Macro 4):** 66 sub-giros — IDs 17-20 existentes + 21-82 expansión, organizados en 10 clusters (`beauty`, `health`, `automotive`, `pets`, `repair`, `fitness`, `education`, `home`, `events`, `professional`) vía la columna `ClusterCode`.
+
+La columna `ClusterCode` solo se popula para entradas de Macro 4 — para los demás macros es NULL y se omite del JSON wire bajo `JsonIgnoreCondition.WhenWritingNull`. La whitelist se enforza con un CHECK constraint en la BD y un static class `POS.Domain.Helpers.ClusterCodes`.
 
 ### 2.3 Modelo de relaciones
 

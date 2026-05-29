@@ -686,36 +686,164 @@ public static class DbInitializer
 
     private static async Task UpsertBusinessTypeCatalogsAsync(ApplicationDbContext context)
     {
-        // Definitive sub-giro catalog — ids are stable and referenced by seed test data.
+        // Definitive 123-entry sub-giro catalog (docs/SUB-GIROS-TAXONOMY.md).
+        // IDs 1-20 are existing rows — labels and macros preserved byte-identical
+        // so no live row gets renamed. IDs 21-123 are the additive expansion;
+        // ClusterCode is populated only for Macro 4 (Services) entries.
         var desired = new List<BusinessTypeCatalog>
         {
-            // Food & Beverage
-            new() { Id = 1,  Name = "Restaurante",                       PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
-            new() { Id = 2,  Name = "Bar / Cantina",                     PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
-            new() { Id = 3,  Name = "Sports Bar / Wings",                PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            // ───── Macro 1 — Restaurantes y Bares (3 existing + 12 new = 15) ─────
+            new() { Id = 1,   Name = "Restaurante",                              PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 2,   Name = "Bar / Cantina",                            PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 3,   Name = "Sports Bar / Wings",                       PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 100, Name = "Marisquería",                              PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 101, Name = "Taquería formal (con mesas)",              PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 102, Name = "Parrilla / Asador / Carnes",               PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 103, Name = "Pozolería / Birriería",                    PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 104, Name = "Cocina económica / Fonda",                 PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 105, Name = "Restaurante italiano / Pizzería de mesa",  PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 106, Name = "Restaurante japonés / Sushi",              PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 107, Name = "Restaurante internacional",                PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 108, Name = "Buffet",                                   PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 109, Name = "Bar de cocteles / Mixología",              PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 110, Name = "Pulquería / Mezcalería",                   PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
+            new() { Id = 111, Name = "Cervecería artesanal / Taproom",           PrimaryMacroCategoryId = MacroCategoryIds.FoodBeverage },
 
-            // Quick Service
-            new() { Id = 4,  Name = "Taquería",                          PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = 5,  Name = "Dogos",                             PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = 6,  Name = "Hamburguesas",                      PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = 7,  Name = "Cafetería",                         PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = 8,  Name = "Paletería / Nevería",               PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
-            new() { Id = 9,  Name = "Panadería / Repostería",            PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            // ───── Macro 2 — Comida Rápida y Cafés (6 existing + 12 new = 18) ─────
+            new() { Id = 4,   Name = "Taquería",                                 PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 5,   Name = "Dogos",                                    PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 6,   Name = "Hamburguesas",                             PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 7,   Name = "Cafetería",                                PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 8,   Name = "Paletería / Nevería",                      PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 9,   Name = "Panadería / Repostería",                   PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 112, Name = "Pizzería express / Slice",                 PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 113, Name = "Tortas y lonches",                         PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 114, Name = "Antojitos mexicanos",                      PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 115, Name = "Juguería / Smoothies",                     PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 116, Name = "Crepería / Wafflería",                     PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 117, Name = "Pollo rostizado / Asadero",                PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 118, Name = "Food truck",                               PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 119, Name = "Sushi express / Rolls",                    PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 120, Name = "Bubble tea / Boba",                        PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 121, Name = "Donas / Postres",                          PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 122, Name = "Comida coreana / Asiática rápida",         PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
+            new() { Id = 123, Name = "Açaí / Bowls saludables",                  PrimaryMacroCategoryId = MacroCategoryIds.QuickService },
 
-            // Retail
-            new() { Id = 10, Name = "Abarrotes / Miscelánea",            PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 11, Name = "Expendio / Depósito de Cerveza",    PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 12, Name = "Refaccionaria / Autopartes",        PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 13, Name = "Ferretería",                        PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 14, Name = "Papelería",                         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 15, Name = "Farmacia",                          PrimaryMacroCategoryId = MacroCategoryIds.Retail },
-            new() { Id = 16, Name = "Boutique / Ropa y Calzado",         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            // ───── Macro 3 — Tiendas y Comercios (7 existing + 17 new = 24) ─────
+            new() { Id = 10,  Name = "Abarrotes / Miscelánea",                   PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 11,  Name = "Expendio / Depósito de Cerveza",           PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 12,  Name = "Refaccionaria / Autopartes",               PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 13,  Name = "Ferretería",                               PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 14,  Name = "Papelería",                                PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 15,  Name = "Farmacia",                                 PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 16,  Name = "Boutique / Ropa y Calzado",                PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 83,  Name = "Tienda de conveniencia / Minisúper",       PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 84,  Name = "Vinatería / Cervecería",                   PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 85,  Name = "Zapatería",                                PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 86,  Name = "Mascotas / Pet shop",                      PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 87,  Name = "Regalos y novedades",                      PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 88,  Name = "Joyería",                                  PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 89,  Name = "Mueblería",                                PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 90,  Name = "Electrónica y celulares",                  PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 91,  Name = "Carnicería / Pollería",                    PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 92,  Name = "Frutería / Verdulería",                    PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 93,  Name = "Tortillería",                              PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 94,  Name = "Semillas / Cremería",                      PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 95,  Name = "Mercería",                                 PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 96,  Name = "Florería",                                 PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 97,  Name = "Juguetería",                               PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 98,  Name = "Tienda naturista",                         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
+            new() { Id = 99,  Name = "Tienda deportiva",                         PrimaryMacroCategoryId = MacroCategoryIds.Retail },
 
-            // Services
-            new() { Id = 17, Name = "Estética / Barbería",               PrimaryMacroCategoryId = MacroCategoryIds.Services },
-            new() { Id = 18, Name = "Taller Mecánico",                   PrimaryMacroCategoryId = MacroCategoryIds.Services },
-            new() { Id = 19, Name = "Consultorio / Clínica",             PrimaryMacroCategoryId = MacroCategoryIds.Services },
-            new() { Id = 20, Name = "Gimnasio / Deportes",               PrimaryMacroCategoryId = MacroCategoryIds.Services },
+            // ───── Macro 4 — Servicios Especializados (4 existing + 62 new = 66) ─────
+            // Existing entries (17-20) receive their ClusterCode retroactively;
+            // the upsert below propagates it into prod on the next boot.
+
+            // Cluster: beauty (12 chips)
+            new() { Id = 17,  Name = "Estética / Barbería",                      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 21,  Name = "Salón de belleza",                         PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 22,  Name = "Peluquería",                               PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 23,  Name = "Barbería",                                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 24,  Name = "Salón de uñas / Manicura y pedicura",      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 25,  Name = "Estudio de pestañas y cejas",              PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 26,  Name = "Spa / Masajes",                            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 27,  Name = "Depilación / Cera / Láser",                PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 28,  Name = "Maquillaje profesional",                   PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 29,  Name = "Estudio de tatuajes y perforaciones",      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 30,  Name = "Micropigmentación / PMU",                  PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+            new() { Id = 31,  Name = "Bronceado / Sunless",                      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Beauty },
+
+            // Cluster: health (9 chips)
+            new() { Id = 19,  Name = "Consultorio / Clínica",                    PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 32,  Name = "Dentista / Consultorio dental",            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 33,  Name = "Nutriología",                              PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 34,  Name = "Psicología / Terapia",                     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 35,  Name = "Fisioterapia / Rehabilitación",            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 36,  Name = "Optometría / Óptica",                      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 37,  Name = "Quiropráctico",                            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 38,  Name = "Podología",                                PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+            new() { Id = 39,  Name = "Acupuntura / Medicina alternativa",        PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Health },
+
+            // Cluster: automotive (7 chips)
+            new() { Id = 18,  Name = "Taller Mecánico",                          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 40,  Name = "Hojalatería y pintura",                    PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 41,  Name = "Vulcanizadora / Llantera",                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 42,  Name = "Auto lavado / Detailing",                  PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 43,  Name = "Servicio eléctrico automotriz",            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 44,  Name = "Verificación / Afinación",                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+            new() { Id = 45,  Name = "Taller de motos",                          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Automotive },
+
+            // Cluster: pets (4 chips)
+            new() { Id = 46,  Name = "Veterinaria / Clínica veterinaria",        PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Pets },
+            new() { Id = 47,  Name = "Estética canina / Pet grooming",           PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Pets },
+            new() { Id = 48,  Name = "Pensión / Guardería de mascotas",          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Pets },
+            new() { Id = 49,  Name = "Adiestramiento canino",                    PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Pets },
+
+            // Cluster: repair (8 chips)
+            new() { Id = 50,  Name = "Reparación de celulares",                          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 51,  Name = "Reparación de computadoras / Soporte técnico",     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 52,  Name = "Cyber / Renta de equipo e impresiones",            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 53,  Name = "Reparación de electrodomésticos",                  PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 54,  Name = "Reparación de calzado",                            PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 55,  Name = "Sastrería / Arreglos de ropa",                     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 56,  Name = "Cerrajería",                                       PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+            new() { Id = 57,  Name = "Joyería y reparación",                             PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Repair },
+
+            // Cluster: fitness (5 chips)
+            new() { Id = 20,  Name = "Gimnasio / Deportes",                      PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Fitness },
+            new() { Id = 58,  Name = "Estudio de yoga / pilates",                PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Fitness },
+            new() { Id = 59,  Name = "Academia de baile / Zumba",                PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Fitness },
+            new() { Id = 60,  Name = "Artes marciales / Box",                    PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Fitness },
+            new() { Id = 61,  Name = "Spinning",                                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Fitness },
+
+            // Cluster: education (5 chips)
+            new() { Id = 62,  Name = "Escuela de idiomas",                               PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Education },
+            new() { Id = 63,  Name = "Regularización / Tutorías escolares",              PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Education },
+            new() { Id = 64,  Name = "Academia de música",                               PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Education },
+            new() { Id = 65,  Name = "Cursos y talleres (manualidades, repostería)",     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Education },
+            new() { Id = 66,  Name = "Guardería / Estancia infantil",                    PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Education },
+
+            // Cluster: home (5 chips)
+            new() { Id = 67,  Name = "Tintorería / Lavandería",                          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Home },
+            new() { Id = 68,  Name = "Plomería / Electricista (con taller)",             PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Home },
+            new() { Id = 69,  Name = "Jardinería / Vivero",                              PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Home },
+            new() { Id = 70,  Name = "Limpieza a domicilio",                             PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Home },
+            new() { Id = 71,  Name = "Carpintería / Tapicería",                          PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Home },
+
+            // Cluster: events (6 chips)
+            new() { Id = 72,  Name = "Renta de mobiliario para eventos",                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+            new() { Id = 73,  Name = "Salón de fiestas / Banquetes",                     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+            new() { Id = 74,  Name = "Fotografía / Estudio fotográfico",                 PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+            new() { Id = 75,  Name = "Floristería y decoración de eventos",              PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+            new() { Id = 76,  Name = "Estudio de grabación / DJ",                        PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+            new() { Id = 77,  Name = "Diseño gráfico / Imprenta",                        PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Events },
+
+            // Cluster: professional (5 chips)
+            new() { Id = 78,  Name = "Contador / Despacho contable",                     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Professional },
+            new() { Id = 79,  Name = "Asesoría legal / Notaría",                         PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Professional },
+            new() { Id = 80,  Name = "Inmobiliaria",                                     PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Professional },
+            new() { Id = 81,  Name = "Agencia de viajes",                                PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Professional },
+            new() { Id = 82,  Name = "Coaching / Consultoría empresarial",               PrimaryMacroCategoryId = MacroCategoryIds.Services, ClusterCode = ClusterCodes.Professional },
         };
 
         var existing = await context.BusinessTypeCatalogs.ToListAsync();
@@ -728,6 +856,7 @@ public static class DbInitializer
             {
                 row.Name = item.Name;
                 row.PrimaryMacroCategoryId = item.PrimaryMacroCategoryId;
+                row.ClusterCode = item.ClusterCode;
             }
             else
             {

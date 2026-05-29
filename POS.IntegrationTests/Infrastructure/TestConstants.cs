@@ -27,6 +27,15 @@ internal static class TestConstants
     public const string AccessControlHmacSecret =
         "integration-test-access-control-hmac-secret-32-bytes-or-more!";
 
+    /// <summary>
+    /// Opaque admin token consumed by the <c>X-Admin-Token</c> header on
+    /// ops-only endpoints (e.g. catalog cache invalidation). Production
+    /// requires ≥ 32 chars; the dummy here matches that floor so the same
+    /// length validation runs in tests as in prod.
+    /// </summary>
+    public const string AdminApiToken =
+        "test-admin-token-dummy-for-integration-tests-32plus";
+
     /// <summary>Test tenant A — seeded by ApplicationDbContext.HasData.</summary>
     public const int BusinessAId = 1;
     public const int BranchAId = 1;

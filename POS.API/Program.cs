@@ -9,10 +9,12 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using POS.API.Adapter;
+using POS.API.Auth;
 using POS.API.Filters;
 using POS.API.Hubs;
 using POS.API.Middleware;
 using POS.API.Workers;
+using Microsoft.AspNetCore.Authentication;
 using POS.Domain.Settings;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
@@ -71,6 +73,26 @@ if (!string.IsNullOrEmpty(resendApiKey))
 var hmacSecret = Environment.GetEnvironmentVariable("ACCESS_CONTROL_QR_TOKEN_HMAC_SECRET");
 if (!string.IsNullOrEmpty(hmacSecret))
     builder.Configuration["AccessControl:QrTokenHmacSecret"] = hmacSecret;
+
+var adminApiToken = Environment.GetEnvironmentVariable("ADMIN_API_TOKEN");
+if (!string.IsNullOrEmpty(adminApiToken))
+    builder.Configuration["Admin:ApiToken"] = adminApiToken;
+
+// Admin API Token fail-fast — opaque header secret for ops-only endpoints
+// (catalog invalidation, future admin actions). Production requires a
+// 32-character minimum (≥ 256-bit randomness) so a misconfigured deploy
+// never silently accepts an empty or guessable token.
+if (builder.Environment.IsProduction())
+{
+    var configuredAdminToken = builder.Configuration["Admin:ApiToken"];
+    if (string.IsNullOrWhiteSpace(configuredAdminToken) || configuredAdminToken.Length < 32)
+    {
+        throw new InvalidOperationException(
+            "ADMIN_API_TOKEN must be set in Production and be at least 32 characters " +
+            "(≥256-bit random). It authenticates ops-only admin endpoints such as " +
+            "POST /api/Admin/catalogs/invalidate.");
+    }
+}
 
 // Configure Serilog
 builder.Host.UseSerilog((context, configuration) =>
@@ -175,7 +197,13 @@ builder.Services.AddAuthentication(options =>
             return Task.CompletedTask;
         }
     };
-});
+})
+// Secondary scheme for ops-only admin endpoints. Authenticated via opaque
+// X-Admin-Token header (see AdminTokenAuthenticationHandler). Coexists with
+// JWT Bearer — controllers opt in via
+// [Authorize(AuthenticationSchemes = AdminTokenAuthenticationHandler.SchemeName)].
+.AddScheme<AuthenticationSchemeOptions, AdminTokenAuthenticationHandler>(
+    AdminTokenAuthenticationHandler.SchemeName, _ => { });
 
 // CORS
 builder.Services.AddCors(options =>
@@ -273,6 +301,22 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = 60,
                 Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Catalog invalidate policy. Auth via X-Admin-Token already mitigates
+    // unauthorized hits, but the policy bounds even an authorized client to
+    // 10 invalidations per minute per IP so a runaway script cannot churn
+    // the cache and turn every catalog read into a DB hit. Sliding window
+    // closes the burst-boundary gap a fixed window would leave open.
+    options.AddPolicy("CatalogInvalidatePolicy", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? IPAddress.None.ToString(),
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
                 QueueLimit = 0
             }));
 });

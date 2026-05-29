@@ -242,6 +242,17 @@ public class ApplicationDbContext : DbContext
 
             entity.Property(c => c.Name).HasMaxLength(100);
             entity.HasIndex(c => c.Name).IsUnique();
+
+            entity.Property(c => c.ClusterCode).HasMaxLength(50);
+
+            // Whitelist mirrors POS.Domain.Helpers.ClusterCodes.All. Adding a
+            // new cluster requires a coordinated change in both places plus a
+            // schema migration to alter this constraint.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_BusinessTypeCatalog_ClusterCode",
+                "\"ClusterCode\" IS NULL OR \"ClusterCode\" IN " +
+                "('beauty','health','automotive','pets','repair'," +
+                "'fitness','education','home','events','professional')"));
         });
 
         #endregion
