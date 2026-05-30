@@ -90,6 +90,15 @@ public class RegisterRequest
     /// <see cref="POS.Domain.Exceptions.ValidationException"/>.
     /// </summary>
     public string? TimeZoneId { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, <see cref="IAuthService.RegisterAsync"/> skips the
+    /// fire-and-forget welcome email dispatch. Default <c>false</c> preserves
+    /// the public <c>POST /api/Auth/register</c> behavior; the admin tenant
+    /// creation endpoint overrides this to <c>true</c> for demo flows where
+    /// no real customer should receive the email.
+    /// </summary>
+    public bool SuppressWelcomeEmail { get; set; } = false;
 }
 
 /// <summary>

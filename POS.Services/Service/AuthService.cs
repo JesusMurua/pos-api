@@ -310,8 +310,13 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), primaryMacro.InternalCode, features, SessionTypeEmail);
 
-        // Fire-and-forget: welcome email — never blocks the response
-        _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
+        // Fire-and-forget: welcome email — never blocks the response. The
+        // admin tenant-creation endpoint sets SuppressWelcomeEmail = true
+        // for demo flows so the email does not surprise the operator.
+        if (!request.SuppressWelcomeEmail)
+        {
+            _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
+        }
 
         return new AuthResponse
         {

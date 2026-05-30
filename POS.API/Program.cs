@@ -319,6 +319,23 @@ builder.Services.AddRateLimiter(options =>
                 SegmentsPerWindow = 6,
                 QueueLimit = 0
             }));
+
+    // Admin tenant directory policy. Same partition / window shape as the
+    // catalog invalidator; the higher permit limit reflects that the admin
+    // panel may legitimately poll the GET listing while the operator works
+    // through a batch of demo setups. Auth via X-Admin-Token is the primary
+    // mitigation — this policy is just a circuit breaker against runaway
+    // scripts that grab the token.
+    options.AddPolicy("AdminBusinessCreationPolicy", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? IPAddress.None.ToString(),
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            }));
 });
 
 // Data Protection — persists keys to a directory configurable via the

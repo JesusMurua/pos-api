@@ -4,12 +4,16 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.InMemory.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Moq;
 using POS.Repository;
+using POS.Services.IService;
 
 namespace POS.IntegrationTests.Infrastructure;
 
@@ -32,6 +36,17 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     /// produce cross-class counter interference.
     /// </summary>
     public EFQueryCounterInterceptor QueryCounter { get; } = new();
+
+    /// <summary>
+    /// Per-factory <see cref="IEmailService"/> mock so tests can assert
+    /// whether the welcome email was dispatched (e.g. the admin endpoint's
+    /// <c>SuppressWelcomeEmail</c> flag). Registered as a singleton in
+    /// <see cref="ReplaceEmailServiceWithMock"/> so resolving the interface
+    /// from any DI scope yields the same mock instance and
+    /// <see cref="Moq.Mock{T}.Verify(System.Linq.Expressions.Expression{System.Action{T}}, Times)"/>
+    /// sees every call across the request lifetime.
+    /// </summary>
+    public Mock<IEmailService> EmailServiceMock { get; } = new(MockBehavior.Loose);
 
     static CustomWebApplicationFactory()
     {
@@ -81,6 +96,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             ReplaceDbContextWithInMemory(services);
             RemoveProductionHostedServices(services);
+            ReplaceEmailServiceWithMock(services);
         });
     }
 
@@ -109,6 +125,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Strip JsonDocument properties from the test model so the
             // InMemory provider can validate it — see InMemoryModelCustomizer.
             options.ReplaceService<IModelCustomizer, InMemoryModelCustomizer>();
+            // Production register / admin-create flows wrap their work in
+            // _unitOfWork.BeginTransactionAsync(). The InMemory provider does
+            // not implement transactions and escalates the warning to an
+            // exception by default, which would surface as 500 in every
+            // create-tenant integration test. Demoting the warning to Ignore
+            // preserves the production code path under test (we still want
+            // RegisterAsync to call BeginTransactionAsync) while letting the
+            // InMemory backend silently no-op the transactional semantics.
+            options.ConfigureWarnings(warnings =>
+                warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning));
         });
 
         // D1 fallback (BDD-021 §9 / Appendix C): the EF Core
@@ -127,6 +153,30 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             var inner = ActivatorUtilities.CreateInstance<UnitOfWork>(sp);
             return new CountingUnitOfWork(inner, QueryCounter);
         });
+    }
+
+    /// <summary>
+    /// Swaps the production Resend-backed <see cref="IEmailService"/> for
+    /// the per-factory <see cref="EmailServiceMock"/> so tests can assert
+    /// whether the welcome email was attempted. Registered as a singleton
+    /// keyed to <c>Mock.Object</c> so every scope (including the AuthService
+    /// fire-and-forget call) resolves the same instance, letting
+    /// <c>Verify(...)</c> observe every call across the request.
+    /// </summary>
+    private void ReplaceEmailServiceWithMock(IServiceCollection services)
+    {
+        // Default Loose mocks return null for Task-returning methods, which
+        // would NRE if any future caller awaits the discarded Task. Setup
+        // SendWelcomeEmailAsync to return a completed Task so the mock is
+        // forward-compatible with await callers without losing the call
+        // recording that Verify(...) relies on.
+        EmailServiceMock
+            .Setup(x => x.SendWelcomeEmailAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        services.RemoveAll<IEmailService>();
+        services.AddSingleton<IEmailService>(EmailServiceMock.Object);
     }
 
     /// <summary>
