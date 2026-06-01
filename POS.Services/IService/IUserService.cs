@@ -46,4 +46,18 @@ public interface IUserService
     /// <exception cref="POS.Domain.Exceptions.ValidationException">
     /// Thrown when defaultBranchId is not in branchIds.</exception>
     Task<IEnumerable<UserBranchDto>> SetUserBranchesAsync(int userId, int[] branchIds, int defaultBranchId);
+
+    /// <summary>
+    /// Records the first-time dismissal of the welcome screen by setting
+    /// <c>User.WelcomeShownAt = DateTime.UtcNow</c>. Idempotent: if the
+    /// timestamp is already populated the existing value is preserved so
+    /// subsequent calls report the original first-seen moment rather than
+    /// overwriting it. Returns the effective timestamp the caller can
+    /// surface to the SPA without an extra read.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.NotFoundException">
+    /// Thrown when <paramref name="userId"/> does not resolve to an
+    /// existing User.
+    /// </exception>
+    Task<DateTime> MarkWelcomeShownAsync(int userId);
 }

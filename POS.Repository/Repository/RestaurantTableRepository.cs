@@ -82,4 +82,11 @@ public class RestaurantTableRepository : GenericRepository<RestaurantTable>, IRe
             };
         });
     }
+
+    /// <inheritdoc />
+    public Task<int> CountForBusinessAsync(int businessId) =>
+        _context.RestaurantTables
+            .IgnoreQueryFilters()
+            .Where(t => t.Branch!.BusinessId == businessId)
+            .CountAsync();
 }

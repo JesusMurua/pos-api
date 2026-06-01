@@ -106,4 +106,11 @@ public class DeviceRepository : GenericRepository<Device>, IDeviceRepository
 
         return await query.CountAsync();
     }
+
+    /// <inheritdoc />
+    public Task<int> CountForBusinessAsync(int businessId) =>
+        _context.Devices
+            .IgnoreQueryFilters()
+            .Where(d => d.Branch!.BusinessId == businessId)
+            .CountAsync();
 }

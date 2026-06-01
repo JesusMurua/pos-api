@@ -230,6 +230,24 @@ public class UserService : IUserService
         return await GetUserBranchesAsync(userId);
     }
 
+    /// <inheritdoc />
+    public async Task<DateTime> MarkWelcomeShownAsync(int userId)
+    {
+        var user = await _unitOfWork.Users.GetByIdAsync(userId)
+            ?? throw new NotFoundException($"User with id {userId} not found");
+
+        // Idempotent: preserve the first-seen timestamp on repeated calls.
+        // The semantics matter — the column is "when did the user first
+        // dismiss the welcome screen", not "when did they last dismiss it".
+        if (user.WelcomeShownAt == null)
+        {
+            user.WelcomeShownAt = DateTime.UtcNow;
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        return user.WelcomeShownAt.Value;
+    }
+
     #endregion
 
     #region Private Helper Methods

@@ -10,4 +10,12 @@ public interface IProductRepository : IGenericRepository<Product>
     Task<ProductImage?> GetImageByIdAsync(int imageId);
     Task AddImageAsync(ProductImage image);
     void DeleteImage(ProductImage image);
+
+    /// <summary>
+    /// Counts every product across every branch of <paramref name="businessId"/>,
+    /// bypassing the BDD-019 branch query filter via <c>IgnoreQueryFilters</c>.
+    /// Used by <c>AuthResponse.Snapshot</c> to surface business-wide totals
+    /// without per-metric round-trips from the welcome screen.
+    /// </summary>
+    Task<int> CountForBusinessAsync(int businessId);
 }

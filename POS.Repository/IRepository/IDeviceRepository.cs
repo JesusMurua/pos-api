@@ -57,4 +57,14 @@ public interface IDeviceRepository : IGenericRepository<Device>
     /// excluded so deactivated terminals do not consume quota.
     /// </summary>
     Task<int> CountActiveByModeAsync(int businessId, int? branchId, string mode);
+
+    /// <summary>
+    /// Counts every device (any mode, active or not) across every branch of
+    /// <paramref name="businessId"/>, bypassing the BDD-019 branch query
+    /// filter via <c>IgnoreQueryFilters</c>. Used by
+    /// <c>AuthResponse.Snapshot</c> to surface business-wide totals — keep
+    /// distinct from <see cref="CountActiveByModeAsync"/> which is the
+    /// licensing-engine call.
+    /// </summary>
+    Task<int> CountForBusinessAsync(int businessId);
 }

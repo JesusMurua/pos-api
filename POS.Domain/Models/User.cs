@@ -34,6 +34,27 @@ public partial class User : IBusinessScoped
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// UTC timestamp of the last successful credential authentication
+    /// (<see cref="POS.Services.IService.IAuthService.EmailLoginAsync"/> or
+    /// <see cref="POS.Services.IService.IAuthService.PinLoginAsync"/>). Not
+    /// updated by session-rehydrate calls (<c>/api/Auth/me</c>) so the
+    /// semantics stay strict: this is "when did the user last sign in",
+    /// not "when was the user last active". If activity tracking is needed,
+    /// add a separate <c>LastSeenAt</c> column in a future migration.
+    /// </summary>
+    public DateTime? LastLoginAt { get; set; }
+
+    /// <summary>
+    /// UTC timestamp of the moment the user dismissed the First-Run
+    /// Experience welcome screen. Default null; set once on the first
+    /// successful <c>POST /api/User/welcome-shown</c> call and preserved
+    /// thereafter so subsequent dismissals do not move the timestamp.
+    /// Surfaced as the <c>welcomeShownAt</c> JWT claim so the SPA route
+    /// guard can redirect to <c>/welcome</c> without a database round-trip.
+    /// </summary>
+    public DateTime? WelcomeShownAt { get; set; }
+
     public UserRoleCatalog? RoleCatalog { get; set; }
 
     public virtual Business? Business { get; set; }

@@ -80,6 +80,11 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         return _dbSet.AnyAsync(filter);
     }
 
+    public Task<int> CountAsync(Expression<Func<T, bool>> filter)
+    {
+        return _dbSet.CountAsync(filter);
+    }
+
     public async Task<T> AddAsync(T entity)
     {
         await _dbSet.AddAsync(entity);

@@ -34,4 +34,12 @@ public interface ICashRegisterRepository : IGenericRepository<CashRegister>
     /// Used by the takeover/recovery flow to detect name collisions.
     /// </summary>
     Task<CashRegister?> GetByNameAsync(int branchId, string name);
+
+    /// <summary>
+    /// Counts every cash register across every branch of
+    /// <paramref name="businessId"/>, bypassing the BDD-019 branch query
+    /// filter via <c>IgnoreQueryFilters</c>. Used by
+    /// <c>AuthResponse.Snapshot</c> to surface business-wide totals.
+    /// </summary>
+    Task<int> CountForBusinessAsync(int businessId);
 }

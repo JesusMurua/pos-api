@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Auth;
 using POS.Domain.Models;
 
 namespace POS.Services.IService;
@@ -208,6 +209,22 @@ public class AuthResponse
     /// <c>OnboardingCompleted=false</c> + InProgress from + Skipped.
     /// </summary>
     public int OnboardingStatusId { get; set; }
+
+    /// <summary>
+    /// UTC timestamp (ISO 8601 with offset) of the moment the user
+    /// dismissed the First-Run Experience welcome screen, or <c>null</c>
+    /// when they have not seen it yet. The SPA route guard redirects to
+    /// <c>/welcome</c> when this is null; the welcome screen calls
+    /// <c>POST /api/User/welcome-shown</c> to populate it.
+    /// </summary>
+    public string? WelcomeShownAt { get; set; }
+
+    /// <summary>
+    /// Per-business operational counts the welcome screen and dashboard
+    /// widgets use to render derived state. Cross-branch — reflects the
+    /// entire business, not just the caller's current branch.
+    /// </summary>
+    public BusinessSnapshot Snapshot { get; set; } = new(0, 0, 0, 0, 0, 0);
 }
 
 /// <summary>

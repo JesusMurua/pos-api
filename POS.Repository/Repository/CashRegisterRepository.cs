@@ -48,4 +48,11 @@ public class CashRegisterRepository : GenericRepository<CashRegister>, ICashRegi
             .Include(r => r.Device)
             .FirstOrDefaultAsync(r => r.BranchId == branchId && r.Name == normalizedName);
     }
+
+    /// <inheritdoc />
+    public Task<int> CountForBusinessAsync(int businessId) =>
+        _context.CashRegisters
+            .IgnoreQueryFilters()
+            .Where(r => r.Branch!.BusinessId == businessId)
+            .CountAsync();
 }

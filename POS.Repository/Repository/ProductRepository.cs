@@ -64,4 +64,11 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         _context.ProductImages.Remove(image);
     }
+
+    /// <inheritdoc />
+    public Task<int> CountForBusinessAsync(int businessId) =>
+        _context.Products
+            .IgnoreQueryFilters()
+            .Where(p => p.Branch!.BusinessId == businessId)
+            .CountAsync();
 }

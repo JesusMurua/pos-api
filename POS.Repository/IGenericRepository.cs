@@ -21,6 +21,15 @@ public interface IGenericRepository<T> where T : class
     /// </summary>
     Task<bool> AnyAsync(Expression<Func<T, bool>> filter);
 
+    /// <summary>
+    /// Counts rows matching <paramref name="filter"/>. Used by
+    /// <c>AuthResponse.Snapshot</c> for business-scoped entities (User, Branch)
+    /// whose tenant filter naturally aligns with the count predicate. Branch-
+    /// scoped entities use their own <c>CountForBusinessAsync</c> instead
+    /// because their global query filter contradicts a business-wide total.
+    /// </summary>
+    Task<int> CountAsync(Expression<Func<T, bool>> filter);
+
     Task<PageData<T>> GetListPagedAsync(
         PageFilter pageFilter,
         Expression<Func<T, bool>>? filter = null);

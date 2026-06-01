@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using POS.Domain.Models;
@@ -13,10 +14,12 @@ namespace POS.API.Controllers;
 public class UserController : BaseApiController
 {
     private readonly IUserService _userService;
+    private readonly IAuthService _authService;
 
-    public UserController(IUserService userService)
+    public UserController(IUserService userService, IAuthService authService)
     {
         _userService = userService;
+        _authService = authService;
     }
 
     /// <summary>
@@ -128,5 +131,39 @@ public class UserController : BaseApiController
     {
         var isActive = await _userService.ToggleActiveAsync(id);
         return Ok(new { isActive });
+    }
+
+    /// <summary>
+    /// Records the first-time dismissal of the welcome (First-Run Experience)
+    /// screen for the calling user and returns a freshly minted JWT plus an
+    /// up-to-date <see cref="AuthResponse"/> so the SPA route guard sees the
+    /// new <c>welcomeShownAt</c> claim immediately. Idempotent: subsequent
+    /// calls preserve the original timestamp; the response just rehydrates
+    /// the session.
+    /// </summary>
+    /// <response code="200">Welcome dismissed (or already was) and session rehydrated.</response>
+    /// <response code="401">Missing JWT, device token, or no longer valid user/business.</response>
+    [HttpPost("welcome-shown")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> WelcomeShown()
+    {
+        // Reject device tokens — they have no user identity to mark.
+        if (User.FindFirst("type")?.Value == "device")
+            return Unauthorized();
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            return Unauthorized();
+
+        var sessionType = User.FindFirst("sessionType")?.Value;
+
+        await _userService.MarkWelcomeShownAsync(userId);
+
+        // Reusing GetSessionAsync — it rehydrates the User+Business graph,
+        // regenerates the JWT with the fresh welcomeShownAt claim, and
+        // populates the BusinessSnapshot in one shot.
+        var response = await _authService.GetSessionAsync(userId, sessionType);
+        return Ok(response);
     }
 }
