@@ -223,6 +223,79 @@ public class AdminBusinessesController : ControllerBase
         return Ok(envelope);
     }
 
+    /// <summary>
+    /// Cross-tenant aggregate stats for the super-admin dashboard.
+    /// Repo emits raw counts and groupings (numeric keys) — this action
+    /// resolves the public PlanTypeCode / MacroCategoryCode via the
+    /// static helpers and backfills <c>CreatedByMonth</c> with the six
+    /// calendar months ending at "now" so the FE chart has a stable
+    /// shape regardless of which months actually had creates.
+    /// </summary>
+    /// <response code="200">Aggregate snapshot.</response>
+    /// <response code="401">Missing or invalid <c>X-Admin-Token</c> header.</response>
+    /// <response code="429">Rate limit exceeded.</response>
+    [HttpGet("stats")]
+    [ProducesResponseType(typeof(AdminBusinessStatsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> Stats(CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        // Single nowUtc read so every count in the response shares the
+        // same instant — trials and growth window calculations stay
+        // self-consistent even if the underlying clock ticks during the
+        // ~100ms the repo spends issuing eleven sequential queries.
+        var nowUtc = DateTime.UtcNow;
+        var raw = await _unitOfWork.Business.GetAdminStatsAsync(nowUtc, cancellationToken);
+
+        var byPlan = raw.CountsByPlanTypeId
+            .Select(kvp => new PlanDistribution(
+                PlanTypeId: kvp.Key,
+                PlanTypeCode: PlanTypeIds.ToCode(kvp.Key),
+                Count: kvp.Value))
+            .OrderBy(p => p.PlanTypeId)
+            .ToList();
+
+        var byMacro = raw.CountsByMacroId
+            .Select(kvp => new MacroDistribution(
+                PrimaryMacroCategoryId: kvp.Key,
+                PrimaryMacroCategoryCode: MacroCategoryIds.ToCode(kvp.Key),
+                Count: kvp.Value))
+            .OrderBy(m => m.PrimaryMacroCategoryId)
+            .ToList();
+
+        // Backfill the six calendar months ending at the current month.
+        // The loop runs oldest → newest so the FE consumes the array in
+        // chronological order without sorting.
+        var currentMonthStart = new DateTime(nowUtc.Year, nowUtc.Month, 1);
+        var createdByMonth = new List<MonthlyCount>(6);
+        for (var offset = 5; offset >= 0; offset--)
+        {
+            var bucket = currentMonthStart.AddMonths(-offset);
+            raw.CountsByYearMonth.TryGetValue((bucket.Year, bucket.Month), out var count);
+            createdByMonth.Add(new MonthlyCount(bucket.Year, bucket.Month, count));
+        }
+
+        var response = new AdminBusinessStatsResponse(
+            TotalBusinesses: raw.TotalBusinesses,
+            ActiveBusinesses: raw.ActiveBusinesses,
+            InactiveBusinesses: raw.InactiveBusinesses,
+            ByPlan: byPlan,
+            ByMacro: byMacro,
+            TrialsExpiring7Days: raw.TrialsExpiring7Days,
+            TrialsExpiring14Days: raw.TrialsExpiring14Days,
+            OnboardingCompleted: raw.OnboardingCompleted,
+            OnboardingPending: raw.OnboardingPending,
+            TotalUsers: raw.TotalUsers,
+            TotalProducts: raw.TotalProducts,
+            CreatedByMonth: createdByMonth);
+
+        LogStatsAudit(stopwatch.ElapsedMilliseconds);
+
+        return Ok(response);
+    }
+
     private void LogCreateAudit(string result, int? businessId, string email, long durationMs)
     {
         var tokenId = User.FindFirst(AdminTokenAuthenticationHandler.TokenIdClaimType)?.Value
@@ -260,6 +333,27 @@ public class AdminBusinessesController : ControllerBase
                 PageSize = pageSize,
                 Search = search,
                 ResultCount = resultCount,
+                DurationMs = durationMs
+            });
+    }
+
+    private void LogStatsAudit(long durationMs)
+    {
+        var tokenId = User.FindFirst(AdminTokenAuthenticationHandler.TokenIdClaimType)?.Value
+                      ?? "anonymous";
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        // Counts themselves are intentionally NOT logged — they are not
+        // sensitive but the log line stays tighter and any future log
+        // sink (S3, Datadog) does not retain a moving snapshot of system
+        // size in plain text.
+        _logger.LogInformation(
+            "Admin listBusinessStats {@AdminBusinessStatsAudit}",
+            new
+            {
+                Timestamp = DateTime.UtcNow,
+                CallerTokenId = tokenId,
+                CallerIp = ip,
                 DurationMs = durationMs
             });
     }

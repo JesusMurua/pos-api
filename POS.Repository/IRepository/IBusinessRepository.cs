@@ -30,4 +30,40 @@ public interface IBusinessRepository : IGenericRepository<Business>
         int pageSize,
         string? search,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Raw cross-tenant aggregate snapshot consumed by
+    /// <c>GET /api/Admin/businesses/stats</c>. Every COUNT and GROUP BY
+    /// goes through <c>IgnoreQueryFilters</c> so the BDD-019 tenant
+    /// filters do not silently clip the totals. The shape stays as raw
+    /// counts / dictionaries — the controller is responsible for resolving
+    /// <c>PlanTypeIds.ToCode</c> / <c>MacroCategoryIds.ToCode</c> and for
+    /// backfilling the six calendar buckets of <see cref="AdminBusinessStatsRaw.CountsByYearMonth"/>.
+    /// </summary>
+    /// <param name="nowUtc">
+    /// Reference instant for trial / growth window calculations. Threading
+    /// it through as a parameter keeps the repo deterministic — the caller
+    /// (controller) reads <c>DateTime.UtcNow</c> once at the start of the
+    /// request so every count in the response uses the same instant.
+    /// </param>
+    Task<AdminBusinessStatsRaw> GetAdminStatsAsync(DateTime nowUtc, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Repo-layer raw projection of the admin stats endpoint. The controller
+/// converts this into the public <c>AdminBusinessStatsResponse</c> by
+/// resolving codes and backfilling empty months.
+/// </summary>
+public sealed record AdminBusinessStatsRaw(
+    int TotalBusinesses,
+    int ActiveBusinesses,
+    int InactiveBusinesses,
+    IReadOnlyDictionary<int, int> CountsByPlanTypeId,
+    IReadOnlyDictionary<int, int> CountsByMacroId,
+    int TrialsExpiring7Days,
+    int TrialsExpiring14Days,
+    int OnboardingCompleted,
+    int OnboardingPending,
+    int TotalUsers,
+    int TotalProducts,
+    IReadOnlyDictionary<(int Year, int Month), int> CountsByYearMonth);
