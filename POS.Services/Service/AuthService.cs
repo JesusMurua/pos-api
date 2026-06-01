@@ -29,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IFeatureGateService _featureGate;
     private readonly ITenantSeedingService _tenantSeedingService;
+    private readonly IBusinessSnapshotService _businessSnapshot;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -37,6 +38,7 @@ public class AuthService : IAuthService
         IEmailService emailService,
         IFeatureGateService featureGate,
         ITenantSeedingService tenantSeedingService,
+        IBusinessSnapshotService businessSnapshot,
         ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
@@ -44,6 +46,7 @@ public class AuthService : IAuthService
         _emailService = emailService;
         _featureGate = featureGate;
         _tenantSeedingService = tenantSeedingService;
+        _businessSnapshot = businessSnapshot;
         _logger = logger;
     }
 
@@ -93,7 +96,7 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(user, business, currentBranchId, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), planType, macroCode, features, SessionTypeEmail);
 
-        var snapshot = await BuildBusinessSnapshotAsync(business.Id);
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
         return BuildAuthResponse(token, user, business, currentBranchId, branches, subscription, snapshot);
     }
 
@@ -142,7 +145,7 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(matchedUser, business, currentBranchId, branches, TimeSpan.FromHours(_jwtSettings.PinExpirationHours), planType, macroCode, features, SessionTypePin);
 
-        var snapshot = await BuildBusinessSnapshotAsync(business.Id);
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
         return BuildAuthResponse(token, matchedUser, business, currentBranchId, branches, subscription, snapshot);
     }
 
@@ -181,7 +184,7 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(user, business, branchId, branches, expiration, planType, macroCode, features, validatedSessionType);
 
-        var snapshot = await BuildBusinessSnapshotAsync(business.Id);
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
         return BuildAuthResponse(token, user, business, branchId, branches, subscription, snapshot);
     }
 
@@ -214,7 +217,7 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(user, business, currentBranchId, branches, expiration, planType, macroCode, features, validatedSessionType);
 
-        var snapshot = await BuildBusinessSnapshotAsync(business.Id);
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
         return BuildAuthResponse(token, user, business, currentBranchId, branches, subscription, snapshot);
     }
 
@@ -378,7 +381,7 @@ public class AuthService : IAuthService
             _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
         }
 
-        var snapshot = await BuildBusinessSnapshotAsync(business.Id);
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
 
         return new AuthResponse
         {
@@ -649,34 +652,6 @@ public class AuthService : IAuthService
         WelcomeShownAt = user.WelcomeShownAt?.ToString("o"),
         Snapshot = snapshot
     };
-
-    /// <summary>
-    /// Builds a <see cref="BusinessSnapshot"/> for <paramref name="businessId"/>
-    /// by issuing six independent COUNT queries — two business-scoped (User,
-    /// Branch) and four branch-scoped (Product, RestaurantTable, CashRegister,
-    /// Device). The branch-scoped repos go through <c>CountForBusinessAsync</c>
-    /// which uses <c>IgnoreQueryFilters</c> + a join through Branch so the
-    /// totals reflect the entire business, not just the caller's current
-    /// branch. Surfaced on every <c>AuthResponse</c> so the welcome screen
-    /// can render derived state without per-metric round-trips.
-    /// </summary>
-    private async Task<BusinessSnapshot> BuildBusinessSnapshotAsync(int businessId)
-    {
-        var userCount = await _unitOfWork.Users.CountAsync(u => u.BusinessId == businessId);
-        var branchCount = await _unitOfWork.Branches.CountAsync(b => b.BusinessId == businessId);
-        var productCount = await _unitOfWork.Products.CountForBusinessAsync(businessId);
-        var tableCount = await _unitOfWork.RestaurantTables.CountForBusinessAsync(businessId);
-        var cashRegisterCount = await _unitOfWork.CashRegisters.CountForBusinessAsync(businessId);
-        var deviceCount = await _unitOfWork.Devices.CountForBusinessAsync(businessId);
-
-        return new BusinessSnapshot(
-            UserCount: userCount,
-            ProductCount: productCount,
-            BranchCount: branchCount,
-            TableCount: tableCount,
-            CashRegisterCount: cashRegisterCount,
-            DeviceCount: deviceCount);
-    }
 
     /// <summary>
     /// Normalizes and validates an incoming IANA timezone identifier. Null or
