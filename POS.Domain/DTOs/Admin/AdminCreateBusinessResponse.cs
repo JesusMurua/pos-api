@@ -2,14 +2,18 @@ namespace POS.Domain.DTOs.Admin;
 
 /// <summary>
 /// Response from <c>POST /api/Admin/businesses</c>. Surfaces the
-/// freshly-created tenant identifiers plus resolved codes the admin panel
-/// can render without a second catalog round-trip.
+/// freshly-created tenant identifiers, the resolved plan / macro codes,
+/// the final onboarding state (which mirrors the
+/// <c>MarkOnboardingComplete</c> flag on the request), and — when the
+/// caller opted in via <c>IncludeOwnerJwt</c> — the Owner JWT so the
+/// super admin can drop straight into the new tenant's POS without an
+/// extra login round-trip.
 /// <para>
-/// <see cref="OwnerJwt"/> is intentionally nullable and only populated when
-/// the request set <c>IncludeOwnerJwt = true</c>. Under the global
+/// <see cref="OwnerJwt"/> is intentionally nullable and only populated
+/// when <c>IncludeOwnerJwt</c> was true. Under the global
 /// <c>WhenWritingNull</c> JSON policy the field is omitted from the wire
 /// payload entirely when null, so a default-flag response does not even
-/// hint at its existence to the admin panel logs.
+/// hint at its existence in admin-side network logs.
 /// </para>
 /// </summary>
 public sealed record AdminCreateBusinessResponse(
@@ -22,4 +26,6 @@ public sealed record AdminCreateBusinessResponse(
     string PrimaryMacroCategoryCode,
     string? TrialEndsAt,
     string CreatedAt,
+    bool OnboardingCompleted,
+    int OnboardingStatusId,
     string? OwnerJwt);

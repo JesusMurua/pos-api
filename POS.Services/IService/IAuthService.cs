@@ -99,6 +99,71 @@ public class RegisterRequest
     /// no real customer should receive the email.
     /// </summary>
     public bool SuppressWelcomeEmail { get; set; } = false;
+
+    /// <summary>
+    /// Admin-flow extension: full sub-giro id set persisted as
+    /// <c>BusinessGiro</c> rows inside the same registration transaction.
+    /// Validated against <c>BusinessTypeCatalog</c>; unknown ids roll the
+    /// transaction back. Null preserves the public Register behavior
+    /// (no sub-giros assigned at registration — captured later via
+    /// <c>PUT /api/business/giro</c>).
+    /// </summary>
+    public IReadOnlyList<int>? SubGiroIds { get; set; }
+
+    /// <summary>
+    /// Admin-flow extension: free-text giro description used when the
+    /// operator selects "Otra" instead of a catalog id. Persisted on
+    /// <c>Business.CustomGiroDescription</c>. Null preserves default.
+    /// </summary>
+    public string? CustomGiroDescription { get; set; }
+
+    /// <summary>
+    /// Admin-flow extension: fiscal configuration persisted on the
+    /// <c>Business</c> entity (Rfc, TaxRegime, LegalName, InvoicingEnabled)
+    /// inside the same registration transaction. Null leaves these
+    /// columns at their schema defaults (NULL / false). When supplied
+    /// with <see cref="FiscalConfigInput.InvoicingEnabled"/> = true, the
+    /// CfdiInvoicing feature gate is intentionally bypassed because the
+    /// super admin is provisioning the tenant — the gate exists to stop
+    /// end users from enabling a paid feature, not the super admin.
+    /// </summary>
+    public FiscalConfigInput? FiscalConfig { get; set; }
+
+    /// <summary>
+    /// Admin-flow extension: when <c>true</c>, marks the freshly created
+    /// <c>Business</c> as fully onboarded (<c>OnboardingCompleted = true</c>,
+    /// <c>OnboardingStatusId = 3</c>) so the Owner JWT carries
+    /// <c>onboardingCompleted = true</c> at first login and the SPA route
+    /// guard sends them straight to the dashboard. Default <c>false</c>
+    /// preserves the public Register flow that walks the wizard.
+    /// </summary>
+    public bool MarkOnboardingComplete { get; set; } = false;
+}
+
+/// <summary>
+/// Service-layer payload for <see cref="RegisterRequest.FiscalConfig"/>.
+/// Mirrors the four columns that <c>POST /api/Business/fiscal</c> updates
+/// post-registration; centralizes them here so the admin endpoint can
+/// provision a tax-ready tenant in one shot. Address / contact still live
+/// on the matrix <c>Branch</c> and are out of scope for this payload.
+/// </summary>
+public sealed class FiscalConfigInput
+{
+    /// <summary>Mexico SAT identifier. 12 chars for companies, 13 for individuals.</summary>
+    public string? Rfc { get; set; }
+
+    /// <summary>SAT regime code (e.g. "601" General de Ley, "612" Personas Físicas).</summary>
+    public string? TaxRegime { get; set; }
+
+    /// <summary>Razón social as registered with SAT.</summary>
+    public string? LegalName { get; set; }
+
+    /// <summary>
+    /// Toggles CFDI invoicing for the tenant. When the admin endpoint sets
+    /// this to <c>true</c>, the <c>CfdiInvoicing</c> feature gate is
+    /// bypassed (admin provisioning, not end-user upgrade).
+    /// </summary>
+    public bool InvoicingEnabled { get; set; }
 }
 
 /// <summary>

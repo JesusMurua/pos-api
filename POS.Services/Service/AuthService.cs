@@ -297,6 +297,20 @@ public class AuthService : IAuthService
             // any seeding failure rolls the entire registration back.
             await _tenantSeedingService.SeedDefaultsForMacroAsync(branch.Id, primaryMacro.Id);
 
+            // Admin-flow extensions: sub-giros, fiscal data, onboarding completion.
+            // All run inside the same transaction so a partial failure (e.g. an
+            // unknown sub-giro id) rolls the entire registration back instead of
+            // leaving an orphan Business without giro / fiscal data.
+            await ApplyAdminFlowExtensionsAsync(business, request);
+
+            if (request.SubGiroIds is not null ||
+                request.CustomGiroDescription is not null ||
+                request.FiscalConfig is not null ||
+                request.MarkOnboardingComplete)
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+
             await transaction.CommitAsync();
         }
         catch (DbUpdateException)
@@ -338,6 +352,67 @@ public class AuthService : IAuthService
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Applies the optional admin-flow extension fields on
+    /// <see cref="RegisterRequest"/> to the freshly persisted
+    /// <see cref="Business"/> aggregate, inside the registration
+    /// transaction. Sub-giro ids are validated against the catalog; an
+    /// unknown id throws and rolls the transaction back. Fiscal config
+    /// bypasses the CfdiInvoicing feature gate (admin provisioning).
+    /// Onboarding completion sets the catalog ids that the JWT generator
+    /// reads from <c>business.OnboardingCompleted</c> below.
+    /// </summary>
+    private async Task ApplyAdminFlowExtensionsAsync(Business business, RegisterRequest request)
+    {
+        if (request.SubGiroIds is not null)
+        {
+            var distinctIds = request.SubGiroIds.Distinct().ToList();
+            if (distinctIds.Count > 0)
+            {
+                // Catalog lookup goes through the cached repo path; unknown
+                // ids surface as ValidationException so the catch in
+                // RegisterAsync produces a clean error.
+                var catalogs = await _unitOfWork.Catalog.GetBusinessTypesAsync();
+                var matched = catalogs.Where(c => distinctIds.Contains(c.Id)).ToList();
+                if (matched.Count != distinctIds.Count)
+                {
+                    throw new ValidationException(
+                        "Uno o más giros seleccionados no existen en el catálogo");
+                }
+
+                foreach (var id in distinctIds)
+                {
+                    business.BusinessGiros.Add(new BusinessGiro
+                    {
+                        BusinessId = business.Id,
+                        BusinessTypeId = id
+                    });
+                }
+            }
+        }
+
+        if (request.CustomGiroDescription is not null)
+        {
+            business.CustomGiroDescription = request.CustomGiroDescription;
+        }
+
+        if (request.FiscalConfig is { } fiscal)
+        {
+            business.Rfc = fiscal.Rfc?.Trim().ToUpperInvariant();
+            business.TaxRegime = fiscal.TaxRegime;
+            business.LegalName = fiscal.LegalName;
+            business.InvoicingEnabled = fiscal.InvoicingEnabled;
+            // Intentionally NOT gating on CfdiInvoicing here — admin
+            // provisioning, see RegisterRequest.FiscalConfig xmldoc.
+        }
+
+        if (request.MarkOnboardingComplete)
+        {
+            business.OnboardingCompleted = true;
+            business.OnboardingStatusId = 3;
+        }
+    }
 
     private async Task<(int currentBranchId, List<BranchSummary> branches)> ResolveBranchesAsync(User user)
     {

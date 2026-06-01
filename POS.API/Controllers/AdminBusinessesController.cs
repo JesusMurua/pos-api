@@ -83,7 +83,19 @@ public class AdminBusinessesController : ControllerBase
                 FolioPrefix = request.FolioPrefix,
                 CountryCode = request.CountryCode,
                 TimeZoneId = request.TimeZoneId,
-                SuppressWelcomeEmail = request.SuppressWelcomeEmail
+                SuppressWelcomeEmail = request.SuppressWelcomeEmail,
+                SubGiroIds = request.SubGiroIds,
+                CustomGiroDescription = request.CustomGiroDescription,
+                FiscalConfig = request.FiscalConfig is null
+                    ? null
+                    : new FiscalConfigInput
+                    {
+                        Rfc = request.FiscalConfig.Rfc,
+                        TaxRegime = request.FiscalConfig.TaxRegime,
+                        LegalName = request.FiscalConfig.LegalName,
+                        InvoicingEnabled = request.FiscalConfig.InvoicingEnabled
+                    },
+                MarkOnboardingComplete = request.MarkOnboardingComplete
             };
 
             var auth = await _authService.RegisterAsync(registerRequest);
@@ -102,6 +114,8 @@ public class AdminBusinessesController : ControllerBase
                 PrimaryMacroCategoryCode: MacroCategoryIds.ToCode(auth.PrimaryMacroCategoryId),
                 TrialEndsAt: auth.TrialEndsAt,
                 CreatedAt: business.CreatedAt.ToString("o"),
+                OnboardingCompleted: auth.OnboardingCompleted,
+                OnboardingStatusId: auth.OnboardingStatusId,
                 OwnerJwt: request.IncludeOwnerJwt ? auth.Token : null);
 
             LogCreateAudit(

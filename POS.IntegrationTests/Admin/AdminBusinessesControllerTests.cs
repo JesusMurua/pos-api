@@ -2,9 +2,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using POS.Domain.DTOs.Admin;
 using POS.IntegrationTests.Infrastructure;
+using POS.Repository;
 using POS.Services.IService;
 
 namespace POS.IntegrationTests.Admin;
@@ -218,6 +221,155 @@ public class AdminBusinessesControllerTests : IClassFixture<CustomWebApplication
 
         returnedNames.Should().BeEquivalentTo(createdNames,
             "the directory must surface every business whose name matches the search prefix");
+    }
+
+    #endregion
+
+    #region Test 9 — Sub-giros persist when supplied
+
+    [Fact]
+    public async Task IT_ADM_BIZ_9_Create_With_SubGiroIds_Persists_BusinessGiro_Rows()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var client = CreateAdminClient();
+        var suffix = NewUniqueSuffix();
+        // Sub-giro 24 = "Salón de uñas" (Services / beauty);
+        // sub-giro 16 = "Boutique" (Retail) — verifies cross-macro acceptance
+        // also propagates through the registration path.
+        var request = BuildCreateRequest(suffix) with
+        {
+            SubGiroIds = new[] { 24, 16 },
+            CustomGiroDescription = "Combo salón + tienda"
+        };
+
+        var response = await client.PostAsJsonAsync(AdminRoute, request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var businessId = document.RootElement.GetProperty("businessId").GetInt32();
+
+        var giros = await db.BusinessGiros
+            .IgnoreQueryFilters()
+            .Where(g => g.BusinessId == businessId)
+            .Select(g => g.BusinessTypeId)
+            .ToListAsync();
+
+        giros.Should().BeEquivalentTo(new[] { 24, 16 },
+            "sub-giros must be inserted as BusinessGiro rows inside the registration transaction");
+
+        var business = await db.Businesses
+            .IgnoreQueryFilters()
+            .FirstAsync(b => b.Id == businessId);
+        business.CustomGiroDescription.Should().Be("Combo salón + tienda");
+    }
+
+    #endregion
+
+    #region Test 10 — Fiscal config persists when supplied
+
+    [Fact]
+    public async Task IT_ADM_BIZ_10_Create_With_FiscalConfig_Persists_RFC_And_Invoicing()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var client = CreateAdminClient();
+        var suffix = NewUniqueSuffix();
+        var request = BuildCreateRequest(suffix) with
+        {
+            FiscalConfig = new AdminFiscalConfigDto
+            {
+                Rfc = "xaxx010101000",
+                TaxRegime = "601",
+                LegalName = "Test Razón Social SA de CV",
+                InvoicingEnabled = true
+            }
+        };
+
+        var response = await client.PostAsJsonAsync(AdminRoute, request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var businessId = document.RootElement.GetProperty("businessId").GetInt32();
+
+        var business = await db.Businesses
+            .IgnoreQueryFilters()
+            .FirstAsync(b => b.Id == businessId);
+
+        business.Rfc.Should().Be("XAXX010101000",
+            "RFC must be normalized to upper case at the service layer");
+        business.TaxRegime.Should().Be("601");
+        business.LegalName.Should().Be("Test Razón Social SA de CV");
+        business.InvoicingEnabled.Should().BeTrue(
+            "the admin path bypasses the CfdiInvoicing feature gate by design");
+    }
+
+    #endregion
+
+    #region Test 11 — MarkOnboardingComplete reflected on the response + Business state
+
+    [Fact]
+    public async Task IT_ADM_BIZ_11_Create_With_MarkOnboardingComplete_Sets_Flag_And_Status()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var client = CreateAdminClient();
+        var suffix = NewUniqueSuffix();
+        var request = BuildCreateRequest(suffix) with { MarkOnboardingComplete = true };
+
+        var response = await client.PostAsJsonAsync(AdminRoute, request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        document.RootElement.GetProperty("onboardingCompleted").GetBoolean().Should().BeTrue();
+        document.RootElement.GetProperty("onboardingStatusId").GetInt32().Should().Be(3);
+
+        var businessId = document.RootElement.GetProperty("businessId").GetInt32();
+        var business = await db.Businesses
+            .IgnoreQueryFilters()
+            .FirstAsync(b => b.Id == businessId);
+
+        business.OnboardingCompleted.Should().BeTrue();
+        business.OnboardingStatusId.Should().Be(3);
+    }
+
+    #endregion
+
+    #region Test 12 — Owner JWT carries onboardingCompleted=true claim when both flags set
+
+    [Fact]
+    public async Task IT_ADM_BIZ_12_Owner_Jwt_Carries_OnboardingCompleted_True_Claim()
+    {
+        var client = CreateAdminClient();
+        var suffix = NewUniqueSuffix();
+        var request = BuildCreateRequest(suffix) with
+        {
+            MarkOnboardingComplete = true,
+            IncludeOwnerJwt = true
+        };
+
+        var response = await client.PostAsJsonAsync(AdminRoute, request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var jwt = document.RootElement.GetProperty("ownerJwt").GetString();
+        jwt.Should().NotBeNullOrWhiteSpace();
+
+        var handler = new JwtSecurityTokenHandler();
+        var parsed = handler.ReadJwtToken(jwt);
+        var onboardingClaim = parsed.Claims.FirstOrDefault(c => c.Type == "onboardingCompleted");
+
+        onboardingClaim.Should().NotBeNull(
+            "the Owner JWT must carry the onboardingCompleted claim emitted by GenerateToken");
+        onboardingClaim!.Value.Should().Be("true",
+            "MarkOnboardingComplete=true on the request must propagate through the JWT");
     }
 
     #endregion

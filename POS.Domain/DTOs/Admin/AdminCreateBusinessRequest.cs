@@ -73,4 +73,65 @@ public sealed record AdminCreateBusinessRequest
     /// or screenshots unless explicitly opted in.
     /// </summary>
     public bool IncludeOwnerJwt { get; init; } = false;
+
+    /// <summary>
+    /// Optional full sub-giro id set persisted as <c>BusinessGiro</c> rows
+    /// inside the same registration transaction. Validated against the
+    /// <c>BusinessTypeCatalog</c> seed; unknown ids roll the entire create
+    /// back with a 400. Null skips sub-giro assignment so the customer can
+    /// pick them later via <c>PUT /api/business/giro</c>.
+    /// </summary>
+    public IReadOnlyList<int>? SubGiroIds { get; init; }
+
+    /// <summary>
+    /// Optional free-text giro clarification persisted on
+    /// <c>Business.CustomGiroDescription</c>. Used together with — or
+    /// instead of — <see cref="SubGiroIds"/> when the operator picks
+    /// "Otra" in the catalog.
+    /// </summary>
+    [MaxLength(100)]
+    public string? CustomGiroDescription { get; init; }
+
+    /// <summary>
+    /// Optional fiscal configuration (RFC, tax regime, legal name, CFDI
+    /// flag) persisted on the freshly created <c>Business</c> inside the
+    /// same transaction. When <see cref="AdminFiscalConfigDto.InvoicingEnabled"/>
+    /// is true, the CfdiInvoicing feature gate is intentionally bypassed
+    /// because this path is admin provisioning, not end-user upgrade.
+    /// Null leaves fiscal columns at their NULL / false defaults.
+    /// </summary>
+    public AdminFiscalConfigDto? FiscalConfig { get; init; }
+
+    /// <summary>
+    /// When <c>true</c>, the freshly created <c>Business</c> is marked as
+    /// fully onboarded (<c>OnboardingCompleted = true</c>,
+    /// <c>OnboardingStatusId = 3</c>) so the first Owner login receives a
+    /// JWT with <c>onboardingCompleted = true</c> and the SPA route guard
+    /// sends them straight to the dashboard instead of the wizard.
+    /// </summary>
+    public bool MarkOnboardingComplete { get; init; } = false;
+}
+
+/// <summary>
+/// API-layer payload mirror of <c>POS.Services.IService.FiscalConfigInput</c>.
+/// Lives in the Domain DTO layer so the API controller can validate /
+/// document its shape with data annotations without leaking service types.
+/// Mapped 1:1 to <c>FiscalConfigInput</c> inside the controller.
+/// Declared as a non-positional record so MVC's data-annotation validator
+/// can read the <c>MaxLength</c> attributes off the properties — positional
+/// records bury the metadata on the synthesized constructor parameter and
+/// the validator refuses to bind them.
+/// </summary>
+public sealed record AdminFiscalConfigDto
+{
+    [MaxLength(13)]
+    public string? Rfc { get; init; }
+
+    [MaxLength(3)]
+    public string? TaxRegime { get; init; }
+
+    [MaxLength(300)]
+    public string? LegalName { get; init; }
+
+    public bool InvoicingEnabled { get; init; }
 }
