@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
@@ -231,6 +233,28 @@ public class UserService : IUserService
     }
 
     /// <inheritdoc />
+    public async Task<string> ResetOwnerPasswordAsync(int businessId, string? newPassword)
+    {
+        var owner = await _unitOfWork.Users.GetAsync(
+            u => u.BusinessId == businessId && u.RoleId == UserRoleIds.Owner);
+
+        var ownerUser = owner.OrderBy(u => u.CreatedAt).FirstOrDefault()
+            ?? throw new NotFoundException($"Business {businessId} has no Owner user");
+
+        var effectivePassword = string.IsNullOrEmpty(newPassword)
+            ? GenerateRandomPassword(length: 12)
+            : newPassword;
+
+        if (effectivePassword.Length < 8)
+            throw new ValidationException("Password must be at least 8 characters long");
+
+        ownerUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(effectivePassword);
+        await _unitOfWork.SaveChangesAsync();
+
+        return effectivePassword;
+    }
+
+    /// <inheritdoc />
     public async Task<DateTime> MarkWelcomeShownAsync(int userId)
     {
         var user = await _unitOfWork.Users.GetByIdAsync(userId)
@@ -251,6 +275,26 @@ public class UserService : IUserService
     #endregion
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Generates a cryptographically-random password from the alphabet
+    /// <c>[A-Za-z0-9!@#$]</c> using <see cref="RandomNumberGenerator"/>.
+    /// The 66-character alphabet over 12 positions gives ~74 bits of
+    /// entropy — sufficient for an Owner credential the admin hands off
+    /// to a customer via secure channel.
+    /// </summary>
+    private static string GenerateRandomPassword(int length)
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$";
+        var bytes = new byte[length];
+        RandomNumberGenerator.Fill(bytes);
+        var chars = new char[length];
+        for (var i = 0; i < length; i++)
+        {
+            chars[i] = alphabet[bytes[i] % alphabet.Length];
+        }
+        return new string(chars);
+    }
 
     /// <summary>
     /// Delegates quantitative enforcement to the feature gate service.

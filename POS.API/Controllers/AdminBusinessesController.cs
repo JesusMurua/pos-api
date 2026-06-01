@@ -7,6 +7,7 @@ using POS.Domain.DTOs.Admin;
 using POS.Domain.DTOs.Common;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
+using POS.Domain.Models;
 using POS.Repository;
 using POS.Services.IService;
 
@@ -32,15 +33,24 @@ public class AdminBusinessesController : ControllerBase
 
     private readonly IAuthService _authService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IUserService _userService;
+    private readonly IBusinessSnapshotService _businessSnapshot;
+    private readonly IFeatureGateService _featureGate;
     private readonly ILogger<AdminBusinessesController> _logger;
 
     public AdminBusinessesController(
         IAuthService authService,
         IUnitOfWork unitOfWork,
+        IUserService userService,
+        IBusinessSnapshotService businessSnapshot,
+        IFeatureGateService featureGate,
         ILogger<AdminBusinessesController> logger)
     {
         _authService = authService;
         _unitOfWork = unitOfWork;
+        _userService = userService;
+        _businessSnapshot = businessSnapshot;
+        _featureGate = featureGate;
         _logger = logger;
     }
 
@@ -176,6 +186,12 @@ public class AdminBusinessesController : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = DefaultPageSize,
         [FromQuery] string? search = null,
+        [FromQuery] int? planTypeId = null,
+        [FromQuery] int? primaryMacroCategoryId = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? trialStatus = null,
+        [FromQuery] string sortBy = "createdAt",
+        [FromQuery] string sortDir = "desc",
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -184,7 +200,16 @@ public class AdminBusinessesController : ControllerBase
         var clampedPageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
         var (rows, total) = await _unitOfWork.Business.GetAllForAdminAsync(
-            clampedPageNumber, clampedPageSize, search, cancellationToken);
+            pageNumber: clampedPageNumber,
+            pageSize: clampedPageSize,
+            search: search,
+            planTypeId: planTypeId,
+            primaryMacroCategoryId: primaryMacroCategoryId,
+            isActive: isActive,
+            trialStatus: trialStatus,
+            sortBy: sortBy,
+            sortDir: sortDir,
+            cancellationToken: cancellationToken);
 
         var items = rows.Select(b =>
         {
@@ -294,6 +319,291 @@ public class AdminBusinessesController : ControllerBase
         LogStatsAudit(stopwatch.ElapsedMilliseconds);
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Full tenant detail view used by the fino-admin SPA when the
+    /// operator opens a business row from the directory list.
+    /// </summary>
+    /// <response code="200">Tenant detail.</response>
+    /// <response code="404">Business not found.</response>
+    /// <response code="401">Missing or invalid <c>X-Admin-Token</c>.</response>
+    [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(AdminBusinessDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        if (business is null)
+        {
+            LogActionAudit("AdminBusinessGetByIdNotFound", id, stopwatch.ElapsedMilliseconds);
+            return NotFound();
+        }
+
+        var detail = await BuildDetailAsync(business);
+        LogActionAudit("AdminBusinessGetById", id, stopwatch.ElapsedMilliseconds);
+        return Ok(detail);
+    }
+
+    /// <summary>
+    /// Suspends or reactivates a tenant. When <c>IsActive=false</c> the
+    /// owner / staff are immediately blocked from authenticating via
+    /// email or PIN login (gate enforced in <c>AuthService</c>).
+    /// </summary>
+    [HttpPatch("{id:int}/status")]
+    [ProducesResponseType(typeof(AdminBusinessDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleStatus(
+        int id,
+        [FromBody] AdminToggleBusinessStatusRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        if (business is null) return NotFound();
+
+        business.IsActive = request.IsActive;
+        await _unitOfWork.SaveChangesAsync();
+        _featureGate.Invalidate(id);
+
+        _logger.LogInformation(
+            "Admin tenant status change for {BusinessId}: IsActive={IsActive}, reason={Reason}",
+            id, request.IsActive, request.Reason ?? "(none)");
+
+        // Refetch via the admin path to get the post-mutation Branches +
+        // Owner inclusion populated; the snapshot also rebuilds with the
+        // up-to-date IsActive flag if the FE renders derived state.
+        var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        var detail = await BuildDetailAsync(fresh!);
+        LogActionAudit("AdminBusinessToggleStatus", id, stopwatch.ElapsedMilliseconds);
+        return Ok(detail);
+    }
+
+    /// <summary>
+    /// Changes the tenant's plan directly (admin override). Stripe-managed
+    /// subscriptions will resync on the next webhook event — the worker
+    /// treats Stripe as single source of truth for billed tenants.
+    /// </summary>
+    [HttpPatch("{id:int}/plan")]
+    [ProducesResponseType(typeof(AdminBusinessDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ChangePlan(
+        int id,
+        [FromBody] AdminChangePlanRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        if (business is null) return NotFound();
+
+        business.PlanTypeId = request.PlanTypeId;
+        await _unitOfWork.SaveChangesAsync();
+        _featureGate.Invalidate(id);
+
+        var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        var detail = await BuildDetailAsync(fresh!);
+        LogActionAudit("AdminBusinessChangePlan", id, stopwatch.ElapsedMilliseconds);
+        return Ok(detail);
+    }
+
+    /// <summary>
+    /// Extends the in-app trial window to <see cref="AdminExtendTrialRequest.NewTrialEndsAt"/>.
+    /// Rejects past dates and instants more than 180 days in the future.
+    /// </summary>
+    [HttpPatch("{id:int}/trial")]
+    [ProducesResponseType(typeof(AdminBusinessDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExtendTrial(
+        int id,
+        [FromBody] AdminExtendTrialRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var nowUtc = DateTime.UtcNow;
+        if (request.NewTrialEndsAt <= nowUtc)
+            return BadRequest(new { message = "NewTrialEndsAt must be in the future." });
+        if (request.NewTrialEndsAt > nowUtc.AddDays(180))
+            return BadRequest(new { message = "NewTrialEndsAt cannot be more than 180 days from now." });
+
+        var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        if (business is null) return NotFound();
+
+        business.TrialEndsAt = request.NewTrialEndsAt;
+        await _unitOfWork.SaveChangesAsync();
+
+        var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        var detail = await BuildDetailAsync(fresh!);
+        LogActionAudit("AdminBusinessExtendTrial", id, stopwatch.ElapsedMilliseconds);
+        return Ok(detail);
+    }
+
+    /// <summary>
+    /// Regenerates (or sets) the tenant Owner's password. The plaintext
+    /// password is returned so the operator can relay it to the customer.
+    /// </summary>
+    [HttpPost("{id:int}/reset-owner-password")]
+    [ProducesResponseType(typeof(AdminResetOwnerPasswordResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResetOwnerPassword(
+        int id,
+        [FromBody] AdminResetOwnerPasswordRequest request)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            var newPassword = await _userService.ResetOwnerPasswordAsync(id, request.NewPassword);
+            LogActionAudit("AdminBusinessResetOwnerPassword", id, stopwatch.ElapsedMilliseconds);
+            return Ok(new AdminResetOwnerPasswordResponse(newPassword));
+        }
+        catch (NotFoundException)
+        {
+            return NotFound();
+        }
+        catch (ValidationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Issues a short-lived (2 hour) JWT as the tenant's Owner so the
+    /// super admin can drop into the POS for support / debugging. Every
+    /// impersonation is structured-logged with the caller token id,
+    /// target user id, and TTL so retroactive forensics is possible.
+    /// </summary>
+    [HttpPost("{id:int}/impersonate")]
+    [ProducesResponseType(typeof(AdminImpersonateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Impersonate(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
+        if (business is null) return NotFound();
+
+        var owner = business.Users?
+            .Where(u => u.RoleId == UserRoleIds.Owner)
+            .OrderBy(u => u.CreatedAt)
+            .FirstOrDefault();
+        if (owner is null) return NotFound(new { message = "Business has no Owner user." });
+
+        var ttl = TimeSpan.FromHours(2);
+        var auth = await _authService.GetSessionAsync(owner.Id, "email", ttl);
+        var expiresAt = DateTime.UtcNow.Add(ttl);
+
+        LogImpersonateAudit(id, owner.Id, ttl, stopwatch.ElapsedMilliseconds);
+
+        return Ok(new AdminImpersonateResponse(
+            OwnerJwt: auth.Token,
+            OwnerEmail: owner.Email ?? string.Empty,
+            OwnerName: owner.Name,
+            ExpiresAt: expiresAt.ToString("o")));
+    }
+
+    private async Task<AdminBusinessDetailResponse> BuildDetailAsync(Business business)
+    {
+        var owner = business.Users?
+            .Where(u => u.RoleId == UserRoleIds.Owner)
+            .OrderBy(u => u.CreatedAt)
+            .FirstOrDefault();
+
+        var snapshot = await _businessSnapshot.BuildAsync(business.Id);
+
+        var branches = business.Branches?
+            .OrderBy(b => b.Id)
+            .Select(b => new BranchInfo(
+                Id: b.Id,
+                Name: b.Name,
+                IsActive: b.IsActive,
+                CreatedAt: b.CreatedAt.ToString("o")))
+            .ToList()
+            ?? new List<BranchInfo>();
+
+        var subGiroIds = business.BusinessGiros?
+            .Select(g => g.BusinessTypeId)
+            .OrderBy(x => x)
+            .ToList()
+            ?? new List<int>();
+
+        return new AdminBusinessDetailResponse(
+            Id: business.Id,
+            Name: business.Name,
+            IsActive: business.IsActive,
+            CreatedAt: business.CreatedAt.ToString("o"),
+            CountryCode: business.CountryCode,
+            PlanTypeId: business.PlanTypeId,
+            PlanTypeCode: PlanTypeIds.ToCode(business.PlanTypeId),
+            PrimaryMacroCategoryId: business.PrimaryMacroCategoryId,
+            PrimaryMacroCategoryCode: MacroCategoryIds.ToCode(business.PrimaryMacroCategoryId),
+            CustomGiroDescription: business.CustomGiroDescription,
+            SubGiroIds: subGiroIds,
+            OnboardingCompleted: business.OnboardingCompleted,
+            OnboardingStatusId: business.OnboardingStatusId,
+            CurrentOnboardingStep: business.CurrentOnboardingStep,
+            TrialEndsAt: business.TrialEndsAt?.ToString("o"),
+            TrialUsed: business.TrialUsed,
+            Rfc: business.Rfc,
+            TaxRegime: business.TaxRegime,
+            LegalName: business.LegalName,
+            InvoicingEnabled: business.InvoicingEnabled,
+            Snapshot: snapshot,
+            OwnerEmail: owner?.Email,
+            OwnerName: owner?.Name,
+            OwnerLastLoginAt: owner?.LastLoginAt?.ToString("o"),
+            Branches: branches);
+    }
+
+    private void LogActionAudit(string eventType, int businessId, long durationMs)
+    {
+        var tokenId = User.FindFirst(AdminTokenAuthenticationHandler.TokenIdClaimType)?.Value
+                      ?? "anonymous";
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        _logger.LogInformation(
+            "Admin tenant action {@AdminBusinessActionAudit}",
+            new
+            {
+                Timestamp = DateTime.UtcNow,
+                EventType = eventType,
+                CallerTokenId = tokenId,
+                CallerIp = ip,
+                BusinessId = businessId,
+                DurationMs = durationMs
+            });
+    }
+
+    private void LogImpersonateAudit(int businessId, int targetUserId, TimeSpan ttl, long durationMs)
+    {
+        var tokenId = User.FindFirst(AdminTokenAuthenticationHandler.TokenIdClaimType)?.Value
+                      ?? "anonymous";
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        // Impersonate is the most security-sensitive admin action — log a
+        // separate structured event so an audit query can isolate the
+        // "who impersonated which Owner, for how long" forensics trail.
+        _logger.LogWarning(
+            "Admin impersonate {@AdminImpersonateAudit}",
+            new
+            {
+                Timestamp = DateTime.UtcNow,
+                CallerTokenId = tokenId,
+                CallerIp = ip,
+                BusinessId = businessId,
+                TargetUserId = targetUserId,
+                TtlHours = ttl.TotalHours,
+                DurationMs = durationMs
+            });
     }
 
     private void LogCreateAudit(string result, int? businessId, string email, long durationMs)

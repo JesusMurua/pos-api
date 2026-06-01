@@ -29,7 +29,23 @@ public interface IBusinessRepository : IGenericRepository<Business>
         int pageNumber,
         int pageSize,
         string? search,
+        int? planTypeId = null,
+        int? primaryMacroCategoryId = null,
+        bool? isActive = null,
+        string? trialStatus = null,
+        string sortBy = "createdAt",
+        string sortDir = "desc",
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Single-row variant of <see cref="GetAllForAdminAsync"/> for the
+    /// admin detail view (<c>GET /api/Admin/businesses/{id}</c>). Bypasses
+    /// BDD-019 tenant filters via <c>IgnoreQueryFilters</c> and eager-loads
+    /// the matrix + secondary branches plus the oldest Owner User so the
+    /// caller can project the detail DTO without follow-up queries.
+    /// Returns <c>null</c> when no business with that id exists.
+    /// </summary>
+    Task<Business?> GetByIdForAdminAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Raw cross-tenant aggregate snapshot consumed by

@@ -49,7 +49,14 @@ public interface IAuthService
     /// <paramref name="sessionType"/> is missing or not one of <c>email</c> /
     /// <c>pin</c>. No graceful-fallback path exists.
     /// </exception>
-    Task<AuthResponse> GetSessionAsync(int userId, string? sessionType);
+    /// <param name="overrideExpiration">
+    /// When supplied, replaces the per-sessionType TTL resolved from
+    /// <c>JwtSettings</c>. Used by the admin impersonation endpoint to
+    /// issue short-lived (2 hour) tokens that cap the blast radius if
+    /// the impersonation token leaks. <c>null</c> preserves the standard
+    /// owner / PIN expiration.
+    /// </param>
+    Task<AuthResponse> GetSessionAsync(int userId, string? sessionType, TimeSpan? overrideExpiration = null);
 
     /// <summary>
     /// Issues a long-lived JWT that represents a physical device (KDS screen, kiosk)

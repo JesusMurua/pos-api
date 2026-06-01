@@ -16,6 +16,12 @@ public class BusinessRepository : GenericRepository<Business>, IBusinessReposito
         int pageNumber,
         int pageSize,
         string? search,
+        int? planTypeId = null,
+        int? primaryMacroCategoryId = null,
+        bool? isActive = null,
+        string? trialStatus = null,
+        string sortBy = "createdAt",
+        string sortDir = "desc",
         CancellationToken cancellationToken = default)
     {
         // IgnoreQueryFilters() drops the BDD-019 tenant filter so the super-admin
@@ -39,12 +45,62 @@ public class BusinessRepository : GenericRepository<Business>, IBusinessReposito
                                    u.Email.ToLower().Contains(needle)));
         }
 
+        if (planTypeId.HasValue)
+            query = query.Where(b => b.PlanTypeId == planTypeId.Value);
+
+        if (primaryMacroCategoryId.HasValue)
+            query = query.Where(b => b.PrimaryMacroCategoryId == primaryMacroCategoryId.Value);
+
+        if (isActive.HasValue)
+            query = query.Where(b => b.IsActive == isActive.Value);
+
+        if (!string.IsNullOrWhiteSpace(trialStatus))
+        {
+            var nowUtc = DateTime.UtcNow;
+            // The trial-status filter classifies businesses against TrialEndsAt
+            // relative to "now". A null TrialEndsAt excludes the row from every
+            // bucket — those tenants are Free plan or never had a trial assigned.
+            query = trialStatus.ToLowerInvariant() switch
+            {
+                "active" => query.Where(b => b.TrialEndsAt != null && b.TrialEndsAt > nowUtc),
+                "expiring-7d" => query.Where(b => b.TrialEndsAt != null
+                                                   && b.TrialEndsAt > nowUtc
+                                                   && b.TrialEndsAt <= nowUtc.AddDays(7)),
+                "expiring-14d" => query.Where(b => b.TrialEndsAt != null
+                                                    && b.TrialEndsAt > nowUtc
+                                                    && b.TrialEndsAt <= nowUtc.AddDays(14)),
+                "expired" => query.Where(b => b.TrialEndsAt != null && b.TrialEndsAt <= nowUtc),
+                _ => query
+            };
+        }
+
         var total = await query.CountAsync(cancellationToken);
+
+        // Sort dispatch. The lastLoginAt sort uses Max(LastLoginAt) over the
+        // Owner users so a tenant with no Owner-with-login lands at the
+        // ascending tail; descending pushes it to the head. Branch-scoped
+        // sorts could be added later — for now the three the FE asked for.
+        var descending = !string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase);
+        IOrderedQueryable<Business> ordered = (sortBy?.ToLowerInvariant()) switch
+        {
+            "name" => descending
+                ? query.OrderByDescending(b => b.Name)
+                : query.OrderBy(b => b.Name),
+            "lastloginat" => descending
+                ? query.OrderByDescending(b => b.Users!
+                    .Where(u => u.RoleId == UserRoleIds.Owner)
+                    .Max(u => (DateTime?)u.LastLoginAt))
+                : query.OrderBy(b => b.Users!
+                    .Where(u => u.RoleId == UserRoleIds.Owner)
+                    .Max(u => (DateTime?)u.LastLoginAt)),
+            _ => descending
+                ? query.OrderByDescending(b => b.CreatedAt)
+                : query.OrderBy(b => b.CreatedAt)
+        };
 
         var skip = Math.Max(0, (pageNumber - 1) * pageSize);
 
-        var items = await query
-            .OrderByDescending(b => b.CreatedAt)
+        var items = await ordered
             .ThenByDescending(b => b.Id)
             .Skip(skip)
             .Take(pageSize)
@@ -58,6 +114,23 @@ public class BusinessRepository : GenericRepository<Business>, IBusinessReposito
             .ToListAsync(cancellationToken);
 
         return (items, total);
+    }
+
+    /// <inheritdoc />
+    public async Task<Business?> GetByIdForAdminAsync(int id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Businesses
+            .IgnoreQueryFilters()
+            // Tracked load (not AsNoTracking) so the caller can mutate the
+            // result inside the same request — status, plan, and trial
+            // PATCH actions write through the returned entity.
+            .Include(b => b.Branches)
+            .Include(b => b.Users!
+                .Where(u => u.RoleId == UserRoleIds.Owner)
+                .OrderBy(u => u.CreatedAt)
+                .Take(1))
+            .Include(b => b.BusinessGiros)
+            .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
     }
 
     /// <inheritdoc />

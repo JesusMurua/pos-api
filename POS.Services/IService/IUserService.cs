@@ -60,4 +60,23 @@ public interface IUserService
     /// existing User.
     /// </exception>
     Task<DateTime> MarkWelcomeShownAsync(int userId);
+
+    /// <summary>
+    /// Resets the credential password of the tenant's Owner user (oldest
+    /// <c>RoleId = UserRoleIds.Owner</c> by <c>CreatedAt</c>). When
+    /// <paramref name="newPassword"/> is null the service generates a
+    /// 12-character cryptographically-random password from the alphabet
+    /// <c>[A-Za-z0-9!@#$]</c>. Validates min-length 8 (same complexity
+    /// floor as the public Register flow). Returns the effective
+    /// plaintext password so the caller can surface it to the admin
+    /// UI for relay to the customer.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.NotFoundException">
+    /// Thrown when the business has no Owner user.
+    /// </exception>
+    /// <exception cref="POS.Domain.Exceptions.ValidationException">
+    /// Thrown when a caller-provided <paramref name="newPassword"/> is
+    /// shorter than 8 characters.
+    /// </exception>
+    Task<string> ResetOwnerPasswordAsync(int businessId, string? newPassword);
 }

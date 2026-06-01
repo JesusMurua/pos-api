@@ -193,7 +193,7 @@ public class AuthService : IAuthService
     /// JWT plus an up-to-date <see cref="AuthResponse"/>. The new token inherits the
     /// same <paramref name="sessionType"/> as the incoming token.
     /// </summary>
-    public async Task<AuthResponse> GetSessionAsync(int userId, string? sessionType)
+    public async Task<AuthResponse> GetSessionAsync(int userId, string? sessionType, TimeSpan? overrideExpiration = null)
     {
         // Validate sessionType up-front so legacy or tampered tokens are rejected
         // before we spend DB round-trips on rehydrating a session we will not issue.
@@ -209,7 +209,10 @@ public class AuthService : IAuthService
 
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
-        var expiration = ResolveExpiration(validatedSessionType);
+        // overrideExpiration replaces the per-sessionType default — used by
+        // the admin impersonation endpoint to cap blast radius with a 2h
+        // token. When null the standard owner / PIN TTL applies.
+        var expiration = overrideExpiration ?? ResolveExpiration(validatedSessionType);
 
         var subscription = await ResolveSubscriptionAsync(user.BusinessId);
         var planType = PlanTypeIds.ToCode(business.PlanTypeId);
