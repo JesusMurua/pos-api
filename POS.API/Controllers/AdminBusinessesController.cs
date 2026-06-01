@@ -223,6 +223,14 @@ public class AdminBusinessesController : ControllerBase
                 Name: b.Name,
                 OwnerEmail: owner?.Email,
                 OwnerName: owner?.Name,
+                // Same Owner the email/name fields show. The lastLoginAt
+                // sort uses Max() over every Owner user via a SQL subquery
+                // — for tenants with multiple Owners (rare) the displayed
+                // value may differ from the sort key by one row. The fix,
+                // if it ever matters, is to project the Max() column in
+                // the repo Select; current shape favors consistency with
+                // OwnerEmail / OwnerName at zero extra round-trip cost.
+                OwnerLastLoginAt: owner?.LastLoginAt?.ToString("o"),
                 PlanTypeId: b.PlanTypeId,
                 PlanTypeCode: PlanTypeIds.ToCode(b.PlanTypeId),
                 PrimaryMacroCategoryId: b.PrimaryMacroCategoryId,
