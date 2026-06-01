@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using POS.Domain.DTOs.Auth;
@@ -28,19 +29,22 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IFeatureGateService _featureGate;
     private readonly ITenantSeedingService _tenantSeedingService;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
         IFeatureGateService featureGate,
-        ITenantSeedingService tenantSeedingService)
+        ITenantSeedingService tenantSeedingService,
+        ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _featureGate = featureGate;
         _tenantSeedingService = tenantSeedingService;
+        _logger = logger;
     }
 
     #region Public API Methods
@@ -58,13 +62,28 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             throw new ValidationException("Invalid email or password");
 
-        // Strict LastLoginAt — set only on real credential authentication.
-        // Session rehydrate (/me) deliberately does not touch this so the
-        // column reflects "last sign-in" rather than "last seen".
+        var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
+
+        // Business-level suspension gate. Surfaces the same generic message
+        // as the wrong-credentials path so a probing attacker cannot tell a
+        // suspended tenant apart from an unknown account. Internal detail
+        // is logged at Warning so the operator can correlate from server
+        // logs if needed.
+        if (business is null || !business.IsActive)
+        {
+            _logger.LogWarning(
+                "Login rejected for {Email}: business {BusinessId} suspended or missing",
+                email, user.BusinessId);
+            throw new ValidationException("Invalid email or password");
+        }
+
+        // Strict LastLoginAt — set only on real credential authentication
+        // that passes BOTH credential and business-active checks. Session
+        // rehydrate (/me) deliberately does not touch this so the column
+        // reflects "last successful sign-in" rather than "last seen".
         user.LastLoginAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 
-        var business = await _unitOfWork.Business.GetByIdAsync(user.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(user);
 
         // Single Source of Truth: Business.PlanTypeId is kept in sync by the Stripe worker.
@@ -98,11 +117,23 @@ public class AuthService : IAuthService
         if (matchedUser == null)
             throw new ValidationException("Invalid PIN");
 
+        var business = await _unitOfWork.Business.GetByIdAsync(matchedUser.BusinessId);
+
+        // Business-level suspension gate — same shape and rationale as
+        // EmailLoginAsync. Generic message to clients, structured log to
+        // server so the operator can correlate.
+        if (business is null || !business.IsActive)
+        {
+            _logger.LogWarning(
+                "PIN login rejected for branch {BranchId}: business {BusinessId} suspended or missing",
+                branchId, matchedUser.BusinessId);
+            throw new ValidationException("Invalid PIN");
+        }
+
         // Strict LastLoginAt — see EmailLoginAsync rationale.
         matchedUser.LastLoginAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync();
 
-        var business = await _unitOfWork.Business.GetByIdAsync(matchedUser.BusinessId);
         var (currentBranchId, branches) = await ResolveBranchesAsync(matchedUser);
 
         var subscription = await ResolveSubscriptionAsync(matchedUser.BusinessId);
