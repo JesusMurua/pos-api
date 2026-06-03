@@ -138,6 +138,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<BusinessTypeFeature> BusinessTypeFeatures { get; set; } = null!;
     public DbSet<PlanBusinessTypeFeatureOverride> PlanBusinessTypeFeatureOverrides { get; set; } = null!;
     public DbSet<ClusterFeature> ClusterFeatures { get; set; } = null!;
+    public DbSet<FeatureMatrixAuditLog> FeatureMatrixAuditLogs { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -1288,6 +1289,12 @@ public class ApplicationDbContext : DbContext
                 "\"ClusterCode\" IN " +
                 "('beauty','health','automotive','pets','repair'," +
                 "'fitness','education','home','events','professional')"));
+        });
+
+        modelBuilder.Entity<FeatureMatrixAuditLog>(entity =>
+        {
+            entity.HasIndex(a => a.ChangedAt);
+            entity.HasIndex(a => a.Axis);
         });
 
         modelBuilder.Entity<ZoneTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });

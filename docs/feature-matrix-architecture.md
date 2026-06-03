@@ -116,9 +116,38 @@ Invalidation:
   edit, since a matrix change affects every tenant. Orphans expire by their own
   TTL; the next read repopulates under the new generation.
 
+## Seeding (bootstrap-only)
+
+`DbInitializer.UpsertFeatureMatrixAsync` runs on every boot but is **insert-if-missing
+per row**: it adds rows that don't exist yet (so a new `FeatureKey` gets its catalog +
+default matrix rows on deploy) and **never overwrites or deletes** existing rows. The
+DB is the source of truth for values — admin edits survive a re-seed. Rule *value*
+changes therefore ship via the admin endpoints or an explicit data migration, not via
+the seed.
+
+## Admin endpoints
+
+Ops-only CRUD under `api/Admin`, authenticated by the **`X-Admin-Token`** scheme (no
+`SuperAdmin` role exists). Every mutation is audited to `FeatureMatrixAuditLog`
+(attributed to the token's `token_id` claim, one row per changed entity) and calls
+`InvalidateAll()`.
+
+| Endpoint | Notes |
+|----------|-------|
+| `GET/PUT feature-catalog`, `PUT feature-catalog/{id}` | **Metadata only** (Name/Description/ResourceLabel/SortOrder). No POST/DELETE — features are `FeatureKey`-bound. |
+| `GET/PUT plan-feature-matrix` | Flag matrix: `{ planTypeId, featureId, isEnabled, defaultLimit }`. Bulk **upsert-merge**. |
+| `GET/PUT business-type-feature-matrix` | Presence: `{ macroCategoryId, featureId, isApplicable, limit? }`. `isApplicable=false` deletes the row. |
+| `GET/PUT cluster-feature-matrix` | Presence: `{ clusterCode, featureId, isApplicable }`. GET envelope includes the full cluster slug list. |
+| `GET/POST/PUT/DELETE plan-business-type-overrides` | Composite key `{planTypeId}/{macroCategoryId}/{featureId}`. |
+| `GET feature-matrix/preview-impact?axis=cluster&...` | Recomputes the resolver to count businesses whose outcome **effectively** flips; returns `affectedCount`, `breakdownByPlan`, `sampleBusinessIds` (≤50). Cluster axis only. |
+| `GET feature-matrix/audit-log?from=&to=&axis=&page=&pageSize=` | Paginated, DESC by `ChangedAt`. |
+
+Bulk PUTs are **upsert-merge**: only the supplied entries are applied; unlisted rows
+are untouched (never a full replace). Invalid `featureId`/`planType`/`macro`/`cluster`
+→ 400.
+
 ## Out of scope (future)
 
-- **Admin console** to edit matrices without a deploy (needs the seed migrated to
-  bootstrap-only / additive first, plus `InvalidateAll`).
 - **Per-tenant override** (a single business opting outside its cluster).
 - **Sub-giro granularity** finer than cluster (a `BusinessTypeCatalogFeature` axis).
+- **Admin UI** (fino-admin) — these endpoints are the backend it will consume.

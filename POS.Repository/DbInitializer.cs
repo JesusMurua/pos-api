@@ -922,25 +922,17 @@ public static class DbInitializer
             new() { Id = FeatureIds.RealtimeAccessControl,   Key = FeatureKey.RealtimeAccessControl,   Code = "RealtimeAccessControl",   Name = "Control de acceso en tiempo real", Description = "Bridge SignalR para biometría, torniquetes y QR de membresía",  IsQuantitative = false, SortOrder = 120, Scope = EnforcementScope.Global },
         };
 
-        var existingFeatures = await context.FeatureCatalogs.ToListAsync();
-        var existingByKey = existingFeatures.ToDictionary(f => f.Key);
+        // Bootstrap-only: insert features that don't exist yet, never overwrite
+        // existing rows. The admin metadata endpoint owns edits; a re-seed on
+        // deploy must not revert them. New FeatureKey enum values still get their
+        // catalog row on the next boot.
+        var existingByKey = (await context.FeatureCatalogs.ToListAsync())
+            .ToDictionary(f => f.Key);
 
         foreach (var item in desiredFeatures)
         {
-            if (existingByKey.TryGetValue(item.Key, out var row))
-            {
-                row.Code = item.Code;
-                row.Name = item.Name;
-                row.Description = item.Description;
-                row.IsQuantitative = item.IsQuantitative;
-                row.ResourceLabel = item.ResourceLabel;
-                row.SortOrder = item.SortOrder;
-                row.Scope = item.Scope;
-            }
-            else
-            {
+            if (!existingByKey.ContainsKey(item.Key))
                 context.FeatureCatalogs.Add(item);
-            }
         }
 
         await context.SaveChangesAsync();
@@ -1106,14 +1098,11 @@ public static class DbInitializer
         var existingPlanRows = await context.PlanFeatureMatrices.ToListAsync();
         var existingPlanByKey = existingPlanRows.ToDictionary(r => (r.PlanTypeId, r.FeatureId));
 
+        // Bootstrap-only: insert missing (plan, feature) rows; never overwrite the
+        // IsEnabled/DefaultLimit of an existing row (admin owns those values).
         foreach (var (planId, featureId, enabled, limit) in planRules)
         {
-            if (existingPlanByKey.TryGetValue((planId, featureId), out var row))
-            {
-                row.IsEnabled = enabled;
-                row.DefaultLimit = limit;
-            }
-            else
+            if (!existingPlanByKey.ContainsKey((planId, featureId)))
             {
                 context.PlanFeatureMatrices.Add(new PlanFeatureMatrix
                 {
@@ -1193,17 +1182,15 @@ public static class DbInitializer
         AddAll(foodAndBeverage, FeatureIds.DeliveryPlatforms);
         AddAll(quickService,    FeatureIds.DeliveryPlatforms);
 
-        var existingMacroRows = await context.BusinessTypeFeatures.ToListAsync();
-        var existingMacroByKey = existingMacroRows.ToDictionary(r => (r.MacroCategoryId, r.FeatureId));
-        var desiredKeys = desiredApplicability.Select(x => (x.Macro, x.Feature)).ToHashSet();
+        // Bootstrap-only: insert missing (macro, feature) applicability rows; never
+        // overwrite Limit nor delete admin-managed rows.
+        var existingMacroByKey = (await context.BusinessTypeFeatures.ToListAsync())
+            .Select(r => (r.MacroCategoryId, r.FeatureId))
+            .ToHashSet();
 
         foreach (var (macroId, featureId, limit) in desiredApplicability)
         {
-            if (existingMacroByKey.TryGetValue((macroId, featureId), out var row))
-            {
-                row.Limit = limit;
-            }
-            else
+            if (!existingMacroByKey.Contains((macroId, featureId)))
             {
                 context.BusinessTypeFeatures.Add(new BusinessTypeFeature
                 {
@@ -1212,12 +1199,6 @@ public static class DbInitializer
                     Limit = limit
                 });
             }
-        }
-
-        foreach (var row in existingMacroRows)
-        {
-            if (!desiredKeys.Contains((row.MacroCategoryId, row.FeatureId)))
-                context.BusinessTypeFeatures.Remove(row);
         }
 
         await context.SaveChangesAsync();
@@ -1229,20 +1210,15 @@ public static class DbInitializer
             (PlanTypeIds.Basic, MacroCategoryIds.QuickService, FeatureIds.RealtimeKds, true),
         };
 
-        var existingOverrides = await context.PlanBusinessTypeFeatureOverrides.ToListAsync();
-        var existingOverrideByKey = existingOverrides
-            .ToDictionary(o => (o.PlanTypeId, o.MacroCategoryId, o.FeatureId));
-        var desiredOverrideKeys = desiredOverrides
-            .Select(x => (x.Plan, x.Macro, x.Feature))
+        // Bootstrap-only: insert missing overrides; never overwrite nor delete
+        // admin-managed rows.
+        var existingOverrideByKey = (await context.PlanBusinessTypeFeatureOverrides.ToListAsync())
+            .Select(o => (o.PlanTypeId, o.MacroCategoryId, o.FeatureId))
             .ToHashSet();
 
         foreach (var (planId, macroId, featureId, enabled) in desiredOverrides)
         {
-            if (existingOverrideByKey.TryGetValue((planId, macroId, featureId), out var row))
-            {
-                row.IsEnabled = enabled;
-            }
-            else
+            if (!existingOverrideByKey.Contains((planId, macroId, featureId)))
             {
                 context.PlanBusinessTypeFeatureOverrides.Add(new PlanBusinessTypeFeatureOverride
                 {
@@ -1252,12 +1228,6 @@ public static class DbInitializer
                     IsEnabled = enabled
                 });
             }
-        }
-
-        foreach (var row in existingOverrides)
-        {
-            if (!desiredOverrideKeys.Contains((row.PlanTypeId, row.MacroCategoryId, row.FeatureId)))
-                context.PlanBusinessTypeFeatureOverrides.Remove(row);
         }
 
         await context.SaveChangesAsync();

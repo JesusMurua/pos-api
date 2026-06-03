@@ -48,6 +48,7 @@ public static class ServiceDependencies
         services.AddScoped<IFeatureGateService, FeatureGateService>();
         // Process-wide cache generation token backing FeatureGateService.InvalidateAll().
         services.AddSingleton<FeatureCacheGeneration>();
+        services.AddScoped<IFeatureMatrixAdminService, FeatureMatrixAdminService>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();
