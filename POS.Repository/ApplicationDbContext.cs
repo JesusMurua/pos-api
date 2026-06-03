@@ -137,6 +137,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PlanFeatureMatrix> PlanFeatureMatrices { get; set; } = null!;
     public DbSet<BusinessTypeFeature> BusinessTypeFeatures { get; set; } = null!;
     public DbSet<PlanBusinessTypeFeatureOverride> PlanBusinessTypeFeatureOverrides { get; set; } = null!;
+    public DbSet<ClusterFeature> ClusterFeatures { get; set; } = null!;
 
     // System catalogs
     public DbSet<PlanTypeCatalog> PlanTypeCatalogs { get; set; } = null!;
@@ -1265,6 +1266,28 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(o => new { o.PlanTypeId, o.FeatureId });
+        });
+
+        modelBuilder.Entity<ClusterFeature>(entity =>
+        {
+            entity.HasKey(c => new { c.ClusterCode, c.FeatureId });
+
+            entity.Property(c => c.ClusterCode).HasMaxLength(50);
+
+            entity.HasOne(c => c.Feature)
+                .WithMany()
+                .HasForeignKey(c => c.FeatureId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(c => c.FeatureId);
+
+            // Whitelist mirrors POS.Domain.Helpers.ClusterCodes.All — same set as
+            // the CK_BusinessTypeCatalog_ClusterCode constraint.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_ClusterFeature_ClusterCode",
+                "\"ClusterCode\" IN " +
+                "('beauty','health','automotive','pets','repair'," +
+                "'fitness','education','home','events','professional')"));
         });
 
         modelBuilder.Entity<ZoneTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });

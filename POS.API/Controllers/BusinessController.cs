@@ -260,6 +260,8 @@ public class BusinessController : BaseApiController
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> CompleteOnboarding()
     {
+        await _businessService.EnsureCanCompleteOnboardingAsync(BusinessId);
+
         var business = await _businessService.GetByIdAsync(BusinessId);
         business.OnboardingCompleted = true;
         business.OnboardingStatusId = 3;
@@ -287,6 +289,9 @@ public class BusinessController : BaseApiController
 
         if (request.StatusId < 1 || request.StatusId > 4)
             return BadRequest(new { message = "Invalid statusId. Must be 1-4." });
+
+        if (request.StatusId == 3)
+            await _businessService.EnsureCanCompleteOnboardingAsync(BusinessId);
 
         var business = await _businessService.GetByIdAsync(BusinessId);
         business.OnboardingStatusId = request.StatusId;
@@ -316,16 +321,15 @@ public class UpdateBusinessGiroRequest : System.ComponentModel.DataAnnotations.I
     public int PrimaryMacroCategoryId { get; set; }
 
     /// <summary>
-    /// Full replacement set of sub-giro ids (<c>BusinessTypeCatalog.Id</c>). May be
-    /// empty when the user picks the "Otra" option and provides
-    /// <see cref="CustomGiroDescription"/> instead. Renamed from <c>BusinessTypeIds</c>
-    /// by BDD-015 to reflect the post-refactor domain language where
-    /// <c>BusinessTypeCatalog</c> rows represent sub-giros, not macro categories.
+    /// Full replacement set of sub-giro ids (<c>BusinessTypeCatalog.Id</c>). At least
+    /// one catalog sub-giro is required so the feature resolver can resolve the
+    /// business's cluster. <see cref="CustomGiroDescription"/> is additive free text,
+    /// never a substitute. Renamed from <c>BusinessTypeIds</c> by BDD-015.
     /// </summary>
     [System.ComponentModel.DataAnnotations.Required]
     public List<int> SubGiroIds { get; set; } = new();
 
-    /// <summary>Free-text clarification when the user picks "Otro" or a non-catalog giro.</summary>
+    /// <summary>Optional free-text clarification, additive to the catalog sub-giros.</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(100)]
     public string? CustomGiroDescription { get; set; }
 
@@ -333,12 +337,11 @@ public class UpdateBusinessGiroRequest : System.ComponentModel.DataAnnotations.I
     public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
         System.ComponentModel.DataAnnotations.ValidationContext validationContext)
     {
-        if ((SubGiroIds == null || SubGiroIds.Count == 0) &&
-            string.IsNullOrWhiteSpace(CustomGiroDescription))
+        if (SubGiroIds == null || SubGiroIds.Count == 0)
         {
             yield return new System.ComponentModel.DataAnnotations.ValidationResult(
-                "Debe seleccionar al menos un sub-giro o proporcionar una descripción personalizada.",
-                new[] { nameof(SubGiroIds), nameof(CustomGiroDescription) });
+                "Debe seleccionar al menos un sub-giro de catálogo.",
+                new[] { nameof(SubGiroIds) });
         }
     }
 }

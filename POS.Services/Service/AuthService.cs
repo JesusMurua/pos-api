@@ -457,6 +457,14 @@ public class AuthService : IAuthService
 
         if (request.MarkOnboardingComplete)
         {
+            // Invariant: a configured business always carries at least one
+            // catalog sub-giro, so the feature resolver can resolve its cluster.
+            if (business.BusinessGiros.Count == 0)
+            {
+                throw new ValidationException(
+                    "No se puede completar el onboarding sin al menos un sub-giro de catálogo");
+            }
+
             business.OnboardingCompleted = true;
             business.OnboardingStatusId = 3;
         }

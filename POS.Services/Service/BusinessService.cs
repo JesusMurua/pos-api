@@ -97,13 +97,29 @@ public class BusinessService : IBusinessService
     }
 
     /// <inheritdoc />
-    public async Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription)
+    public async Task EnsureCanCompleteOnboardingAsync(int businessId)
     {
-        if ((businessTypeIds == null || businessTypeIds.Count == 0) &&
-            string.IsNullOrWhiteSpace(customGiroDescription))
+        var business = (await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros"))
+            .FirstOrDefault()
+            ?? throw new NotFoundException($"Business with id {businessId} not found");
+
+        if (business.BusinessGiros == null || business.BusinessGiros.Count == 0)
         {
             throw new ValidationException(
-                "Debe seleccionar al menos un sub-giro o proporcionar una descripción personalizada");
+                "No se puede completar el onboarding sin al menos un sub-giro de catálogo");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Business> UpdateGiroAsync(int businessId, int primaryMacroCategoryId, IReadOnlyList<int> businessTypeIds, string? customGiroDescription)
+    {
+        // Invariant: every business must carry at least one catalog sub-giro so
+        // the feature resolver can resolve its cluster. CustomGiroDescription is
+        // additive (extra free text), never a substitute for a catalog sub-giro.
+        if (businessTypeIds == null || businessTypeIds.Count == 0)
+        {
+            throw new ValidationException(
+                "Debe seleccionar al menos un sub-giro de catálogo");
         }
 
         var results = await _unitOfWork.Business.GetAsync(b => b.Id == businessId, "BusinessGiros");

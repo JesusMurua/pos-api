@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
+using POS.Domain.Models;
 using POS.Domain.Models.Catalogs;
 using POS.Repository;
 using POS.Services.IService;
@@ -130,9 +131,29 @@ public class FeatureGateService : IFeatureGateService
             .AsNoTracking()
             .ToListAsync();
 
+        // Sub-giro cluster axis (3rd dimension). A feature becomes cluster-gated
+        // only when at least one ClusterFeature row exists for it; otherwise it
+        // keeps pure Plan × Macro resolution. The business's clusters come from
+        // its catalog sub-giros (BusinessGiro → BusinessTypeCatalog.ClusterCode).
+        var clusterRows = await _context.Set<ClusterFeature>()
+            .AsNoTracking()
+            .ToListAsync();
+
+        var businessClusters = await _context.Set<BusinessGiro>()
+            .AsNoTracking()
+            .Where(g => g.BusinessId == businessId && g.BusinessTypeCatalog!.ClusterCode != null)
+            .Select(g => g.BusinessTypeCatalog!.ClusterCode!)
+            .Distinct()
+            .ToListAsync();
+
         var planByFeatureId = planRows.ToDictionary(r => r.FeatureId);
         var macroApplicability = macroRows.ToDictionary(r => r.FeatureId, r => r.Limit);
         var overrideByFeatureId = overrideRows.ToDictionary(o => o.FeatureId, o => o.IsEnabled);
+
+        var clustersByFeatureId = clusterRows
+            .GroupBy(r => r.FeatureId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.ClusterCode).ToHashSet(StringComparer.Ordinal));
+        var businessClusterSet = businessClusters.ToHashSet(StringComparer.Ordinal);
 
         var entries = new Dictionary<FeatureKey, FeatureEntry>(features.Count);
         var resourceLabels = new Dictionary<FeatureKey, string?>(features.Count);
@@ -142,6 +163,19 @@ public class FeatureGateService : IFeatureGateService
             var planEnabled = planByFeatureId.TryGetValue(feature.Id, out var planRow) && planRow.IsEnabled;
             var applicable = macroApplicability.TryGetValue(feature.Id, out var macroLimit);
 
+            // Cluster axis (additive, fail-closed). Features without any cluster
+            // rule resolve as before (clusterApplies = true). A cluster-ruled
+            // feature requires the business to carry at least one matching
+            // cluster; a business with no clusters (e.g. mid-onboarding before
+            // its sub-giro is set) gets it disabled rather than leaked.
+            bool clusterApplies;
+            if (!clustersByFeatureId.TryGetValue(feature.Id, out var featureClusters))
+                clusterApplies = true;
+            else if (businessClusterSet.Count == 0)
+                clusterApplies = false;
+            else
+                clusterApplies = featureClusters.Overlaps(businessClusterSet);
+
             bool isEnabled;
             if (overrideByFeatureId.TryGetValue(feature.Id, out var overrideEnabled))
             {
@@ -149,7 +183,7 @@ public class FeatureGateService : IFeatureGateService
             }
             else
             {
-                isEnabled = applicable && planEnabled;
+                isEnabled = applicable && planEnabled && clusterApplies;
             }
 
             var limit = ResolveLimit(planRow?.DefaultLimit, applicable ? macroLimit : null);

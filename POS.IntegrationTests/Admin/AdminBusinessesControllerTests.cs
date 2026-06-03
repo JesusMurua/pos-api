@@ -320,7 +320,13 @@ public class AdminBusinessesControllerTests : IClassFixture<CustomWebApplication
 
         var client = CreateAdminClient();
         var suffix = NewUniqueSuffix();
-        var request = BuildCreateRequest(suffix) with { MarkOnboardingComplete = true };
+        // A configured business must carry a catalog sub-giro, so onboarding
+        // completion requires SubGiroIds (Services sub-giros, same as Test 9).
+        var request = BuildCreateRequest(suffix) with
+        {
+            MarkOnboardingComplete = true,
+            SubGiroIds = new[] { 24, 16 }
+        };
 
         var response = await client.PostAsJsonAsync(AdminRoute, request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -351,7 +357,8 @@ public class AdminBusinessesControllerTests : IClassFixture<CustomWebApplication
         var request = BuildCreateRequest(suffix) with
         {
             MarkOnboardingComplete = true,
-            IncludeOwnerJwt = true
+            IncludeOwnerJwt = true,
+            SubGiroIds = new[] { 24, 16 }
         };
 
         var response = await client.PostAsJsonAsync(AdminRoute, request);

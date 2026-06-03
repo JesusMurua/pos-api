@@ -1261,6 +1261,42 @@ public static class DbInitializer
         }
 
         await context.SaveChangesAsync();
+
+        // 5. ClusterCode × Feature — vertical gating within a macro (Services
+        //    sub-giro clusters). ADDITIVE and idempotent: inserts only missing
+        //    rows, never overwrites or deletes, so admin edits survive a re-seed.
+        //    fitness = gym (access control / reception); appointment-based
+        //    clusters get reminders, fitness/home/events do not.
+        var desiredClusterRules = new (string Cluster, int Feature)[]
+        {
+            (ClusterCodes.Fitness, FeatureIds.RealtimeAccessControl),
+            (ClusterCodes.Fitness, FeatureIds.MaxReceptionsPerBranch),
+
+            (ClusterCodes.Beauty,       FeatureIds.AppointmentReminders),
+            (ClusterCodes.Health,       FeatureIds.AppointmentReminders),
+            (ClusterCodes.Pets,         FeatureIds.AppointmentReminders),
+            (ClusterCodes.Automotive,   FeatureIds.AppointmentReminders),
+            (ClusterCodes.Professional, FeatureIds.AppointmentReminders),
+            (ClusterCodes.Education,    FeatureIds.AppointmentReminders),
+        };
+
+        var existingClusterKeys = (await context.ClusterFeatures.ToListAsync())
+            .Select(r => (r.ClusterCode, r.FeatureId))
+            .ToHashSet();
+
+        foreach (var (cluster, featureId) in desiredClusterRules)
+        {
+            if (!existingClusterKeys.Contains((cluster, featureId)))
+            {
+                context.ClusterFeatures.Add(new ClusterFeature
+                {
+                    ClusterCode = cluster,
+                    FeatureId = featureId
+                });
+            }
+        }
+
+        await context.SaveChangesAsync();
     }
 
     #endregion

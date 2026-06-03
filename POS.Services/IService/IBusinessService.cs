@@ -37,6 +37,16 @@ public interface IBusinessService
     Task<BusinessGiroResponse> GetGiroAsync(int businessId);
 
     /// <summary>
+    /// Guards the onboarding-completion transition: a business cannot be marked
+    /// complete without at least one catalog sub-giro (<see cref="BusinessGiro"/>),
+    /// so the feature resolver can always resolve its cluster.
+    /// </summary>
+    /// <exception cref="POS.Domain.Exceptions.ValidationException">
+    /// Thrown when the business has no catalog sub-giro.
+    /// </exception>
+    Task EnsureCanCompleteOnboardingAsync(int businessId);
+
+    /// <summary>
     /// Updates fiscal configuration (RFC, tax regime, legal name, invoicing flag).
     /// Per BDD-015, the <c>false → true</c> transition of <paramref name="invoicingEnabled"/>
     /// requires the <see cref="POS.Domain.Enums.FeatureKey.CfdiInvoicing"/> feature; other
