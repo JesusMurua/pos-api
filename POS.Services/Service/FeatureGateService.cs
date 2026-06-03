@@ -11,19 +11,26 @@ using POS.Services.IService;
 namespace POS.Services.Service;
 
 /// <summary>
-/// Evaluates the Plan × BusinessType feature matrix with per-business memory caching.
+/// Evaluates the Plan × Macro × Cluster feature matrix. The matrices are global
+/// and small, so they are loaded once into a shared, generation-versioned cache;
+/// each per-business snapshot then resolves in memory against that cache plus the
+/// tenant's own plan/macro/clusters. <see cref="InvalidateAll"/> bumps the
+/// generation to drop every cached entry at once.
 /// </summary>
 public class FeatureGateService : IFeatureGateService
 {
     private readonly ApplicationDbContext _context;
     private readonly IMemoryCache _cache;
+    private readonly FeatureCacheGeneration _generation;
 
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan SnapshotTtl = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan MatricesTtl = TimeSpan.FromHours(1);
 
-    public FeatureGateService(ApplicationDbContext context, IMemoryCache cache)
+    public FeatureGateService(ApplicationDbContext context, IMemoryCache cache, FeatureCacheGeneration generation)
     {
         _context = context;
         _cache = cache;
+        _generation = generation;
     }
 
     public async Task<bool> IsEnabledAsync(int businessId, FeatureKey feature)
@@ -80,16 +87,65 @@ public class FeatureGateService : IFeatureGateService
 
     public void Invalidate(int businessId)
     {
-        _cache.Remove(CacheKey(businessId));
+        _cache.Remove(SnapshotKey(_generation.Current, businessId));
+    }
+
+    public void InvalidateAll()
+    {
+        // Advancing the generation orphans every snapshot key and the global
+        // matrix key in one move — both embed the generation. Orphans expire by
+        // their own TTL; the next read repopulates under the new generation.
+        _generation.Bump();
     }
 
     private Task<BusinessFeatureSnapshot> GetSnapshotAsync(int businessId)
     {
-        return _cache.GetOrCreateAsync(CacheKey(businessId), async entry =>
+        return _cache.GetOrCreateAsync(SnapshotKey(_generation.Current, businessId), async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+            entry.AbsoluteExpirationRelativeToNow = SnapshotTtl;
             return await BuildSnapshotAsync(businessId);
         })!;
+    }
+
+    /// <summary>
+    /// Loads the global feature matrices once per generation into a shared cache.
+    /// They are small and tenant-independent, so every per-business snapshot
+    /// resolves against this in-memory copy instead of re-querying the DB.
+    /// </summary>
+    private Task<FeatureMatrixData> GetMatricesAsync()
+    {
+        return _cache.GetOrCreateAsync(MatricesKey(_generation.Current), async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = MatricesTtl;
+            return await LoadMatricesAsync();
+        })!;
+    }
+
+    private async Task<FeatureMatrixData> LoadMatricesAsync()
+    {
+        var features = await _context.Set<FeatureCatalog>().AsNoTracking().ToListAsync();
+        var planRows = await _context.Set<PlanFeatureMatrix>().AsNoTracking().ToListAsync();
+        var macroRows = await _context.Set<BusinessTypeFeature>().AsNoTracking().ToListAsync();
+        var overrideRows = await _context.Set<PlanBusinessTypeFeatureOverride>().AsNoTracking().ToListAsync();
+        var clusterRows = await _context.Set<ClusterFeature>().AsNoTracking().ToListAsync();
+
+        var planByPlan = planRows
+            .GroupBy(r => r.PlanTypeId)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(r => r.FeatureId));
+
+        var macroByMacro = macroRows
+            .GroupBy(r => r.MacroCategoryId)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(r => r.FeatureId, r => r.Limit));
+
+        var overrideByPlanMacro = overrideRows
+            .GroupBy(r => (r.PlanTypeId, r.MacroCategoryId))
+            .ToDictionary(g => g.Key, g => g.ToDictionary(r => r.FeatureId, r => r.IsEnabled));
+
+        var clustersByFeatureId = clusterRows
+            .GroupBy(r => r.FeatureId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.ClusterCode).ToHashSet(StringComparer.Ordinal));
+
+        return new FeatureMatrixData(features, planByPlan, macroByMacro, overrideByPlanMacro, clustersByFeatureId);
     }
 
     private async Task<BusinessFeatureSnapshot> BuildSnapshotAsync(int businessId)
@@ -112,33 +168,10 @@ public class FeatureGateService : IFeatureGateService
 
         var macroCategoryId = business.PrimaryMacroCategoryId;
 
-        var planRows = await _context.Set<PlanFeatureMatrix>()
-            .AsNoTracking()
-            .Where(m => m.PlanTypeId == business.PlanTypeId)
-            .ToListAsync();
+        var matrices = await GetMatricesAsync();
 
-        var macroRows = await _context.Set<BusinessTypeFeature>()
-            .AsNoTracking()
-            .Where(b => b.MacroCategoryId == macroCategoryId)
-            .ToListAsync();
-
-        var overrideRows = await _context.Set<PlanBusinessTypeFeatureOverride>()
-            .AsNoTracking()
-            .Where(o => o.PlanTypeId == business.PlanTypeId && o.MacroCategoryId == macroCategoryId)
-            .ToListAsync();
-
-        var features = await _context.Set<FeatureCatalog>()
-            .AsNoTracking()
-            .ToListAsync();
-
-        // Sub-giro cluster axis (3rd dimension). A feature becomes cluster-gated
-        // only when at least one ClusterFeature row exists for it; otherwise it
-        // keeps pure Plan × Macro resolution. The business's clusters come from
-        // its catalog sub-giros (BusinessGiro → BusinessTypeCatalog.ClusterCode).
-        var clusterRows = await _context.Set<ClusterFeature>()
-            .AsNoTracking()
-            .ToListAsync();
-
+        // Per-tenant data: the business's clusters come from its catalog sub-giros
+        // (BusinessGiro → BusinessTypeCatalog.ClusterCode).
         var businessClusters = await _context.Set<BusinessGiro>()
             .AsNoTracking()
             .Where(g => g.BusinessId == businessId && g.BusinessTypeCatalog!.ClusterCode != null)
@@ -146,19 +179,19 @@ public class FeatureGateService : IFeatureGateService
             .Distinct()
             .ToListAsync();
 
-        var planByFeatureId = planRows.ToDictionary(r => r.FeatureId);
-        var macroApplicability = macroRows.ToDictionary(r => r.FeatureId, r => r.Limit);
-        var overrideByFeatureId = overrideRows.ToDictionary(o => o.FeatureId, o => o.IsEnabled);
-
-        var clustersByFeatureId = clusterRows
-            .GroupBy(r => r.FeatureId)
-            .ToDictionary(g => g.Key, g => g.Select(r => r.ClusterCode).ToHashSet(StringComparer.Ordinal));
+        var planByFeatureId = matrices.PlanByPlan.GetValueOrDefault(business.PlanTypeId)
+            ?? EmptyPlanRows;
+        var macroApplicability = matrices.MacroByMacro.GetValueOrDefault(macroCategoryId)
+            ?? EmptyMacroLimits;
+        var overrideByFeatureId = matrices.OverrideByPlanMacro.GetValueOrDefault((business.PlanTypeId, macroCategoryId))
+            ?? EmptyOverrides;
+        var clustersByFeatureId = matrices.ClustersByFeatureId;
         var businessClusterSet = businessClusters.ToHashSet(StringComparer.Ordinal);
 
-        var entries = new Dictionary<FeatureKey, FeatureEntry>(features.Count);
-        var resourceLabels = new Dictionary<FeatureKey, string?>(features.Count);
+        var entries = new Dictionary<FeatureKey, FeatureEntry>(matrices.Features.Count);
+        var resourceLabels = new Dictionary<FeatureKey, string?>(matrices.Features.Count);
 
-        foreach (var feature in features)
+        foreach (var feature in matrices.Features)
         {
             var planEnabled = planByFeatureId.TryGetValue(feature.Id, out var planRow) && planRow.IsEnabled;
             var applicable = macroApplicability.TryGetValue(feature.Id, out var macroLimit);
@@ -205,7 +238,24 @@ public class FeatureGateService : IFeatureGateService
         return Math.Max(planDefault.Value, macroOverride.Value);
     }
 
-    private static string CacheKey(int businessId) => $"FeatureGate::{businessId}";
+    private static string SnapshotKey(long generation, int businessId) => $"FeatureGate::{generation}::{businessId}";
+
+    private static string MatricesKey(long generation) => $"FeatureMatrix::{generation}";
+
+    private static readonly Dictionary<int, PlanFeatureMatrix> EmptyPlanRows = new();
+    private static readonly Dictionary<int, int?> EmptyMacroLimits = new();
+    private static readonly Dictionary<int, bool> EmptyOverrides = new();
+
+    /// <summary>
+    /// In-memory, tenant-independent projection of the four feature matrices,
+    /// shaped for O(1) per-tenant resolution. Cached once per generation.
+    /// </summary>
+    private sealed record FeatureMatrixData(
+        IReadOnlyList<FeatureCatalog> Features,
+        IReadOnlyDictionary<int, Dictionary<int, PlanFeatureMatrix>> PlanByPlan,
+        IReadOnlyDictionary<int, Dictionary<int, int?>> MacroByMacro,
+        IReadOnlyDictionary<(int PlanTypeId, int MacroCategoryId), Dictionary<int, bool>> OverrideByPlanMacro,
+        IReadOnlyDictionary<int, HashSet<string>> ClustersByFeatureId);
 
     private sealed record FeatureEntry(bool IsEnabled, int? Limit, EnforcementScope Scope);
 

@@ -96,14 +96,25 @@ Never gate security on the claim alone; keep it on `EnforceAsync`.
 
 ## Caching
 
-Per-business snapshot cached in `IMemoryCache` (`FeatureGate::{businessId}`, 5 min TTL).
-Invalidated by `IFeatureGateService.Invalidate(businessId)` on plan changes (Stripe
-worker) and giro changes (`BusinessService`).
+Two-level, generation-versioned (`FeatureCacheGeneration`, a process-wide
+`Interlocked` counter):
 
-> **Future (PR-B, deferred):** load the global matrices once into memory and resolve
-> per-tenant via in-memory lookups, with a generation token enabling a cheap
-> `InvalidateAll()` for the admin console. Not implemented yet — matrices are still
-> shipped via the bootstrap seed.
+- **Global matrices** (`FeatureMatrix::{gen}`, 1 h TTL): the four matrices +
+  `FeatureCatalog` loaded once into in-memory dictionaries. They are small and
+  tenant-independent, so every snapshot resolves against this copy instead of
+  re-querying the DB.
+- **Per-business snapshot** (`FeatureGate::{gen}::{businessId}`, 5 min TTL): the
+  resolved feature set. Building one only reads the tenant's `(PlanTypeId,
+  PrimaryMacroCategoryId)` + its clusters, then resolves in memory.
+
+Invalidation:
+
+- `Invalidate(businessId)` — drops one snapshot. Called on plan changes (Stripe
+  worker) and giro changes (`BusinessService`).
+- `InvalidateAll()` — bumps the generation, orphaning the global matrix cache and
+  every snapshot at once (O(1), no prefix scan). Call after any matrix/override
+  edit, since a matrix change affects every tenant. Orphans expire by their own
+  TTL; the next read repopulates under the new generation.
 
 ## Out of scope (future)
 

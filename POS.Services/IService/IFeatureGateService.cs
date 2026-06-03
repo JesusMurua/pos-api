@@ -55,4 +55,11 @@ public interface IFeatureGateService
     /// Invalidates the cached matrix for a specific business (call on plan changes, giro changes).
     /// </summary>
     void Invalidate(int businessId);
+
+    /// <summary>
+    /// Invalidates every cached snapshot and the shared global-matrix cache.
+    /// Call after editing the Plan/Macro/Cluster matrices or overrides, since a
+    /// matrix change affects every tenant. O(1) — advances a generation token.
+    /// </summary>
+    void InvalidateAll();
 }
