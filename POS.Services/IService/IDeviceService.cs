@@ -50,6 +50,25 @@ public interface IDeviceService
     Task<ActivateDeviceResponse> ActivateAndRegisterDeviceAsync(string code, string deviceUuid);
     Task<DeviceSetupResponse> SetupWithEmailAsync(string email, string password);
     Task<DeviceResponse> RegisterOrUpdateDeviceAsync(DeviceRegistrationRequest request);
+
+    /// <summary>
+    /// Lookup-or-insert flavor of <see cref="RegisterOrUpdateDeviceAsync"/>
+    /// for callers already inside an outer transaction (notably the
+    /// <c>CashierSessionService.InitializeAsync</c> orchestration). Enforces
+    /// the per-plan device-limit gate the same way the public path does, but:
+    /// <list type="bullet">
+    ///   <item><description>Does NOT emit a <c>DeviceToken</c> — the Owner
+    ///   keeps using their own JWT, the extra JWT signing on the critical
+    ///   path of POS startup is pure waste.</description></item>
+    ///   <item><description>Does NOT call <c>SaveChangesAsync</c> — the
+    ///   orchestrator owns the transaction commit so that a downstream
+    ///   register-link failure rolls the device row back together with
+    ///   the rest of the work.</description></item>
+    /// </list>
+    /// Returns the tracked <see cref="Device"/> entity so the caller can
+    /// reach <c>device.Id</c> without remapping a DTO.
+    /// </summary>
+    Task<Device> EnsureRegisteredAsync(string deviceUuid, int branchId, string mode, string name);
     Task UpdateHeartbeatAsync(string uuid);
     Task<DeviceResponse?> GetByUuidAsync(string uuid);
 

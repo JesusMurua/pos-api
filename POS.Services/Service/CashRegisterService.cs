@@ -422,6 +422,30 @@ public class CashRegisterService : ICashRegisterService
     /// Atomic: single transaction, concurrency-safe via xmin token. The closer
     /// identity is taken from the JWT-resolved <paramref name="userId"/>.
     /// </summary>
+    /// <inheritdoc />
+    public async Task ForceCloseSessionAsync(int sessionId, int byUserId, string reason)
+    {
+        var session = await _unitOfWork.CashRegisterSessions.GetByIdAsync(sessionId)
+            ?? throw new NotFoundException($"Cash register session with id {sessionId} not found");
+
+        if (session.CashRegisterStatusId != CashRegisterStatus.Open)
+            throw new ValidationException("Session is not open and cannot be force-closed.");
+
+        // Balance columns are intentionally left at their pre-close values.
+        // The Notes prefix lets financial reports filter force-closed sessions
+        // (Notes LIKE 'FORCE_TAKEOVER:%') so the cuadre reports do not surface
+        // an artificial DifferenceCents = -InitialAmount as if the cashier
+        // had walked off with the entire opening float.
+        session.CashRegisterStatusId = CashRegisterStatus.Closed;
+        session.ClosedByUserId = byUserId;
+        session.ClosedAt = DateTime.UtcNow;
+        session.Notes = $"FORCE_TAKEOVER: {reason}";
+
+        _unitOfWork.CashRegisterSessions.Update(session);
+        // Intentionally NO SaveChangesAsync — the orchestrator commits the
+        // outer transaction after the rest of the initialize work.
+    }
+
     public async Task<CashRegisterSessionDto> CloseSessionAsync(int branchId, int userId, CloseSessionRequest request, int? cashRegisterId = null)
     {
         await using var transaction = await _unitOfWork.BeginTransactionAsync();

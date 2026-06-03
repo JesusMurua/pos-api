@@ -436,6 +436,49 @@ public class DeviceService : IDeviceService
         return MapToResponse(device, deviceToken);
     }
 
+    /// <inheritdoc />
+    public async Task<Device> EnsureRegisteredAsync(string deviceUuid, int branchId, string mode, string name)
+    {
+        var normalizedMode = mode.ToLowerInvariant();
+
+        if (!DeviceModeCodes.IsValid(normalizedMode))
+            throw new ValidationException($"Mode must be one of: {DeviceModeCodes.FormatList()}");
+
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
+
+        // Order matters: look up by UUID first so a re-register of the same
+        // terminal does not get false-positive blocked at the plan-limit
+        // gate (the existing row is already counted in ActiveDevices, so
+        // the check would fire at count == limit even though the post-call
+        // total is unchanged).
+        var existing = await _unitOfWork.Devices.GetByDeviceUuidAsync(deviceUuid);
+        if (existing != null)
+        {
+            existing.BranchId = branchId;
+            existing.Mode = normalizedMode;
+            existing.Name = name;
+            existing.IsActive = true;
+            _unitOfWork.Devices.Update(existing);
+            return existing;
+        }
+
+        // Fresh insert path — enforce the plan limit now.
+        await EnforceDeviceLimitsAsync(branch.BusinessId, branchId, normalizedMode);
+
+        var device = new Device
+        {
+            BranchId = branchId,
+            DeviceUuid = deviceUuid,
+            Mode = normalizedMode,
+            Name = name,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _unitOfWork.Devices.AddAsync(device);
+        return device;
+    }
+
     /// <summary>
     /// Updates the LastSeenAt timestamp for a device heartbeat.
     /// </summary>

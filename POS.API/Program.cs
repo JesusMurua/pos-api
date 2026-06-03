@@ -336,6 +336,23 @@ builder.Services.AddRateLimiter(options =>
                 SegmentsPerWindow = 6,
                 QueueLimit = 0
             }));
+
+    // POS first-time-setup orchestration policy. Each Owner / Manager triggers
+    // a single InitializeCashierSession when their browser lands on /pos/sell;
+    // the cap at 60 / minute / IP comfortably covers normal multi-branch flows
+    // (operator clicking through several locations in a row) while still
+    // acting as a circuit breaker against scripts that try to exhaust device
+    // licensing quota by spamming uuids.
+    options.AddPolicy("PosInitializePolicy", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? IPAddress.None.ToString(),
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0
+            }));
 });
 
 // Data Protection — persists keys to a directory configurable via the

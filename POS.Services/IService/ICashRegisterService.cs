@@ -81,6 +81,24 @@ public interface ICashRegisterService
     Task<CashRegisterSessionDto> CloseSessionAsync(int branchId, int userId, CloseSessionRequest request, int? cashRegisterId = null);
 
     /// <summary>
+    /// Marks an open <see cref="CashRegisterSession"/> as closed without
+    /// recalculating any of the balance columns. Used by the
+    /// <c>CashierSessionService.InitializeAsync</c> force-takeover branch
+    /// when the operator reclaims a register that already had a session
+    /// open on another device. Balance columns (<c>CountedAmountCents</c>,
+    /// <c>CashSalesCents</c>, <c>DifferenceCents</c>, ...) are left at their
+    /// pre-close values — financial reports can distinguish a force-closed
+    /// session via <c>Notes LIKE 'FORCE_TAKEOVER:%'</c> and exclude it from
+    /// cuadre totals instead of treating it as a real close with a
+    /// <c>DifferenceCents = -InitialAmount</c> artifact.
+    /// <para>
+    /// Does NOT call <c>SaveChangesAsync</c> — the orchestrator owns the
+    /// transaction commit.
+    /// </para>
+    /// </summary>
+    Task ForceCloseSessionAsync(int sessionId, int byUserId, string reason);
+
+    /// <summary>
     /// Adds a cash movement to the open session. The author identity is taken from the JWT.
     /// </summary>
     Task<CashMovementDto> AddMovementAsync(int branchId, int userId, AddMovementRequest request, int? cashRegisterId = null);
