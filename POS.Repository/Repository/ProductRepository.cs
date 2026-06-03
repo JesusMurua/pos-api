@@ -71,4 +71,9 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
             .IgnoreQueryFilters()
             .Where(p => p.Branch!.BusinessId == businessId)
             .CountAsync();
+
+    /// <inheritdoc />
+    public Task<int> CountOrderItemsForProductAsync(int productId) =>
+        _context.OrderItems
+            .CountAsync(oi => oi.ProductId == productId);
 }

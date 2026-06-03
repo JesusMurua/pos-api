@@ -35,6 +35,18 @@ public interface IProductService
     Task<ProductResponse> ToggleActiveAsync(int id);
 
     /// <summary>
+    /// Hard-deletes a product and its cascade children (sizes, modifier groups
+    /// and their extras, images, taxes). Refuses with
+    /// <see cref="DeleteProductOutcome.HasOrders"/> when the product has sales
+    /// history, and with <see cref="DeleteProductOutcome.InUse"/> when another
+    /// non-order foreign key still references it. Image blobs are removed from
+    /// storage on success. Branch scoping is enforced by the global query
+    /// filter, so a product outside the caller's branch resolves to
+    /// <see cref="DeleteProductOutcome.NotFound"/>.
+    /// </summary>
+    Task<DeleteProductResult> DeleteAsync(int id);
+
+    /// <summary>
     /// Applies a stock movement (in / out / adjustment) to a tracked product.
     /// Pushes the previously-inlined controller logic into the service layer
     /// so the Product entity no longer needs to leak through the API.

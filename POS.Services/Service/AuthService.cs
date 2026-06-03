@@ -28,7 +28,6 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
     private readonly IFeatureGateService _featureGate;
-    private readonly ITenantSeedingService _tenantSeedingService;
     private readonly IBusinessSnapshotService _businessSnapshot;
     private readonly ILogger<AuthService> _logger;
 
@@ -37,7 +36,6 @@ public class AuthService : IAuthService
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
         IFeatureGateService featureGate,
-        ITenantSeedingService tenantSeedingService,
         IBusinessSnapshotService businessSnapshot,
         ILogger<AuthService> logger)
     {
@@ -45,7 +43,6 @@ public class AuthService : IAuthService
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _featureGate = featureGate;
-        _tenantSeedingService = tenantSeedingService;
         _businessSnapshot = businessSnapshot;
         _logger = logger;
     }
@@ -343,11 +340,6 @@ public class AuthService : IAuthService
             }
 
             await _unitOfWork.SaveChangesAsync();
-
-            // Seed default categories + sample products for the macro so the operator
-            // sees a populated POS on first login. Runs inside the same transaction —
-            // any seeding failure rolls the entire registration back.
-            await _tenantSeedingService.SeedDefaultsForMacroAsync(branch.Id, primaryMacro.Id);
 
             // Admin-flow extensions: sub-giros, fiscal data, onboarding completion.
             // All run inside the same transaction so a partial failure (e.g. an

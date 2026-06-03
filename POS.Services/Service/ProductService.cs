@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.DTOs.Product;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
@@ -12,15 +13,18 @@ public class ProductService : IProductService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFeatureGateService _featureGate;
     private readonly ITaxResolverService _taxResolver;
+    private readonly IStorageService _storageService;
 
     public ProductService(
         IUnitOfWork unitOfWork,
         IFeatureGateService featureGate,
-        ITaxResolverService taxResolver)
+        ITaxResolverService taxResolver,
+        IStorageService storageService)
     {
         _unitOfWork = unitOfWork;
         _featureGate = featureGate;
         _taxResolver = taxResolver;
+        _storageService = storageService;
     }
 
     #region Public API Methods
@@ -127,6 +131,50 @@ public class ProductService : IProductService
     }
 
     /// <summary>
+    /// Hard-deletes a product. See <see cref="IProductService.DeleteAsync"/>.
+    /// </summary>
+    public async Task<DeleteProductResult> DeleteAsync(int id)
+    {
+        // Load with relations so EF tracks the cascade children (sizes,
+        // modifier groups/extras, images, taxes) and the image URLs are
+        // available for the post-commit storage cleanup. The global query
+        // filter scopes this to the caller's branch, so a foreign-branch id
+        // resolves to NotFound rather than leaking a cross-tenant delete.
+        var product = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);
+        if (product == null)
+            return DeleteProductResult.NotFound();
+
+        // Sales history blocks the delete (OrderItem.Product is OnDelete.Restrict).
+        // Pre-check so the FE gets a specific, actionable 409 with the count.
+        var orderCount = await _unitOfWork.Products.CountOrderItemsForProductAsync(id);
+        if (orderCount > 0)
+            return DeleteProductResult.HasOrders(orderCount);
+
+        // Capture blob URLs before the cascade removes the ProductImage rows.
+        // Deleted only AFTER the DB delete commits, so an InUse rollback never
+        // orphans live blobs.
+        var blobUrls = CollectImageBlobUrls(product);
+
+        _unitOfWork.Products.Delete(product);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Safety net for the NoAction foreign keys the pre-check can't see
+            // (ProductConsumption / StockReceiptItem). The FK violation rolls
+            // the delete back; report a generic in-use conflict.
+            return DeleteProductResult.InUse();
+        }
+
+        foreach (var url in blobUrls)
+            await _storageService.DeleteAsync(url);
+
+        return DeleteProductResult.Deleted();
+    }
+
+    /// <summary>
     /// Applies a stock movement to a tracked product. Mirrors the legacy
     /// controller logic: "in" adds, "out" subtracts (floored at 0),
     /// "adjustment" sets the exact value. IsAvailable follows threshold.
@@ -221,6 +269,31 @@ public class ProductService : IProductService
     /// <see cref="NotFoundException"/>. Centralised so all entity-side
     /// reads in the service go through the same include list.
     /// </summary>
+    /// <summary>
+    /// Gathers the distinct storage URLs to purge when a product is deleted:
+    /// every <see cref="ProductImage.Url"/> plus the denormalized
+    /// <see cref="Product.ImageUrl"/> when it points at a blob not already
+    /// covered by the image rows.
+    /// </summary>
+    private static List<string> CollectImageBlobUrls(Product product)
+    {
+        var urls = new HashSet<string>(StringComparer.Ordinal);
+
+        if (product.Images != null)
+        {
+            foreach (var image in product.Images)
+            {
+                if (!string.IsNullOrWhiteSpace(image.Url))
+                    urls.Add(image.Url);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+            urls.Add(product.ImageUrl);
+
+        return urls.ToList();
+    }
+
     private async Task<Product> LoadWithRelationsOrThrowAsync(int id)
     {
         var product = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);

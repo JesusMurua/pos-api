@@ -1385,7 +1385,7 @@ public class ApplicationDbContext : DbContext
 
         // Product seed data was previously declared via HasData; EF Core 9 disallows
         // HasData on entities mapped to JSON via OwnsOne(...).ToJson(). Demo products
-        // are now exclusively seeded at runtime by DbInitializer / TenantSeedingService.
+        // for Business 1 are seeded at runtime by DbInitializer.
 
         modelBuilder.Entity<User>().HasData(
             new User

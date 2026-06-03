@@ -174,6 +174,39 @@ public class ProductsController : BaseApiController
     }
 
     /// <summary>
+    /// Hard-deletes a product and its cascade children (sizes, modifier groups
+    /// and extras, images, taxes). Use the toggle endpoint instead when the
+    /// product has sales history.
+    /// </summary>
+    /// <param name="id">The product identifier.</param>
+    /// <returns>No content on success.</returns>
+    /// <response code="204">Product deleted.</response>
+    /// <response code="404">If the product is not found in the current branch.</response>
+    /// <response code="409">If the product has orders or is otherwise referenced.</response>
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Owner")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _productService.DeleteAsync(id);
+
+        return result.Outcome switch
+        {
+            DeleteProductOutcome.Deleted => NoContent(),
+            DeleteProductOutcome.NotFound => NotFound(
+                new { message = $"Product with id {id} not found" }),
+            DeleteProductOutcome.HasOrders => Conflict(
+                new { error = "product_has_orders", orderCount = result.OrderCount }),
+            DeleteProductOutcome.InUse => Conflict(
+                new { error = "product_in_use" }),
+            _ => throw new InvalidOperationException(
+                $"Unhandled delete outcome: {result.Outcome}")
+        };
+    }
+
+    /// <summary>
     /// Updates stock for a product with TrackStock enabled.
     /// </summary>
     /// <param name="id">The product identifier.</param>
