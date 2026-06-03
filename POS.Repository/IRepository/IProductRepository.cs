@@ -27,4 +27,13 @@ public interface IProductRepository : IGenericRepository<Product>
     /// product instead of deleting it.
     /// </summary>
     Task<int> CountOrderItemsForProductAsync(int productId);
+
+    /// <summary>
+    /// Returns the subset of <paramref name="productIds"/> that have at least
+    /// one <c>OrderItem</c>. A single <c>WHERE ProductId IN (...)</c> query
+    /// (not N per-product COUNTs) so it scales to large catalogs. Used to
+    /// populate <c>ProductResponse.HasOrders</c> after the entities are
+    /// materialized.
+    /// </summary>
+    Task<HashSet<int>> GetProductIdsWithOrdersAsync(IEnumerable<int> productIds);
 }

@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Category;
 using POS.Domain.Models;
 
 namespace POS.Services.IService;
@@ -28,10 +29,12 @@ public interface ICategoryService
     Task<Category> ToggleActiveAsync(int id);
 
     /// <summary>
-    /// Deletes a category if it has no active products.
+    /// Hard-deletes a category, but only when it has no products attached
+    /// (active or inactive). A category with any product resolves to
+    /// <see cref="DeleteCategoryOutcome.HasProducts"/> so a cascade delete can
+    /// never silently remove products that carry order/fiscal history. Branch
+    /// scoping is enforced by the global query filter, so a category outside
+    /// the caller's branch resolves to <see cref="DeleteCategoryOutcome.NotFound"/>.
     /// </summary>
-    /// <exception cref="Domain.Exceptions.ValidationException">
-    /// Thrown when the category has active products.
-    /// </exception>
-    Task<bool> DeleteAsync(int id);
+    Task<DeleteCategoryResult> DeleteAsync(int id);
 }

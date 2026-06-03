@@ -27,6 +27,16 @@ public class ProductResponse
 
     public bool IsAvailable { get; set; }
 
+    /// <summary>
+    /// True when at least one <c>OrderItem</c> references this product, i.e. it
+    /// has sales history and therefore cannot be hard-deleted (the delete is
+    /// blocked by the <c>OnDelete(Restrict)</c> foreign key). The front office
+    /// uses this to disable the "Delete" action up front instead of surfacing a
+    /// 409 after the click. Stays true even when the product is deactivated, so
+    /// the fiscal lock is preserved.
+    /// </summary>
+    public bool HasOrders { get; set; }
+
     public bool IsPopular { get; set; }
 
     public bool TrackStock { get; set; }

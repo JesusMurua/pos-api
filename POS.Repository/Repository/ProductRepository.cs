@@ -76,4 +76,20 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     public Task<int> CountOrderItemsForProductAsync(int productId) =>
         _context.OrderItems
             .CountAsync(oi => oi.ProductId == productId);
+
+    /// <inheritdoc />
+    public async Task<HashSet<int>> GetProductIdsWithOrdersAsync(IEnumerable<int> productIds)
+    {
+        var ids = productIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new HashSet<int>();
+
+        var matched = await _context.OrderItems
+            .Where(oi => ids.Contains(oi.ProductId))
+            .Select(oi => oi.ProductId)
+            .Distinct()
+            .ToListAsync();
+
+        return matched.ToHashSet();
+    }
 }

@@ -1,3 +1,4 @@
+using POS.Domain.DTOs.Category;
 using POS.Domain.Exceptions;
 using POS.Domain.Models;
 using POS.Repository;
@@ -70,27 +71,27 @@ public class CategoryService : ICategoryService
     }
 
     /// <summary>
-    /// Deletes a category if it has no active products.
+    /// Hard-deletes a category. See <see cref="ICategoryService.DeleteAsync"/>.
     /// </summary>
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<DeleteCategoryResult> DeleteAsync(int id)
     {
-        var results = await _unitOfWork.Categories.GetAsync(
-            c => c.Id == id,
-            "Products");
-
-        var category = results.FirstOrDefault();
-
+        // Load through the filtered DbSet so a foreign-branch id resolves to
+        // NotFound rather than leaking a cross-tenant delete.
+        var category = (await _unitOfWork.Categories.GetAsync(c => c.Id == id))
+            .FirstOrDefault();
         if (category == null)
-            throw new NotFoundException($"Category with id {id} not found");
+            return DeleteCategoryResult.NotFound();
 
-        var hasActiveProducts = category.Products?.Any(p => p.IsAvailable) ?? false;
-
-        if (hasActiveProducts)
-            throw new ValidationException("Cannot delete a category with active products");
+        // Count ALL products in the category (not just available ones): a
+        // cascade delete would drag every product — including sold ones with
+        // fiscal history — so any attached product blocks the delete.
+        var productCount = await _unitOfWork.Products.CountAsync(p => p.CategoryId == id);
+        if (productCount > 0)
+            return DeleteCategoryResult.HasProducts(productCount);
 
         _unitOfWork.Categories.Delete(category);
         await _unitOfWork.SaveChangesAsync();
-        return true;
+        return DeleteCategoryResult.Deleted();
     }
 
     #endregion

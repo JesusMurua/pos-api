@@ -12,7 +12,13 @@ namespace POS.Domain.DTOs.Product;
 /// </summary>
 public static class ProductMapping
 {
-    public static ProductResponse ToResponse(this ProductEntity entity)
+    /// <param name="withOrders">
+    /// Optional set of product ids that have <c>OrderItem</c> history. When
+    /// supplied, <c>HasOrders</c> is set from membership in the set; when null
+    /// (e.g. standalone mapping in tests or a freshly created product) it
+    /// defaults to <c>false</c>.
+    /// </param>
+    public static ProductResponse ToResponse(this ProductEntity entity, HashSet<int>? withOrders = null)
     {
         return new ProductResponse
         {
@@ -25,6 +31,7 @@ public static class ProductMapping
             Description = entity.Description,
             Barcode = entity.Barcode,
             IsAvailable = entity.IsAvailable,
+            HasOrders = withOrders?.Contains(entity.Id) ?? false,
             IsPopular = entity.IsPopular,
             TrackStock = entity.TrackStock,
             CurrentStock = entity.CurrentStock,

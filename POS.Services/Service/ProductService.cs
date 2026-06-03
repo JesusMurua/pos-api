@@ -36,15 +36,16 @@ public class ProductService : IProductService
     {
         var categories = await _unitOfWork.Categories.GetActiveBranchCategoriesAsync(branchId);
         var ctx = await LoadTaxContextAsync(branchId);
-        var responses = new List<ProductResponse>();
 
+        var products = new List<Product>();
         foreach (var category in categories)
-        {
-            var categoryProducts = await _unitOfWork.Products.GetActiveWithExtrasAsync(category.Id);
-            responses.AddRange(categoryProducts.Select(p => MapWithEffectiveTax(p, ctx)));
-        }
+            products.AddRange(await _unitOfWork.Products.GetActiveWithExtrasAsync(category.Id));
 
-        return responses;
+        // One batch query for the whole page instead of a per-product COUNT.
+        var withOrders = await _unitOfWork.Products.GetProductIdsWithOrdersAsync(
+            products.Select(p => p.Id));
+
+        return products.Select(p => MapWithEffectiveTax(p, ctx, withOrders)).ToList();
     }
 
     /// <summary>
@@ -54,7 +55,8 @@ public class ProductService : IProductService
     {
         var product = await LoadWithRelationsOrThrowAsync(id);
         var ctx = await LoadTaxContextAsync(product.BranchId);
-        return MapWithEffectiveTax(product, ctx);
+        var withOrders = await LoadOrdersFlagAsync(id);
+        return MapWithEffectiveTax(product, ctx, withOrders);
     }
 
     /// <summary>
@@ -109,7 +111,8 @@ public class ProductService : IProductService
         await _unitOfWork.SaveChangesAsync();
 
         var ctx = await LoadTaxContextAsync(existing.BranchId);
-        return MapWithEffectiveTax(existing, ctx);
+        var withOrders = await LoadOrdersFlagAsync(existing.Id);
+        return MapWithEffectiveTax(existing, ctx, withOrders);
     }
 
     /// <summary>
@@ -117,7 +120,10 @@ public class ProductService : IProductService
     /// </summary>
     public async Task<ProductResponse> ToggleActiveAsync(int id)
     {
-        var product = await _unitOfWork.Products.GetByIdAsync(id);
+        // Load with relations so the toggle response carries the product's
+        // sizes/modifier groups/images (not just the scalar fields), letting
+        // the FE merge the full entity instead of wiping its local copy.
+        var product = await _unitOfWork.Products.GetByIdWithRelationsAsync(id);
 
         if (product == null)
             throw new NotFoundException($"Product with id {id} not found");
@@ -127,7 +133,8 @@ public class ProductService : IProductService
         await _unitOfWork.SaveChangesAsync();
 
         var ctx = await LoadTaxContextAsync(product.BranchId);
-        return MapWithEffectiveTax(product, ctx);
+        var withOrders = await LoadOrdersFlagAsync(id);
+        return MapWithEffectiveTax(product, ctx, withOrders);
     }
 
     /// <summary>
@@ -212,7 +219,8 @@ public class ProductService : IProductService
         _unitOfWork.Products.Update(product);
         await _unitOfWork.SaveChangesAsync();
 
-        return MapWithEffectiveTax(product, ctx);
+        var withOrders = await LoadOrdersFlagAsync(product.Id);
+        return MapWithEffectiveTax(product, ctx, withOrders);
     }
 
     public async Task AddImageAsync(int productId, ProductImage image)
@@ -257,7 +265,8 @@ public class ProductService : IProductService
         if (product == null) return null;
 
         var ctx = await LoadTaxContextAsync(branchId);
-        return MapWithEffectiveTax(product, ctx);
+        var withOrders = await LoadOrdersFlagAsync(product.Id);
+        return MapWithEffectiveTax(product, ctx, withOrders);
     }
 
     #endregion
@@ -349,14 +358,22 @@ public class ProductService : IProductService
         return new TaxContext(business, countryDefaults);
     }
 
-    private ProductResponse MapWithEffectiveTax(Product product, TaxContext ctx)
+    private ProductResponse MapWithEffectiveTax(Product product, TaxContext ctx, HashSet<int>? withOrders = null)
     {
         var resolution = _taxResolver.ResolveTax(product, ctx.Business, ctx.CountryDefaults);
-        var response = product.ToResponse();
+        var response = product.ToResponse(withOrders);
         response.EffectiveTaxRate = resolution.Rate;
         response.EffectiveIsTaxIncluded = product.IsTaxIncluded;
         return response;
     }
+
+    /// <summary>
+    /// Resolves the <c>HasOrders</c> flag for a single product via the batch
+    /// repository helper, so the read methods share one code path with the
+    /// list endpoint.
+    /// </summary>
+    private Task<HashSet<int>> LoadOrdersFlagAsync(int productId) =>
+        _unitOfWork.Products.GetProductIdsWithOrdersAsync(new[] { productId });
 
     private sealed record TaxContext(Business Business, IReadOnlyList<Tax> CountryDefaults);
 

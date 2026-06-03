@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Domain.DTOs.Category;
 using POS.Domain.Models;
 using POS.Services.IService;
 
@@ -107,21 +108,37 @@ public class CategoriesController : BaseApiController
     }
 
     /// <summary>
-    /// Deletes a category if it has no active products.
+    /// Deletes a category, but only when it has no products attached.
+    /// Reassign or delete the products first.
     /// </summary>
     /// <param name="id">The category identifier.</param>
     /// <returns>No content on success.</returns>
     /// <response code="204">Category deleted successfully.</response>
-    /// <response code="400">If the category has active products.</response>
-    /// <response code="404">If the category is not found.</response>
+    /// <response code="404">If the category is not found in the current branch.</response>
+    /// <response code="409">If the category has products attached.</response>
     [HttpDelete("{id}")]
     [Authorize(Roles = "Owner")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(int id)
     {
-        await _categoryService.DeleteAsync(id);
-        return NoContent();
+        var result = await _categoryService.DeleteAsync(id);
+
+        return result.Outcome switch
+        {
+            DeleteCategoryOutcome.Deleted => NoContent(),
+            DeleteCategoryOutcome.NotFound => NotFound(
+                new { message = $"Category with id {id} not found" }),
+            DeleteCategoryOutcome.HasProducts => Conflict(new
+            {
+                error = "category_has_products",
+                productCount = result.ProductCount,
+                message = $"Cannot delete category — has {result.ProductCount} product(s) attached. " +
+                          "Reassign or delete them first."
+            }),
+            _ => throw new InvalidOperationException(
+                $"Unhandled delete outcome: {result.Outcome}")
+        };
     }
 }
