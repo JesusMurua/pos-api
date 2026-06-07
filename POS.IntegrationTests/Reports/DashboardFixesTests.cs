@@ -81,7 +81,71 @@ public class DashboardFixesTests : IClassFixture<CustomWebApplicationFactory>
         closed.DifferenceCents.Should().Be(0, "no false shortage — expected matches the net drawer");
     }
 
+    [Fact]
+    public async Task SalesByPaymentMethod_CashOnly_ReturnsSingleSlice()
+    {
+        // Two $500 cash sales WITH payment rows → one Cash slice of $1,000, count 2.
+        var branchId = await SeedBranchAsync();
+        await SeedPaidCashOrderAsync(branchId, 50000, 50000, new DateTime(2026, 6, 5, 18, 0, 0, DateTimeKind.Utc));
+        await SeedPaidCashOrderAsync(branchId, 50000, 50000, new DateTime(2026, 6, 6, 18, 0, 0, DateTimeKind.Utc));
+
+        using var scope = _factory.Services.CreateScope();
+        var reports = scope.ServiceProvider.GetRequiredService<IReportService>();
+        var charts = await reports.GetDashboardChartsAsync(
+            branchId, new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7), "day");
+
+        charts.SalesByPaymentMethod.Should().ContainSingle();
+        var slice = charts.SalesByPaymentMethod[0];
+        slice.PaymentMethod.Should().Be("Cash");
+        slice.Provider.Should().BeNull();
+        slice.TotalCents.Should().Be(100000);
+        slice.TransactionCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task OrderPaidWithoutPaymentRows_AbsentFromDoughnut_ButPresentInLine()
+    {
+        // Reproduces the reported root cause: an order flagged IsPaid=true with NO
+        // OrderPayment rows. It appears in the line/bar charts (Orders/OrderItems)
+        // but the payment-method doughnut (OrderPayments) has nothing to aggregate.
+        var branchId = await SeedBranchAsync();
+        await SeedPaidOrderWithoutPaymentsAsync(branchId, 50000,
+            new DateTime(2026, 6, 6, 18, 0, 0, DateTimeKind.Utc));
+
+        using var scope = _factory.Services.CreateScope();
+        var reports = scope.ServiceProvider.GetRequiredService<IReportService>();
+        var charts = await reports.GetDashboardChartsAsync(
+            branchId, new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7), "day");
+
+        charts.SalesOverTime.Should().NotBeEmpty("the order has Order rows, so the line chart sees it");
+        charts.TopProducts.Should().NotBeEmpty("the order has OrderItem rows, so the bar chart sees it");
+        charts.SalesByPaymentMethod.Should().BeEmpty(
+            "no OrderPayment rows exist → the doughnut is empty. Root cause is missing payment data, not the query.");
+    }
+
     #region Helpers
+
+    private async Task SeedPaidOrderWithoutPaymentsAsync(int branchId, int totalCents, DateTime createdAtUtc)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Orders.Add(new Order
+        {
+            Id = Guid.NewGuid().ToString(),
+            BranchId = branchId,
+            OrderNumber = 99,
+            TotalCents = totalCents,
+            PaidCents = totalCents,
+            ChangeCents = 0,
+            IsPaid = true, // legacy: flagged paid without persisting OrderPayment rows
+            CreatedAt = createdAtUtc,
+            Items = new List<OrderItem>
+            {
+                new() { ProductName = "Uñas", Quantity = 1, UnitPriceCents = totalCents }
+            }
+        });
+        await db.SaveChangesAsync();
+    }
 
     private async Task<int> SeedBranchAsync() => (await SeedBranchWithOwnerAsync()).BranchId;
 
