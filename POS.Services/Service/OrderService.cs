@@ -1553,10 +1553,25 @@ public class OrderService : IOrderService
 
     private static void RecalculatePaymentTotals(Order order)
     {
-        order.PaidCents = order.Payments
+        var completed = order.Payments
             .Where(p => p.PaymentStatusId == PaymentStatus.Completed)
+            .ToList();
+
+        order.PaidCents = completed.Sum(p => p.AmountCents);
+
+        // Change only ever comes from CASH overpayment — a card/terminal charges
+        // the exact amount and never returns cash. Compute how much cash was
+        // actually applied (after non-cash methods cover their part) and treat the
+        // remainder as change. This keeps the cash bucket / drawer reconciliation
+        // from being polluted by a non-cash overpayment (e.g. a $600 card on a
+        // $500 order must NOT register $100 of phantom change).
+        var cashTendered = completed
+            .Where(p => p.Method == PaymentMethod.Cash)
             .Sum(p => p.AmountCents);
-        order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
+        var nonCash = order.PaidCents - cashTendered;
+        var cashApplied = Math.Min(cashTendered, Math.Max(0, order.TotalCents - nonCash));
+        order.ChangeCents = Math.Max(0, cashTendered - cashApplied);
+
         // Server-Wins: IsPaid is derived from completed payments, never trusted
         // from the client. Keeps the BI/charts IsPaid filter reliable.
         order.IsPaid = order.PaidCents >= order.TotalCents;

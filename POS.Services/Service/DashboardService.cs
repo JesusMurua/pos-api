@@ -43,17 +43,17 @@ public class DashboardService : IDashboardService
         var completedCount = completedMetrics.Sum(m => m.OrderCount);
         var totalCents = completedMetrics.Sum(m => m.TotalCents);
 
-        var cashCents = paymentTotals
-            .Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.TotalCents);
-        var cardCents = paymentTotals
-            .Where(p => p.Method == PaymentMethod.Card).Sum(p => p.TotalCents);
-        var transferCents = paymentTotals
-            .Where(p => p.Method == PaymentMethod.Transfer).Sum(p => p.TotalCents);
-        var otherCents = paymentTotals
-            .Where(p => p.Method != PaymentMethod.Cash
-                     && p.Method != PaymentMethod.Card
-                     && p.Method != PaymentMethod.Transfer)
+        // Group by payment bucket (Cash already net of change at the repository).
+        // Card-backed terminals (Clip, BankTerminal) fold into the Card bucket;
+        // MercadoPago/credit/points/other fall to Other — see PaymentMethodBuckets.
+        int SumBucket(PaymentBucket bucket) => paymentTotals
+            .Where(p => PaymentMethodBuckets.BucketOf(p.Method) == bucket)
             .Sum(p => p.TotalCents);
+
+        var cashCents = SumBucket(PaymentBucket.Cash);
+        var cardCents = SumBucket(PaymentBucket.Card);
+        var transferCents = SumBucket(PaymentBucket.Transfer);
+        var otherCents = SumBucket(PaymentBucket.Other);
 
         var topMethod = paymentTotals
             .OrderByDescending(p => p.TotalCents)
