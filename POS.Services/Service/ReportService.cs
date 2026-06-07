@@ -169,9 +169,13 @@ public class ReportService : IReportService
     public async Task<DashboardChartsDto> GetDashboardChartsAsync(
         int branchId, DateOnly from, DateOnly to, string granularity)
     {
-        var (startUtc, endUtc) = await ResolveUtcRangeAsync(branchId, from, to);
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId)
+            ?? throw new NotFoundException($"Branch with id {branchId} not found");
 
-        var salesOverTime = await _unitOfWork.Orders.GetSalesOverTimeAsync(branchId, startUtc, endUtc, granularity);
+        var (startUtc, _) = TimeZoneHelper.GetUtcRangeForLocalDate(from, branch.TimeZoneId);
+        var (_, endUtc) = TimeZoneHelper.GetUtcRangeForLocalDate(to, branch.TimeZoneId);
+
+        var salesOverTime = await _unitOfWork.Orders.GetSalesOverTimeAsync(branchId, startUtc, endUtc, granularity, branch.TimeZoneId);
         var topProducts = await _unitOfWork.Orders.GetTopProductsBIAsync(branchId, startUtc, endUtc);
         var salesByPaymentMethod = await _unitOfWork.Orders.GetSalesByPaymentMethodAsync(branchId, startUtc, endUtc);
 

@@ -119,11 +119,13 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         EnsureUtcRange(startUtc, endUtc);
 
-        return await _context.OrderPayments
+        // Aligned with GetSalesByPaymentMethodAsync (charts): paid, non-cancelled only.
+        var totals = await _context.OrderPayments
             .AsNoTracking()
             .Where(p => p.Order.BranchId == branchId
                      && p.Order.CreatedAt >= startUtc
                      && p.Order.CreatedAt < endUtc
+                     && p.Order.IsPaid
                      && p.Order.CancellationReason == null)
             .GroupBy(p => p.Method)
             .Select(g => new PaymentMethodTotalRow
@@ -132,6 +134,35 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                 TotalCents = g.Sum(p => p.AmountCents)
             })
             .ToListAsync();
+
+        // Cash is stored as tendered; change is always returned in cash, so the
+        // net cash collected = tendered − change.
+        await SubtractCashChangeAsync(totals, branchId, startUtc, endUtc);
+        return totals;
+    }
+
+    /// <summary>
+    /// Sum of <c>Order.ChangeCents</c> for paid, non-cancelled orders in range —
+    /// i.e. the cash handed back to customers. Always cash, so it nets out of the
+    /// cash bucket of any payment-method breakdown.
+    /// </summary>
+    private Task<int> GetCashChangeTotalAsync(int branchId, DateTime startUtc, DateTime endUtc) =>
+        _context.Orders.AsNoTracking()
+            .Where(o => o.BranchId == branchId
+                     && o.CreatedAt >= startUtc
+                     && o.CreatedAt < endUtc
+                     && o.IsPaid
+                     && o.CancellationReason == null)
+            .SumAsync(o => o.ChangeCents);
+
+    private async Task SubtractCashChangeAsync(
+        List<PaymentMethodTotalRow> totals, int branchId, DateTime startUtc, DateTime endUtc)
+    {
+        var change = await GetCashChangeTotalAsync(branchId, startUtc, endUtc);
+        if (change == 0) return;
+
+        var cash = totals.FirstOrDefault(t => t.Method == PaymentMethod.Cash);
+        if (cash != null) cash.TotalCents -= change;
     }
 
     /// <inheritdoc />
@@ -237,77 +268,48 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     /// <inheritdoc />
     public async Task<List<SalesPointDto>> GetSalesOverTimeAsync(
-        int branchId, DateTime startUtc, DateTime endUtc, string granularity)
+        int branchId, DateTime startUtc, DateTime endUtc, string granularity, string? timeZoneId)
     {
         EnsureUtcRange(startUtc, endUtc);
 
-        var baseQuery = _context.Orders
+        // Fetch the (already date-bounded) rows, then bucket in memory by the
+        // branch's LOCAL time. Grouping in SQL would bucket by UTC, shifting
+        // late-night local sales onto the next day.
+        var rows = await _context.Orders
             .AsNoTracking()
             .Where(o => o.BranchId == branchId
                      && o.IsPaid
                      && o.CancellationReason == null
                      && o.CreatedAt >= startUtc
-                     && o.CreatedAt < endUtc);
+                     && o.CreatedAt < endUtc)
+            .Select(o => new { o.CreatedAt, o.TotalCents })
+            .ToListAsync();
 
-        switch (granularity?.ToLowerInvariant())
+        var tz = TimeZoneHelper.GetTimeZoneInfo(timeZoneId);
+        var unit = granularity?.ToLowerInvariant();
+
+        DateTime BucketOf(DateTime createdAtUtc)
         {
-            case "hour":
-                var hourData = await baseQuery
-                    .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month, o.CreatedAt.Day, o.CreatedAt.Hour })
-                    .Select(g => new
-                    {
-                        g.Key.Year, g.Key.Month, g.Key.Day, g.Key.Hour,
-                        TotalCents = g.Sum(o => o.TotalCents),
-                        OrderCount = g.Count()
-                    })
-                    .OrderBy(x => x.Year).ThenBy(x => x.Month).ThenBy(x => x.Day).ThenBy(x => x.Hour)
-                    .ToListAsync();
-
-                return hourData.Select(x => new SalesPointDto
-                {
-                    Date = new DateTime(x.Year, x.Month, x.Day, x.Hour, 0, 0),
-                    TotalCents = x.TotalCents,
-                    OrderCount = x.OrderCount
-                }).ToList();
-
-            case "month":
-                var monthData = await baseQuery
-                    .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month })
-                    .Select(g => new
-                    {
-                        g.Key.Year, g.Key.Month,
-                        TotalCents = g.Sum(o => o.TotalCents),
-                        OrderCount = g.Count()
-                    })
-                    .OrderBy(x => x.Year).ThenBy(x => x.Month)
-                    .ToListAsync();
-
-                return monthData.Select(x => new SalesPointDto
-                {
-                    Date = new DateTime(x.Year, x.Month, 1),
-                    TotalCents = x.TotalCents,
-                    OrderCount = x.OrderCount
-                }).ToList();
-
-            default: // "day"
-                var dayData = await baseQuery
-                    .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month, o.CreatedAt.Day })
-                    .Select(g => new
-                    {
-                        g.Key.Year, g.Key.Month, g.Key.Day,
-                        TotalCents = g.Sum(o => o.TotalCents),
-                        OrderCount = g.Count()
-                    })
-                    .OrderBy(x => x.Year).ThenBy(x => x.Month).ThenBy(x => x.Day)
-                    .ToListAsync();
-
-                return dayData.Select(x => new SalesPointDto
-                {
-                    Date = new DateTime(x.Year, x.Month, x.Day),
-                    TotalCents = x.TotalCents,
-                    OrderCount = x.OrderCount
-                }).ToList();
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(createdAtUtc, DateTimeKind.Utc), tz);
+            return unit switch
+            {
+                "hour" => new DateTime(local.Year, local.Month, local.Day, local.Hour, 0, 0),
+                "month" => new DateTime(local.Year, local.Month, 1),
+                _ => new DateTime(local.Year, local.Month, local.Day)
+            };
         }
+
+        return rows
+            .GroupBy(r => BucketOf(r.CreatedAt))
+            .OrderBy(g => g.Key)
+            .Select(g => new SalesPointDto
+            {
+                Date = g.Key,
+                TotalCents = g.Sum(r => r.TotalCents),
+                OrderCount = g.Count()
+            })
+            .ToList();
     }
 
     /// <inheritdoc />
@@ -370,13 +372,25 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
             .OrderByDescending(x => x.TotalCents)
             .ToListAsync();
 
-        return rawPayments.Select(r => new PaymentMethodSalesDto
+        var rows = rawPayments.Select(r => new PaymentMethodSalesDto
         {
             PaymentMethod = r.Method.ToString(),
             Provider = r.Provider,
             TotalCents = r.TotalCents,
             TransactionCount = r.TransactionCount
         }).ToList();
+
+        // Net out change from the cash bucket (tendered − change), same as the
+        // summary. Change is always cash and has no provider.
+        var change = await GetCashChangeTotalAsync(branchId, startUtc, endUtc);
+        if (change != 0)
+        {
+            var cash = rows.FirstOrDefault(r =>
+                r.PaymentMethod == PaymentMethod.Cash.ToString() && r.Provider == null);
+            if (cash != null) cash.TotalCents -= change;
+        }
+
+        return rows;
     }
 
     /// <inheritdoc />

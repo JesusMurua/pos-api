@@ -73,10 +73,11 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<List<FiscalCsvRow>> GetFlatOrdersForCsvAsync(int branchId, DateTime startUtc, DateTime endUtc);
 
     /// <summary>
-    /// Returns sales data grouped by time bucket for the BI dashboard.
-    /// Uses AsNoTracking + GroupBy/Select for SQL-level aggregation.
+    /// Returns sales data grouped by time bucket for the BI dashboard. Buckets are
+    /// computed in the branch's local timezone, so a late-night sale lands on the
+    /// correct local day rather than the next UTC day.
     /// </summary>
-    Task<List<SalesPointDto>> GetSalesOverTimeAsync(int branchId, DateTime startUtc, DateTime endUtc, string granularity);
+    Task<List<SalesPointDto>> GetSalesOverTimeAsync(int branchId, DateTime startUtc, DateTime endUtc, string granularity, string? timeZoneId);
 
     /// <summary>
     /// Returns top N products with revenue for the BI dashboard.

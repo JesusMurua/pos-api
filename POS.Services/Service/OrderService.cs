@@ -1557,6 +1557,9 @@ public class OrderService : IOrderService
             .Where(p => p.PaymentStatusId == PaymentStatus.Completed)
             .Sum(p => p.AmountCents);
         order.ChangeCents = Math.Max(0, order.PaidCents - order.TotalCents);
+        // Server-Wins: IsPaid is derived from completed payments, never trusted
+        // from the client. Keeps the BI/charts IsPaid filter reliable.
+        order.IsPaid = order.PaidCents >= order.TotalCents;
     }
 
     /// <summary>

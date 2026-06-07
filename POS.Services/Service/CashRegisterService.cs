@@ -590,10 +590,19 @@ public class CashRegisterService : ICashRegisterService
                 && o.CancellationReason == null,
             "Payments");
 
-        return orders
+        var ordersList = orders.ToList();
+
+        // Cash is stored tendered; change is always returned in cash, so the net
+        // cash that actually lands in the drawer = tendered − change. Without this
+        // the expected-amount overstates the drawer and the close shows a false
+        // shortage equal to the change given.
+        var cashTendered = ordersList
             .SelectMany(o => o.Payments)
             .Where(p => p.Method == PaymentMethod.Cash)
             .Sum(p => p.AmountCents);
+        var changeReturned = ordersList.Sum(o => o.ChangeCents);
+
+        return cashTendered - changeReturned;
     }
 
     /// <summary>
