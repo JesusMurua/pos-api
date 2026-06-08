@@ -89,6 +89,45 @@ namespace POS.Repository.Migrations
                 nullable: false,
                 defaultValue: false);
 
+            // Data: reconcile the 9 system payment methods (category/SAT/flags) so
+            // the OrderPayments backfill below can resolve every Method to a catalog
+            // row. Mirrors DbInitializer.UpsertPaymentMethodCatalogAsync — source of
+            // truth: docs/payment-method-catalog-architecture.md §4.1.
+            migrationBuilder.Sql(@"
+                INSERT INTO ""PaymentMethodCatalogs""
+                    (""Code"",""Name"",""SortOrder"",""Category"",""SatPaymentFormCode"",""RequiresReference"",""RequiresCustomer"",""SupportsOverpay"",""SupportsPartial"",""ProviderKey"",""CountryCode"",""IconClass"",""IsActive"",""IsSystem"")
+                SELECT d.""Code"",d.""Name"",d.""SortOrder"",d.""Category"",d.""Sat"",d.""RR"",d.""RC"",d.""SO"",d.""SP"",d.""Provider"",d.""Country"",d.""Icon"",TRUE,TRUE
+                FROM (VALUES
+                    ('Cash','Efectivo',1,'Cash','01',FALSE,FALSE,TRUE,TRUE,NULL,NULL,'pi-money-bill'),
+                    ('Card','Tarjeta',2,'Card','04',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-credit-card'),
+                    ('Transfer','Transferencia',3,'Digital','03',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-arrow-right-arrow-left'),
+                    ('Other','Otro',4,'Other','99',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-ellipsis-h'),
+                    ('Clip','Clip',5,'Card','04',FALSE,FALSE,FALSE,TRUE,'clip','MX','pi-credit-card'),
+                    ('MercadoPago','MercadoPago',6,'Digital','04',FALSE,FALSE,FALSE,TRUE,'mercadopago','MX','pi-qrcode'),
+                    ('BankTerminal','Terminal bancaria',7,'Card','04',FALSE,FALSE,FALSE,TRUE,'bankterminal',NULL,'pi-credit-card'),
+                    ('StoreCredit','Crédito de tienda',8,'Credit','05',FALSE,TRUE,FALSE,TRUE,NULL,NULL,'pi-wallet'),
+                    ('LoyaltyPoints','Puntos',9,'Points','05',FALSE,TRUE,FALSE,TRUE,NULL,NULL,'pi-star')
+                ) AS d(""Code"",""Name"",""SortOrder"",""Category"",""Sat"",""RR"",""RC"",""SO"",""SP"",""Provider"",""Country"",""Icon"")
+                WHERE NOT EXISTS (SELECT 1 FROM ""PaymentMethodCatalogs"" p WHERE p.""Code"" = d.""Code"");
+
+                UPDATE ""PaymentMethodCatalogs"" p SET
+                    ""Name""=d.""Name"",""SortOrder""=d.""SortOrder"",""Category""=d.""Category"",""SatPaymentFormCode""=d.""Sat"",
+                    ""RequiresReference""=d.""RR"",""RequiresCustomer""=d.""RC"",""SupportsOverpay""=d.""SO"",""SupportsPartial""=d.""SP"",
+                    ""ProviderKey""=d.""Provider"",""CountryCode""=d.""Country"",""IconClass""=d.""Icon"",""IsActive""=TRUE,""IsSystem""=TRUE
+                FROM (VALUES
+                    ('Cash','Efectivo',1,'Cash','01',FALSE,FALSE,TRUE,TRUE,NULL,NULL,'pi-money-bill'),
+                    ('Card','Tarjeta',2,'Card','04',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-credit-card'),
+                    ('Transfer','Transferencia',3,'Digital','03',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-arrow-right-arrow-left'),
+                    ('Other','Otro',4,'Other','99',FALSE,FALSE,FALSE,TRUE,NULL,NULL,'pi-ellipsis-h'),
+                    ('Clip','Clip',5,'Card','04',FALSE,FALSE,FALSE,TRUE,'clip','MX','pi-credit-card'),
+                    ('MercadoPago','MercadoPago',6,'Digital','04',FALSE,FALSE,FALSE,TRUE,'mercadopago','MX','pi-qrcode'),
+                    ('BankTerminal','Terminal bancaria',7,'Card','04',FALSE,FALSE,FALSE,TRUE,'bankterminal',NULL,'pi-credit-card'),
+                    ('StoreCredit','Crédito de tienda',8,'Credit','05',FALSE,TRUE,FALSE,TRUE,NULL,NULL,'pi-wallet'),
+                    ('LoyaltyPoints','Puntos',9,'Points','05',FALSE,TRUE,FALSE,TRUE,NULL,NULL,'pi-star')
+                ) AS d(""Code"",""Name"",""SortOrder"",""Category"",""Sat"",""RR"",""RC"",""SO"",""SP"",""Provider"",""Country"",""Icon"")
+                WHERE p.""Code"" = d.""Code"";
+            ");
+
             migrationBuilder.AddColumn<string>(
                 name: "Category",
                 table: "OrderPayments",
@@ -133,6 +172,28 @@ namespace POS.Repository.Migrations
                 type: "boolean",
                 nullable: false,
                 defaultValue: false);
+
+            // Data: freeze the catalog snapshot onto existing payments so the FK
+            // below is satisfied (the table is not guaranteed empty in deployed
+            // environments). Every enum Method now resolves to a catalog row; a
+            // stray value falls back to 'Other'.
+            migrationBuilder.Sql(@"
+                UPDATE ""OrderPayments"" o SET
+                    ""MethodCode""=o.""Method"",
+                    ""Category""=c.""Category"",
+                    ""SatPaymentFormCode""=c.""SatPaymentFormCode"",
+                    ""PaymentMethodId""=c.""Id""
+                FROM ""PaymentMethodCatalogs"" c
+                WHERE o.""Method"" = c.""Code"";
+
+                UPDATE ""OrderPayments"" o SET
+                    ""MethodCode""=c.""Code"",
+                    ""Category""=c.""Category"",
+                    ""SatPaymentFormCode""=c.""SatPaymentFormCode"",
+                    ""PaymentMethodId""=c.""Id""
+                FROM ""PaymentMethodCatalogs"" c
+                WHERE c.""Code""='Other' AND o.""PaymentMethodId"" = 0;
+            ");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OrderPayments_PaymentMethodId",
