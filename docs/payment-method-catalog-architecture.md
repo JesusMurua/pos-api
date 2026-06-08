@@ -286,6 +286,13 @@ summary/charts (the money exists); the admin can optionally filter on the flag.
 
 ## 5. Endpoints
 
+> 📄 **Frozen wire contract:** the exact JSON shapes, field nullability, enum
+> casing, query params and HTTP status codes for *every* endpoint below (public,
+> admin and drift) live in the companion
+> [Payment Method Catalog — Wire API Contract](payment-method-catalog-api.md).
+> That annex is the source of truth for FE consumers (`fino-app`, `fino-admin`);
+> this section keeps the design rationale.
+
 ### 5.1 Public (tenant-facing)
 
 ```
