@@ -1,6 +1,6 @@
 # Payment Method Catalog — Architecture & Design
 
-> **Status:** PR-A1 implemented. Design source of truth for the remaining PRs (A2 → B → C).
+> **Status:** PR-A1 + PR-A2 implemented. Design source of truth for the remaining PRs (B → C).
 > **Scope:** Backend refactor of payment methods from a hardcoded enum to a
 > data-driven catalog with behavior categories, plan gating and tenant overrides.
 
@@ -36,9 +36,22 @@ Implemented (no pre-launch data, so **no backfill and no fallbacks** were needed
 - Tests: catalog reconcile (9 rows), frozen write-path, category buckets,
   multi-method change/corte. Suite 128 → 130.
 
-**Deferred to PR-A2/B/C** (unchanged from the design below): soft sync gating
-that sets `WasUnauthorized`/`WasUnknownMethod`, admin endpoints + public
-`/payment-methods/available`, and the `Method` enum drop.
+**PR-A2 — Delivered (soft gating + drift report):**
+
+- `MapToPayment` no longer silently defaults unknown methods to Cash — an
+  unparseable method is recorded as `Other` with `WasUnknownMethod = true` and an
+  `ILogger.LogWarning` (branch/order/received value). The sale is never rejected
+  (offline-first). The catalog freeze keeps fail-fast only for a valid enum with
+  no catalog row (= seed bug).
+- Cross-tenant drift report `GET /api/Admin/orders/unauthorized-methods?from=&to=&page=&pageSize=`
+  (`X-Admin-Token`), via `OrderRepository.GetFlaggedPaymentsAsync` with
+  `IgnoreQueryFilters()`. Returns paged payments flagged `WasUnknownMethod` **or**
+  `WasUnauthorized` (so PR-B's rows appear with no endpoint change). Rows carry
+  order/business/plan + frozen method code/category. Suite 130 → 133.
+
+**Deferred to PR-B/C:** `WasUnauthorized` gating logic + its tests (born with
+`PlanPaymentMethodMatrix`), the admin CRUD + public `/payment-methods/available`,
+and the `Method` enum drop.
 
 ---
 

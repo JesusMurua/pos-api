@@ -3,6 +3,7 @@ using POS.Domain.DTOs.Customer;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
+using POS.Domain.Models.Catalogs;
 using POS.Repository.IRepository;
 using POS.Repository.Utils;
 
@@ -164,6 +165,50 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
         var cash = totals.FirstOrDefault(t => t.Category == PaymentCategory.Cash);
         if (cash != null) cash.TotalCents -= change;
+    }
+
+    /// <inheritdoc />
+    public async Task<POS.Domain.DTOs.Admin.PagedDriftReportDto> GetFlaggedPaymentsAsync(
+        DateTime fromUtc, DateTime toUtc, int page, int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 50;
+
+        // IgnoreQueryFilters: this is a super-admin, cross-tenant view, so the
+        // BDD-019 branch filter must be dropped (same pattern as BusinessRepository).
+        var baseQuery = _context.OrderPayments
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(p => (p.WasUnknownMethod || p.WasUnauthorized)
+                     && p.CreatedAt >= fromUtc
+                     && p.CreatedAt < toUtc);
+
+        var total = await baseQuery.CountAsync();
+
+        var items = await baseQuery
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new POS.Domain.DTOs.Admin.DriftPaymentEntryDto(
+                p.OrderId,
+                p.Order.OrderNumber,
+                p.Order.Branch!.BusinessId,
+                p.Order.Branch.Business!.Name,
+                _context.Set<PlanTypeCatalog>()
+                    .Where(pt => pt.Id == p.Order.Branch!.Business!.PlanTypeId)
+                    .Select(pt => pt.Name).FirstOrDefault() ?? string.Empty,
+                p.MethodCode,
+                _context.Set<PaymentMethodCatalog>()
+                    .Where(c => c.Id == p.PaymentMethodId)
+                    .Select(c => c.Name).FirstOrDefault() ?? p.MethodCode,
+                p.Category,
+                p.WasUnauthorized,
+                p.WasUnknownMethod,
+                p.CreatedAt,
+                p.AmountCents))
+            .ToListAsync();
+
+        return new POS.Domain.DTOs.Admin.PagedDriftReportDto(page, pageSize, total, items);
     }
 
     /// <inheritdoc />

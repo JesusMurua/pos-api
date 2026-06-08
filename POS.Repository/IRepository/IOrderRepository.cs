@@ -55,6 +55,14 @@ public interface IOrderRepository : IGenericRepository<Order>
     Task<List<PaymentMethodTotalRow>> GetPaymentTotalsAsync(int branchId, DateTime startUtc, DateTime endUtc);
 
     /// <summary>
+    /// Cross-tenant (super-admin) drift report: paged payments flagged
+    /// <c>WasUnknownMethod</c> or <c>WasUnauthorized</c>. Bypasses the tenant
+    /// query filter. Filters by the payment's sync timestamp (CreatedAt).
+    /// </summary>
+    Task<POS.Domain.DTOs.Admin.PagedDriftReportDto> GetFlaggedPaymentsAsync(
+        DateTime fromUtc, DateTime toUtc, int page, int pageSize);
+
+    /// <summary>
     /// Returns top N products by quantity sold for completed orders.
     /// Uses AsNoTracking + GroupBy/Select for SQL-level aggregation.
     /// </summary>

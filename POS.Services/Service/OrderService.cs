@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
@@ -21,6 +22,7 @@ public class OrderService : IOrderService
     private readonly ICustomerService _customerService;
     private readonly IMembershipService _membershipService;
     private readonly ITaxResolverService _taxResolver;
+    private readonly ILogger<OrderService> _logger;
 
     public OrderService(
         IUnitOfWork unitOfWork,
@@ -29,7 +31,8 @@ public class OrderService : IOrderService
         IInventoryService inventoryService,
         ICustomerService customerService,
         IMembershipService membershipService,
-        ITaxResolverService taxResolver)
+        ITaxResolverService taxResolver,
+        ILogger<OrderService> logger)
     {
         _unitOfWork = unitOfWork;
         _pushService = pushService;
@@ -38,6 +41,7 @@ public class OrderService : IOrderService
         _customerService = customerService;
         _membershipService = membershipService;
         _taxResolver = taxResolver;
+        _logger = logger;
     }
 
     #region Public API Methods
@@ -126,7 +130,7 @@ public class OrderService : IOrderService
 
                     existingOrder.Payments.Clear();
                     foreach (var p in request.Payments)
-                        existingOrder.Payments.Add(MapToPayment(request.Id, p));
+                        existingOrder.Payments.Add(MapToPayment(request.Id, p, request.BranchId, request.OrderNumber));
 
                     RecalculatePaymentTotals(existingOrder);
                     _unitOfWork.Orders.Update(existingOrder);
@@ -1365,7 +1369,7 @@ public class OrderService : IOrderService
         order.TotalCents = Math.Max(0, order.SubtotalCents - order.OrderDiscountCents);
     }
 
-    private static Order MapToOrder(SyncOrderRequest request)
+    private Order MapToOrder(SyncOrderRequest request)
     {
         return new Order
         {
@@ -1386,7 +1390,7 @@ public class OrderService : IOrderService
             CashRegisterSessionId = request.CashRegisterSessionId,
             CustomerId = request.CustomerId,
             Items = request.Items.Select(i => MapToOrderItem(request.Id, i)).ToList(),
-            Payments = request.Payments.Select(p => MapToPayment(request.Id, p)).ToList()
+            Payments = request.Payments.Select(p => MapToPayment(request.Id, p, request.BranchId, request.OrderNumber)).ToList()
         };
     }
 
@@ -1478,10 +1482,20 @@ public class OrderService : IOrderService
         };
     }
 
-    private static OrderPayment MapToPayment(string orderId, SyncPaymentRequest p)
+    private OrderPayment MapToPayment(string orderId, SyncPaymentRequest p, int branchId, int orderNumber)
     {
+        var wasUnknownMethod = false;
         if (!Enum.TryParse<PaymentMethod>(p.Method, true, out var method))
-            method = PaymentMethod.Cash;
+        {
+            // Unknown/garbage method: record the money under Other and flag it for
+            // the drift report instead of silently mislabeling it as Cash. The sale
+            // is never rejected (offline-first: "never reject valid orders").
+            method = PaymentMethod.Other;
+            wasUnknownMethod = true;
+            _logger.LogWarning(
+                "Unknown payment method '{Method}' on order #{OrderNumber} (branch {BranchId}); recorded as Other.",
+                p.Method, orderNumber, branchId);
+        }
 
         var statusId = PaymentStatus.FromString(p.Status);
 
@@ -1489,6 +1503,7 @@ public class OrderService : IOrderService
         {
             OrderId = orderId,
             Method = method,
+            WasUnknownMethod = wasUnknownMethod,
             AmountCents = p.AmountCents,
             Reference = p.Reference,
             PaymentProvider = p.PaymentProvider,
