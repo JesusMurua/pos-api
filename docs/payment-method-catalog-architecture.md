@@ -397,6 +397,44 @@ Parallel tracks:
 
 ---
 
+## 8b. Known debt — system methods are code-owned
+
+The bootstrap reconcile
+(`DbInitializer.UpsertPaymentMethodCatalogAsync`) **rewrites all 9 system rows
+on every startup** — it runs unconditionally after `Database.Migrate()` on each
+prod boot/redeploy and unconditionally overwrites every behavioral column
+(name, category, SAT, `RequiresReference`, flags, provider, country, icon,
+`IsActive`, `IsSystem`) from the in-code `Pm(...)` definitions.
+
+Consequence — a latent footgun for the future fino-admin catalog UI:
+
+- `PUT /api/Admin/payment-method-catalog/{id}` accepts edits to **any** row,
+  including system ones, and the change persists… **until the next deploy, when
+  the reconcile silently reverts it.** The admin UI will appear to let you edit
+  Transfer/Cash/etc. but the edit is not durable.
+- **Durable, admin-controlled surfaces (never touched by the reconcile):**
+  non-system catalog rows (admin-created custom methods), `PlanPaymentMethodMatrix`,
+  and `TenantPaymentMethodOverride`. Behavioral tweaks to *system* methods should
+  be made in code (the `Pm(...)` seed), not via the admin endpoint.
+
+Because system-method behavior is code-owned, changing a default (e.g.
+`Transfer.RequiresReference = true`) is done in `Pm(...)` and propagates to prod
+on the next deploy via the reconcile — **no data migration needed**. A seed test
+(`PaymentMethodSeedTests`) locks the row so an accidental edit is caught.
+
+Candidate fix (**not in this PR** — would change reconcile semantics):
+
+- Add an `IsManaged` / "edited-by-admin" tracking column so the reconcile skips
+  rows an admin has deliberately customized; **or**
+- Make the reconcile *insert-if-missing* for system rows (stop overwriting),
+  accepting that seed-value changes then require a one-time data migration.
+
+Until then: treat system-method metadata as a code artifact, and gate the
+fino-admin UI to make editing system rows read-only (or warn that changes are
+non-durable).
+
+---
+
 ## 9. References
 
 - `CLAUDE.md` → **Offline Sync Strategy** (the "never reject valid orders" rule

@@ -655,7 +655,7 @@ public static class DbInitializer
         {
             Pm(PaymentMethod.Cash, "Efectivo", 1, PaymentCategory.Cash, supportsOverpay: true, icon: "pi-money-bill"),
             Pm(PaymentMethod.Card, "Tarjeta", 2, PaymentCategory.Card, icon: "pi-credit-card"),
-            Pm(PaymentMethod.Transfer, "Transferencia", 3, PaymentCategory.Digital, icon: "pi-arrow-right-arrow-left"),
+            Pm(PaymentMethod.Transfer, "Transferencia", 3, PaymentCategory.Digital, requiresReference: true, icon: "pi-arrow-right-arrow-left"),
             Pm(PaymentMethod.Other, "Otro", 4, PaymentCategory.Other, icon: "pi-ellipsis-h"),
             Pm(PaymentMethod.Clip, "Clip", 5, PaymentCategory.Card, provider: "clip", country: "MX", icon: "pi-credit-card"),
             Pm(PaymentMethod.MercadoPago, "MercadoPago", 6, PaymentCategory.Digital, provider: "mercadopago", country: "MX", icon: "pi-qrcode"),
@@ -738,7 +738,7 @@ public static class DbInitializer
 
     private static PaymentMethodCatalog Pm(
         PaymentMethod method, string name, int sortOrder, PaymentCategory category,
-        bool requiresCustomer = false, bool supportsOverpay = false,
+        bool requiresCustomer = false, bool supportsOverpay = false, bool requiresReference = false,
         string? provider = null, string? country = null, string? icon = null) => new()
         {
             Code = method.ToString(),
@@ -746,6 +746,7 @@ public static class DbInitializer
             SortOrder = sortOrder,
             Category = category,
             SatPaymentFormCode = SatPaymentForm.FromPaymentMethod(method),
+            RequiresReference = requiresReference,
             RequiresCustomer = requiresCustomer,
             SupportsOverpay = supportsOverpay,
             SupportsPartial = true,
