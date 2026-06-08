@@ -79,7 +79,12 @@ public class OrderDailyMetricRow
 /// </summary>
 public class PaymentMethodTotalRow
 {
-    public PaymentMethod Method { get; set; }
+    /// <summary>Frozen behavioral category — drives the summary bucket.</summary>
+    public PaymentCategory Category { get; set; }
+
+    /// <summary>Frozen catalog code — used for the top-method label.</summary>
+    public string MethodCode { get; set; } = null!;
+
     public int TotalCents { get; set; }
 }
 

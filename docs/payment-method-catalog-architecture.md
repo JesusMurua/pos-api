@@ -1,9 +1,44 @@
 # Payment Method Catalog — Architecture & Design
 
-> **Status:** Design (approved, pre-implementation). No code written yet.
+> **Status:** PR-A1 implemented. Design source of truth for the remaining PRs (A2 → B → C).
 > **Scope:** Backend refactor of payment methods from a hardcoded enum to a
 > data-driven catalog with behavior categories, plan gating and tenant overrides.
-> **Source of truth** for the implementation PRs (A1 → A2 → B → C).
+
+---
+
+## 0. PR-A1 — Delivered (foundation)
+
+Implemented (no pre-launch data, so **no backfill and no fallbacks** were needed):
+
+- `PaymentCategory` enum (7 values) + `PaymentMethodCatalog` extended
+  (Category, SatPaymentFormCode, Requires*/Supports* flags, ProviderKey,
+  CountryCode, IconClass, IsActive, IsSystem).
+- `OrderPayment` frozen-at-sale columns: `MethodCode`, `Category`,
+  `SatPaymentFormCode`, `PaymentMethodId` (FK → catalog, **non-nullable**,
+  `ON DELETE RESTRICT`), plus `WasUnauthorized`/`WasUnknownMethod` (columns only;
+  logic is PR-A2).
+- Migration `AddPaymentMethodCatalogFoundation` — **schema only** (empty
+  `OrderPayments` table → no data backfill). Catalog 4→9 reconcile runs in
+  `DbInitializer.UpsertPaymentMethodCatalogAsync` (idempotent, runs in all envs).
+- Freeze centralized in **`OrderService`** (`SyncOrdersAsync` batch + `AddPaymentAsync`)
+  via `_unitOfWork.Catalog` — covers all four write-paths (sync, AddPayment, Clip,
+  MercadoPago); **fail-fast** if a method has no catalog row. No separate resolver
+  service was needed.
+- `InvoicingService` reads the frozen `SatPaymentFormCode` (no fallback);
+  `SatPaymentForm` StoreCredit/LoyaltyPoints → `"05"`.
+- Reports bucket by the frozen `OrderPayment.Category`
+  (`GetPaymentTotalsAsync` groups by Category+MethodCode; Dashboard + Report
+  updated; `PaymentMethodBuckets` helper deleted). `DashboardSales` gained
+  `DigitalCents/CreditCents/PointsCents/VoucherCents`; `TransferCents` kept as a
+  **deprecated alias = DigitalCents** until the FE migrates.
+- SAT decisions confirmed: StoreCredit/LoyaltyPoints `"05"`; MercadoPago →
+  `Digital` (→ `DigitalCents`).
+- Tests: catalog reconcile (9 rows), frozen write-path, category buckets,
+  multi-method change/corte. Suite 128 → 130.
+
+**Deferred to PR-A2/B/C** (unchanged from the design below): soft sync gating
+that sets `WasUnauthorized`/`WasUnknownMethod`, admin endpoints + public
+`/payment-methods/available`, and the `Method` enum drop.
 
 ---
 

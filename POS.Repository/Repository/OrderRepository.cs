@@ -127,10 +127,11 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                      && p.Order.CreatedAt < endUtc
                      && p.Order.IsPaid
                      && p.Order.CancellationReason == null)
-            .GroupBy(p => p.Method)
+            .GroupBy(p => new { p.Category, p.MethodCode })
             .Select(g => new PaymentMethodTotalRow
             {
-                Method = g.Key,
+                Category = g.Key.Category,
+                MethodCode = g.Key.MethodCode,
                 TotalCents = g.Sum(p => p.AmountCents)
             })
             .ToListAsync();
@@ -161,7 +162,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         var change = await GetCashChangeTotalAsync(branchId, startUtc, endUtc);
         if (change == 0) return;
 
-        var cash = totals.FirstOrDefault(t => t.Method == PaymentMethod.Cash);
+        var cash = totals.FirstOrDefault(t => t.Category == PaymentCategory.Cash);
         if (cash != null) cash.TotalCents -= change;
     }
 

@@ -43,21 +43,23 @@ public class DashboardService : IDashboardService
         var completedCount = completedMetrics.Sum(m => m.OrderCount);
         var totalCents = completedMetrics.Sum(m => m.TotalCents);
 
-        // Group by payment bucket (Cash already net of change at the repository).
-        // Card-backed terminals (Clip, BankTerminal) fold into the Card bucket;
-        // MercadoPago/credit/points/other fall to Other — see PaymentMethodBuckets.
-        int SumBucket(PaymentBucket bucket) => paymentTotals
-            .Where(p => PaymentMethodBuckets.BucketOf(p.Method) == bucket)
+        // Buckets roll up by the frozen payment category (Cash already net of
+        // change at the repository). Reads the snapshot column — no in-code map.
+        int SumCat(PaymentCategory category) => paymentTotals
+            .Where(p => p.Category == category)
             .Sum(p => p.TotalCents);
 
-        var cashCents = SumBucket(PaymentBucket.Cash);
-        var cardCents = SumBucket(PaymentBucket.Card);
-        var transferCents = SumBucket(PaymentBucket.Transfer);
-        var otherCents = SumBucket(PaymentBucket.Other);
+        var cashCents = SumCat(PaymentCategory.Cash);
+        var cardCents = SumCat(PaymentCategory.Card);
+        var digitalCents = SumCat(PaymentCategory.Digital);
+        var creditCents = SumCat(PaymentCategory.Credit);
+        var pointsCents = SumCat(PaymentCategory.Points);
+        var voucherCents = SumCat(PaymentCategory.Voucher);
+        var otherCents = SumCat(PaymentCategory.Other);
 
         var topMethod = paymentTotals
             .OrderByDescending(p => p.TotalCents)
-            .FirstOrDefault()?.Method.ToString() ?? "Cash";
+            .FirstOrDefault()?.MethodCode ?? "Cash";
 
         return new DashboardSummaryDto
         {
@@ -69,7 +71,11 @@ public class DashboardService : IDashboardService
                 AverageTicketCents = completedCount > 0 ? totalCents / completedCount : 0,
                 CashCents = cashCents,
                 CardCents = cardCents,
-                TransferCents = transferCents,
+                DigitalCents = digitalCents,
+                TransferCents = digitalCents, // deprecated alias (= digital) until FE migrates
+                CreditCents = creditCents,
+                PointsCents = pointsCents,
+                VoucherCents = voucherCents,
                 OtherCents = otherCents,
                 TopPaymentMethod = topMethod
             },

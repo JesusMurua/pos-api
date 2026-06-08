@@ -92,16 +92,7 @@ public static class DbInitializer
             await context.SaveChangesAsync();
         }
 
-        if (!await context.PaymentMethodCatalogs.AnyAsync())
-        {
-            context.PaymentMethodCatalogs.AddRange(
-                new PaymentMethodCatalog { Code = "Cash", Name = "Efectivo", SortOrder = 1 },
-                new PaymentMethodCatalog { Code = "Card", Name = "Tarjeta", SortOrder = 2 },
-                new PaymentMethodCatalog { Code = "Transfer", Name = "Transferencia", SortOrder = 3 },
-                new PaymentMethodCatalog { Code = "Other", Name = "Otro", SortOrder = 4 }
-            );
-            await context.SaveChangesAsync();
-        }
+        await UpsertPaymentMethodCatalogAsync(context);
 
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
@@ -650,6 +641,77 @@ public static class DbInitializer
     #endregion
 
     #region Catalog Upsert Helpers
+
+    /// <summary>
+    /// Reconciles the 9 system payment methods (insert-if-missing by Code + update
+    /// behavioral metadata on existing rows). Idempotent. SAT codes come from
+    /// <see cref="SatPaymentForm"/> (single source). See
+    /// docs/payment-method-catalog-architecture.md §4.1.
+    /// </summary>
+    private static async Task UpsertPaymentMethodCatalogAsync(ApplicationDbContext context)
+    {
+        var desired = new[]
+        {
+            Pm(PaymentMethod.Cash, "Efectivo", 1, PaymentCategory.Cash, supportsOverpay: true, icon: "pi-money-bill"),
+            Pm(PaymentMethod.Card, "Tarjeta", 2, PaymentCategory.Card, icon: "pi-credit-card"),
+            Pm(PaymentMethod.Transfer, "Transferencia", 3, PaymentCategory.Digital, icon: "pi-arrow-right-arrow-left"),
+            Pm(PaymentMethod.Other, "Otro", 4, PaymentCategory.Other, icon: "pi-ellipsis-h"),
+            Pm(PaymentMethod.Clip, "Clip", 5, PaymentCategory.Card, provider: "clip", country: "MX", icon: "pi-credit-card"),
+            Pm(PaymentMethod.MercadoPago, "MercadoPago", 6, PaymentCategory.Digital, provider: "mercadopago", country: "MX", icon: "pi-qrcode"),
+            Pm(PaymentMethod.BankTerminal, "Terminal bancaria", 7, PaymentCategory.Card, provider: "bankterminal", icon: "pi-credit-card"),
+            Pm(PaymentMethod.StoreCredit, "Crédito de tienda", 8, PaymentCategory.Credit, requiresCustomer: true, icon: "pi-wallet"),
+            Pm(PaymentMethod.LoyaltyPoints, "Puntos", 9, PaymentCategory.Points, requiresCustomer: true, icon: "pi-star"),
+        };
+
+        var existing = (await context.PaymentMethodCatalogs.ToListAsync())
+            .ToDictionary(p => p.Code, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var d in desired)
+        {
+            if (existing.TryGetValue(d.Code, out var row))
+            {
+                row.Name = d.Name;
+                row.SortOrder = d.SortOrder;
+                row.Category = d.Category;
+                row.SatPaymentFormCode = d.SatPaymentFormCode;
+                row.RequiresReference = d.RequiresReference;
+                row.RequiresCustomer = d.RequiresCustomer;
+                row.SupportsOverpay = d.SupportsOverpay;
+                row.SupportsPartial = d.SupportsPartial;
+                row.ProviderKey = d.ProviderKey;
+                row.CountryCode = d.CountryCode;
+                row.IconClass = d.IconClass;
+                row.IsActive = true;
+                row.IsSystem = true;
+            }
+            else
+            {
+                context.PaymentMethodCatalogs.Add(d);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private static PaymentMethodCatalog Pm(
+        PaymentMethod method, string name, int sortOrder, PaymentCategory category,
+        bool requiresCustomer = false, bool supportsOverpay = false,
+        string? provider = null, string? country = null, string? icon = null) => new()
+        {
+            Code = method.ToString(),
+            Name = name,
+            SortOrder = sortOrder,
+            Category = category,
+            SatPaymentFormCode = SatPaymentForm.FromPaymentMethod(method),
+            RequiresCustomer = requiresCustomer,
+            SupportsOverpay = supportsOverpay,
+            SupportsPartial = true,
+            ProviderKey = provider,
+            CountryCode = country,
+            IconClass = icon,
+            IsActive = true,
+            IsSystem = true
+        };
 
     private static async Task UpsertMacroCategoriesAsync(ApplicationDbContext context)
     {

@@ -16,7 +16,25 @@ public class DashboardSales
     public int AverageTicketCents { get; set; }
     public int CashCents { get; set; }
     public int CardCents { get; set; }
+
+    /// <summary>
+    /// Deprecated: transfers now roll into <see cref="DigitalCents"/>. Kept
+    /// populated (= DigitalCents) as a non-breaking alias until the FE migrates.
+    /// </summary>
     public int TransferCents { get; set; }
+
+    /// <summary>Bank transfers, wallets and QR (digital category).</summary>
+    public int DigitalCents { get; set; }
+
+    /// <summary>Customer store credit consumed.</summary>
+    public int CreditCents { get; set; }
+
+    /// <summary>Loyalty points redeemed as currency.</summary>
+    public int PointsCents { get; set; }
+
+    /// <summary>Vouchers / gift codes.</summary>
+    public int VoucherCents { get; set; }
+
     public int OtherCents { get; set; }
     public string TopPaymentMethod { get; set; } = "Cash";
 }

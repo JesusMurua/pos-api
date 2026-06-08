@@ -236,6 +236,9 @@ public class DashboardFixesTests : IClassFixture<CustomWebApplicationFactory>
                 new()
                 {
                     Method = PaymentMethod.Cash,
+                    MethodCode = "Cash",
+                    Category = PaymentCategory.Cash,
+                    SatPaymentFormCode = "01",
                     AmountCents = tenderedCents,
                     PaymentStatusId = PaymentStatus.Completed,
                     CreatedAt = createdAtUtc

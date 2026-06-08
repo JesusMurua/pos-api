@@ -4,6 +4,7 @@ using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
+using POS.Domain.Models.Catalogs;
 using POS.Domain.Models.Metadata;
 using POS.Repository;
 using POS.Services.IService;
@@ -319,6 +320,12 @@ public class OrderService : IOrderService
         // These require a valid CustomerId and sufficient balance.
         var allSyncedOrders = ordersToInsert.Concat(
             existingOrders.Values.Where(o => requests.Any(r => r.Id == o.Id))).ToList();
+
+        // Freeze the catalog snapshot (code/category/SAT/FK) onto every payment
+        // before persist — single choke point for the whole batch.
+        var paymentCatalog = await LoadPaymentCatalogAsync();
+        foreach (var payment in allSyncedOrders.SelectMany(o => o.Payments))
+            FreezeCatalogFields(payment, paymentCatalog);
 
         var customerPayments = allSyncedOrders
             .Where(o => o.Payments.Any(p =>
@@ -854,6 +861,7 @@ public class OrderService : IOrderService
         payment.CreatedAt = DateTime.UtcNow;
         if (payment.PaymentStatusId == PaymentStatus.Completed && payment.ConfirmedAt == null)
             payment.ConfirmedAt = DateTime.UtcNow;
+        FreezeCatalogFields(payment, await LoadPaymentCatalogAsync());
         order.Payments.Add(payment);
 
         RecalculatePaymentTotals(order);
@@ -1492,6 +1500,29 @@ public class OrderService : IOrderService
             ConfirmedAt = statusId == PaymentStatus.Completed ? DateTime.UtcNow : null,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    /// <summary>Loads the payment-method catalog keyed by Code (case-insensitive).</summary>
+    private async Task<Dictionary<string, PaymentMethodCatalog>> LoadPaymentCatalogAsync() =>
+        (await _unitOfWork.Catalog.GetPaymentMethodsAsync())
+            .ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Freezes the catalog snapshot (code/category/SAT/FK) onto a payment at sale
+    /// time. Every enum method has a seeded catalog row; a miss is a seed/deploy
+    /// bug, so we fail fast rather than silently mislabel money.
+    /// </summary>
+    private static void FreezeCatalogFields(
+        OrderPayment payment, IReadOnlyDictionary<string, PaymentMethodCatalog> catalog)
+    {
+        if (!catalog.TryGetValue(payment.Method.ToString(), out var row))
+            throw new InvalidOperationException(
+                $"PaymentMethodCatalog is missing a row for method '{payment.Method}'. Run the system seed.");
+
+        payment.MethodCode = row.Code;
+        payment.Category = row.Category;
+        payment.SatPaymentFormCode = row.SatPaymentFormCode;
+        payment.PaymentMethodId = row.Id;
     }
 
     /// <summary>

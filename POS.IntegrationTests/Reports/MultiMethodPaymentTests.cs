@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
 using POS.IntegrationTests.Infrastructure;
@@ -76,7 +77,7 @@ public class MultiMethodPaymentTests : IClassFixture<CustomWebApplicationFactory
     }
 
     [Fact]
-    public async Task Buckets_ByCategory_Clip_Card_MercadoPago_Other_Transfer()
+    public async Task Buckets_ByCategory_Digital_Card_FromFrozenCategory()
     {
         var ctx = await SeedAsync();
         await SyncOrderAsync(ctx, total: 60000, payments: new[]
@@ -85,10 +86,27 @@ public class MultiMethodPaymentTests : IClassFixture<CustomWebApplicationFactory
         });
 
         var sales = await SummaryAsync(ctx.BranchId);
-        sales.TransferCents.Should().Be(20000, "Transfer → transferCents");
-        sales.CardCents.Should().Be(20000, "Clip folds into the Card bucket");
-        sales.OtherCents.Should().Be(20000, "MercadoPago → Other (deferred)");
+        sales.CardCents.Should().Be(20000, "Clip folds into the Card category");
+        sales.DigitalCents.Should().Be(40000, "Transfer + MercadoPago are the Digital category");
+        sales.TransferCents.Should().Be(40000, "deprecated alias mirrors DigitalCents");
+        sales.OtherCents.Should().Be(0);
         sales.CashCents.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Sync_FreezesCatalogSnapshot_OnEachPayment()
+    {
+        var ctx = await SeedAsync();
+        var orderId = await SyncOrderAsync(ctx, total: 50000, payments: new[] { ("Card", 50000) });
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var payment = await db.OrderPayments.FirstAsync(p => p.OrderId == orderId);
+
+        payment.MethodCode.Should().Be("Card");
+        payment.Category.Should().Be(PaymentCategory.Card);
+        payment.SatPaymentFormCode.Should().Be("04");
+        payment.PaymentMethodId.Should().BeGreaterThan(0, "FK resolved from the catalog");
     }
 
     [Fact]

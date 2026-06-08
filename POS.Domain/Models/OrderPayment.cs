@@ -15,6 +15,35 @@ public class OrderPayment
 
     public PaymentMethod Method { get; set; }
 
+    /// <summary>
+    /// Frozen-at-sale copy of the catalog row's <c>Code</c>. Denormalized so
+    /// reports group without a join and survive catalog edits.
+    /// </summary>
+    [Required, MaxLength(20)]
+    public string MethodCode { get; set; } = null!;
+
+    /// <summary>Frozen-at-sale behavioral category — the report-bucket driver.</summary>
+    public PaymentCategory Category { get; set; }
+
+    /// <summary>Frozen-at-sale SAT "Forma de Pago" code for CFDI fidelity.</summary>
+    [Required, MaxLength(2)]
+    public string SatPaymentFormCode { get; set; } = null!;
+
+    /// <summary>FK to <see cref="PaymentMethodCatalog"/> (RESTRICT). Queries read the frozen columns.</summary>
+    public int PaymentMethodId { get; set; }
+
+    /// <summary>
+    /// Set when the method was valid but not authorized by the tenant's plan at
+    /// sync time. Seted by PR-A2; present now to keep the schema atomic.
+    /// </summary>
+    public bool WasUnauthorized { get; set; }
+
+    /// <summary>
+    /// Set when the method was absent from the catalog and recorded as a fallback.
+    /// Seted by PR-A2; present now to keep the schema atomic.
+    /// </summary>
+    public bool WasUnknownMethod { get; set; }
+
     public int AmountCents { get; set; }
 
     [MaxLength(50)]

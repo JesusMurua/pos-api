@@ -48,11 +48,12 @@ public class ReportService : IReportService
         var discountCents = completedMetrics.Sum(m => m.DiscountCents);
         var averageTicket = completedOrders > 0 ? (decimal)totalCents / completedOrders : 0;
 
+        // Category-based: card now correctly includes Clip/BankTerminal terminals.
         var cashCents = paymentTotals
-            .Where(p => p.Method == PaymentMethod.Cash)
+            .Where(p => p.Category == PaymentCategory.Cash)
             .Sum(p => p.TotalCents);
         var cardCents = paymentTotals
-            .Where(p => p.Method == PaymentMethod.Card)
+            .Where(p => p.Category == PaymentCategory.Card)
             .Sum(p => p.TotalCents);
 
         var dailySummaries = dailyMetrics

@@ -151,9 +151,10 @@ public class InvoicingService : IInvoicingService
         // Build invoice items
         var facItems = BuildInvoiceItems(new[] { order });
 
-        // Determine dominant payment form
-        var paymentForm = SatPaymentForm.FromDominantMethod(
-            order.Payments.Select(p => (p.Method, p.AmountCents)));
+        // Determine dominant payment form from the SAT code frozen on each payment
+        // at sale time (survives later catalog edits).
+        var paymentForm = SatPaymentForm.FromDominantSatCode(
+            order.Payments.Select(p => (p.SatPaymentFormCode, p.AmountCents)));
 
         // Call Facturapi API
         var apiResponse = await _facturapiClient.CreateInvoiceAsync(new FacturapiInvoiceRequest

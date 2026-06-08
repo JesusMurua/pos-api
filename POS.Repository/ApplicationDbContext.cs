@@ -647,6 +647,11 @@ public class ApplicationDbContext : DbContext
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
+            // Frozen-at-sale catalog snapshot (denormalized).
+            entity.Property(p => p.MethodCode).HasMaxLength(20);
+            entity.Property(p => p.Category).HasConversion<string>().HasMaxLength(20);
+            entity.Property(p => p.SatPaymentFormCode).HasMaxLength(2);
+
             entity.Property(p => p.Reference).HasMaxLength(50);
             entity.Property(p => p.PaymentProvider).HasMaxLength(30);
             entity.Property(p => p.ExternalTransactionId).HasMaxLength(100);
@@ -657,9 +662,17 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(p => p.PaymentStatusId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // FK to the payment-method catalog. RESTRICT: a method with history
+            // can never be hard-deleted (admin soft-deletes via IsActive=false).
+            entity.HasOne<PaymentMethodCatalog>()
+                .WithMany()
+                .HasForeignKey(p => p.PaymentMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasIndex(p => p.OrderId);
             entity.HasIndex(p => p.ExternalTransactionId);
             entity.HasIndex(p => p.PaymentStatusId);
+            entity.HasIndex(p => p.PaymentMethodId);
 
             // Strongly-typed provider-specific PaymentMetadata persisted as PostgreSQL jsonb.
             entity.OwnsOne(p => p.PaymentMetadata, b =>
@@ -1299,7 +1312,19 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ZoneTypeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<UserRoleCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
-        modelBuilder.Entity<PaymentMethodCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<PaymentMethodCatalog>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            // No HasDefaultValue: enum/bool store-defaults collide with CLR-default
+            // sentinels (e.g. Category=Cash) and would silently override seeded
+            // values. The migration carries AddColumn defaults for existing rows;
+            // DbInitializer sets the real values. New rows always send explicit values.
+            e.Property(x => x.Category).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.SatPaymentFormCode).HasMaxLength(2);
+            e.Property(x => x.ProviderKey).HasMaxLength(30);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+            e.Property(x => x.IconClass).HasMaxLength(40);
+        });
         modelBuilder.Entity<KitchenStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<DisplayStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<DeviceModeCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
