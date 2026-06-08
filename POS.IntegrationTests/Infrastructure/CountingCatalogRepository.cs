@@ -61,6 +61,18 @@ public class CountingCatalogRepository : ICatalogRepository
         return _inner.GetPaymentMethodsAsync();
     }
 
+    public Task<IEnumerable<PlanPaymentMethodMatrix>> GetPlanPaymentMethodMatricesAsync()
+    {
+        _counter.Increment();
+        return _inner.GetPlanPaymentMethodMatricesAsync();
+    }
+
+    public Task<IEnumerable<TenantPaymentMethodOverride>> GetTenantPaymentMethodOverridesAsync(int businessId)
+    {
+        _counter.Increment();
+        return _inner.GetTenantPaymentMethodOverridesAsync(businessId);
+    }
+
     public Task<IEnumerable<KitchenStatusCatalog>> GetKitchenStatusesAsync()
     {
         _counter.Increment();

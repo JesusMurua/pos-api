@@ -1,6 +1,6 @@
 # Payment Method Catalog — Architecture & Design
 
-> **Status:** PR-A1 + PR-A2 implemented. Design source of truth for the remaining PRs (B → C).
+> **Status:** PR-A1 + PR-A2 + PR-B implemented. Design source of truth for PR-C (enum drop) + FE.
 > **Scope:** Backend refactor of payment methods from a hardcoded enum to a
 > data-driven catalog with behavior categories, plan gating and tenant overrides.
 
@@ -49,9 +49,29 @@ Implemented (no pre-launch data, so **no backfill and no fallbacks** were needed
   `WasUnauthorized` (so PR-B's rows appear with no endpoint change). Rows carry
   order/business/plan + frozen method code/category. Suite 130 → 133.
 
-**Deferred to PR-B/C:** `WasUnauthorized` gating logic + its tests (born with
-`PlanPaymentMethodMatrix`), the admin CRUD + public `/payment-methods/available`,
-and the `Method` enum drop.
+**PR-B — Delivered (matrix + override + admin + public /available):**
+
+- Entities `PlanPaymentMethodMatrix` (clave `(PlanTypeId, PaymentMethodId)`),
+  `TenantPaymentMethodOverride` (per-business, unique `(BusinessId, PaymentMethodId)`),
+  `PaymentMatrixAuditLog`. Migration `AddPaymentPlanMatrixAndOverrides` (3 tablas,
+  sin backfill). Seed: `UpsertPlanPaymentMethodMatrixAsync` siembra las 36 combos
+  (4 planes × 9 métodos) con `IsEnabled` explícito, después del catálogo.
+- `WasUnauthorized` gating en el batch-loop de `SyncOrdersAsync`
+  (`ApplyAuthorizationFlagsAsync`): precedencia override > plan-matrix > (matrix
+  vacía = autorizado). Nunca rechaza. País = `Business.CountryCode`.
+- Público `GET /api/payment-methods/available` (`PaymentMethodsController`,
+  Bearer tenant) vía `PaymentMethodAvailabilityService` con cache per-tenant
+  (`PaymentMethodCacheGeneration`, TTL 5 min). `name` = CustomLabel si existe.
+- Admin (`X-Admin-Token`, `PaymentMatrixAdminController` + `PaymentMatrixAdminService`):
+  catalog CRUD (DELETE soft si tiene pagos, 409 si IsSystem), plan-matrix bulk PUT,
+  tenant-override CRUD, preview-impact (excluye tenants con override), audit-log.
+  SAT whitelist (`SatPaymentFormCodes`). Mutaciones → bump generation +
+  `ICatalogService.Invalidate("PaymentMethods")`.
+- El drift de PR-A2 ahora puebla `WasUnauthorized` sin cambio al endpoint.
+- 17 tests nuevos. Suite 133 → 150.
+
+**Deferred to PR-C + FE:** drop del enum `Method` + migrar lectores restantes a
+`MethodCode`; consumo FE del `/available` + UI fino-admin.
 
 ---
 

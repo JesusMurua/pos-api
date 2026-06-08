@@ -31,6 +31,13 @@ public class CatalogRepository : ICatalogRepository
     public async Task<IEnumerable<PaymentMethodCatalog>> GetPaymentMethodsAsync() =>
         await _context.PaymentMethodCatalogs.AsNoTracking().OrderBy(x => x.SortOrder).ToListAsync();
 
+    public async Task<IEnumerable<PlanPaymentMethodMatrix>> GetPlanPaymentMethodMatricesAsync() =>
+        await _context.PlanPaymentMethodMatrices.AsNoTracking().ToListAsync();
+
+    public async Task<IEnumerable<TenantPaymentMethodOverride>> GetTenantPaymentMethodOverridesAsync(int businessId) =>
+        await _context.TenantPaymentMethodOverrides.AsNoTracking()
+            .Where(o => o.BusinessId == businessId).ToListAsync();
+
     public async Task<IEnumerable<KitchenStatusCatalog>> GetKitchenStatusesAsync() =>
         await _context.KitchenStatusCatalogs.AsNoTracking().OrderBy(x => x.SortOrder).ToListAsync();
 

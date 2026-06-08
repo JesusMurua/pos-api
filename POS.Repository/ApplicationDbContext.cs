@@ -146,6 +146,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<ZoneTypeCatalog> ZoneTypeCatalogs { get; set; } = null!;
     public DbSet<UserRoleCatalog> UserRoleCatalogs { get; set; } = null!;
     public DbSet<PaymentMethodCatalog> PaymentMethodCatalogs { get; set; } = null!;
+    public DbSet<PlanPaymentMethodMatrix> PlanPaymentMethodMatrices { get; set; } = null!;
+    public DbSet<TenantPaymentMethodOverride> TenantPaymentMethodOverrides { get; set; } = null!;
+    public DbSet<PaymentMatrixAuditLog> PaymentMatrixAuditLogs { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -1324,6 +1327,48 @@ public class ApplicationDbContext : DbContext
             e.Property(x => x.ProviderKey).HasMaxLength(30);
             e.Property(x => x.CountryCode).HasMaxLength(2);
             e.Property(x => x.IconClass).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<PlanPaymentMethodMatrix>(entity =>
+        {
+            entity.HasKey(m => new { m.PlanTypeId, m.PaymentMethodId });
+
+            entity.HasOne(m => m.PlanTypeCatalog)
+                .WithMany()
+                .HasForeignKey(m => m.PlanTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(m => m.PaymentMethod)
+                .WithMany()
+                .HasForeignKey(m => m.PaymentMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(m => m.PaymentMethodId);
+        });
+
+        modelBuilder.Entity<TenantPaymentMethodOverride>(entity =>
+        {
+            entity.Property(o => o.CustomLabel).HasMaxLength(50);
+            entity.Property(o => o.ProviderConfigJson).HasColumnType("jsonb");
+
+            entity.HasOne(o => o.Business)
+                .WithMany()
+                .HasForeignKey(o => o.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(o => o.PaymentMethod)
+                .WithMany()
+                .HasForeignKey(o => o.PaymentMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(o => new { o.BusinessId, o.PaymentMethodId }).IsUnique();
+            entity.HasIndex(o => o.PaymentMethodId);
+        });
+
+        modelBuilder.Entity<PaymentMatrixAuditLog>(entity =>
+        {
+            entity.HasIndex(a => a.ChangedAt);
+            entity.HasIndex(a => a.Axis);
         });
         modelBuilder.Entity<KitchenStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<DisplayStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });

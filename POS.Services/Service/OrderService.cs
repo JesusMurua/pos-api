@@ -331,6 +331,11 @@ public class OrderService : IOrderService
         foreach (var payment in allSyncedOrders.SelectMany(o => o.Payments))
             FreezeCatalogFields(payment, paymentCatalog);
 
+        // PR-B layer-2 gating: flag payments whose (now-frozen) method is not
+        // authorized by the tenant's plan matrix / override. Never rejects the
+        // order (offline-first). The whole batch is one branch, so load once.
+        await ApplyAuthorizationFlagsAsync(allSyncedOrders, branchId);
+
         var customerPayments = allSyncedOrders
             .Where(o => o.Payments.Any(p =>
                 p.Method == PaymentMethod.StoreCredit || p.Method == PaymentMethod.LoyaltyPoints))
@@ -1515,6 +1520,50 @@ public class OrderService : IOrderService
             ConfirmedAt = statusId == PaymentStatus.Completed ? DateTime.UtcNow : null,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Sets <c>WasUnauthorized</c> on payments whose frozen method is not enabled
+    /// for the tenant's plan (unless a tenant override allows it). Resolution
+    /// precedence: override &gt; plan matrix &gt; (empty matrix = authorized,
+    /// transition only). Never rejects — offline-first.
+    /// </summary>
+    private async Task ApplyAuthorizationFlagsAsync(IEnumerable<Order> orders, int branchId)
+    {
+        var branch = await _unitOfWork.Branches.GetByIdAsync(branchId);
+        if (branch == null) return;
+        var business = await _unitOfWork.Business.GetByIdAsync(branch.BusinessId);
+        if (business == null) return;
+
+        var matrix = (await _unitOfWork.Catalog.GetPlanPaymentMethodMatricesAsync()).ToList();
+        var anyMatrixRows = matrix.Count > 0;
+        var planEnabled = matrix
+            .Where(m => m.PlanTypeId == business.PlanTypeId)
+            .ToDictionary(m => m.PaymentMethodId, m => m.IsEnabled);
+        var overrides = (await _unitOfWork.Catalog.GetTenantPaymentMethodOverridesAsync(business.Id))
+            .ToDictionary(o => o.PaymentMethodId, o => o.IsEnabled);
+
+        foreach (var order in orders)
+        {
+            foreach (var payment in order.Payments)
+            {
+                bool authorized;
+                if (overrides.TryGetValue(payment.PaymentMethodId, out var ovEnabled))
+                    authorized = ovEnabled;                       // override wins
+                else if (!anyMatrixRows)
+                    authorized = true;                            // matrix not seeded yet (transition)
+                else
+                    authorized = planEnabled.TryGetValue(payment.PaymentMethodId, out var en) && en;
+
+                if (!authorized)
+                {
+                    payment.WasUnauthorized = true;
+                    _logger.LogWarning(
+                        "Unauthorized payment method '{MethodCode}' for business {BusinessId} (plan {PlanTypeId}) on order #{OrderNumber}; persisted and flagged.",
+                        payment.MethodCode, business.Id, business.PlanTypeId, order.OrderNumber);
+                }
+            }
+        }
     }
 
     /// <summary>Loads the payment-method catalog keyed by Code (case-insensitive).</summary>

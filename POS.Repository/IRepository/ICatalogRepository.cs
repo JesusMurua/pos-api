@@ -10,6 +10,8 @@ public interface ICatalogRepository
     Task<IEnumerable<ZoneTypeCatalog>> GetZoneTypesAsync();
     Task<IEnumerable<UserRoleCatalog>> GetUserRolesAsync();
     Task<IEnumerable<PaymentMethodCatalog>> GetPaymentMethodsAsync();
+    Task<IEnumerable<PlanPaymentMethodMatrix>> GetPlanPaymentMethodMatricesAsync();
+    Task<IEnumerable<TenantPaymentMethodOverride>> GetTenantPaymentMethodOverridesAsync(int businessId);
     Task<IEnumerable<KitchenStatusCatalog>> GetKitchenStatusesAsync();
     Task<IEnumerable<DisplayStatusCatalog>> GetDisplayStatusesAsync();
     Task<IEnumerable<DeviceModeCatalog>> GetDeviceModesAsync();

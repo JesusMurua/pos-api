@@ -49,6 +49,10 @@ public static class ServiceDependencies
         // Process-wide cache generation token backing FeatureGateService.InvalidateAll().
         services.AddSingleton<FeatureCacheGeneration>();
         services.AddScoped<IFeatureMatrixAdminService, FeatureMatrixAdminService>();
+        // Payment-method catalog: per-tenant /available cache generation + admin + availability.
+        services.AddSingleton<PaymentMethodCacheGeneration>();
+        services.AddScoped<IPaymentMatrixAdminService, PaymentMatrixAdminService>();
+        services.AddScoped<IPaymentMethodAvailabilityService, PaymentMethodAvailabilityService>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();

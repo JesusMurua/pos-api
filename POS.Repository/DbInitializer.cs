@@ -93,6 +93,7 @@ public static class DbInitializer
         }
 
         await UpsertPaymentMethodCatalogAsync(context);
+        await UpsertPlanPaymentMethodMatrixAsync(context);
 
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
@@ -687,6 +688,48 @@ public static class DbInitializer
             else
             {
                 context.PaymentMethodCatalogs.Add(d);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Seeds every (plan × method) combination with an explicit IsEnabled, so the
+    /// authorization resolver never faces an ambiguous missing row (absence only
+    /// happens pre-seed). Idempotent (insert-if-missing). Must run AFTER
+    /// <see cref="UpsertPaymentMethodCatalogAsync"/> (FK to the catalog). See
+    /// docs/payment-method-catalog-architecture.md §2.
+    /// </summary>
+    private static async Task UpsertPlanPaymentMethodMatrixAsync(ApplicationDbContext context)
+    {
+        // Inclusion per plan tier (everything else seeded IsEnabled=false).
+        var included = new Dictionary<int, HashSet<string>>
+        {
+            [PlanTypeIds.Free] = new() { "Cash", "Other" },
+            [PlanTypeIds.Basic] = new() { "Cash", "Other", "Card", "Transfer" },
+            [PlanTypeIds.Pro] = new() { "Cash", "Other", "Card", "Transfer", "Clip", "MercadoPago", "BankTerminal" },
+            [PlanTypeIds.Enterprise] = new()
+            {
+                "Cash", "Other", "Card", "Transfer", "Clip", "MercadoPago", "BankTerminal", "StoreCredit", "LoyaltyPoints"
+            }
+        };
+
+        var methods = await context.PaymentMethodCatalogs.ToListAsync();
+        var existing = (await context.PlanPaymentMethodMatrices.ToListAsync())
+            .ToDictionary(m => (m.PlanTypeId, m.PaymentMethodId));
+
+        foreach (var (planId, codes) in included)
+        {
+            foreach (var method in methods)
+            {
+                if (existing.ContainsKey((planId, method.Id))) continue;
+                context.PlanPaymentMethodMatrices.Add(new PlanPaymentMethodMatrix
+                {
+                    PlanTypeId = planId,
+                    PaymentMethodId = method.Id,
+                    IsEnabled = codes.Contains(method.Code)
+                });
             }
         }
 
