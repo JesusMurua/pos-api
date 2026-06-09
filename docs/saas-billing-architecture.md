@@ -1,6 +1,7 @@
 # SaaS Billing v2 — Architecture & Design (multi-rail, admin-operable)
 
-> **Status:** Design — not implemented. Source of truth for the SaaS-billing
+> **Status:** Design — not implemented. **All open questions resolved (2026-06-08);
+> ready to start PR-1a.** Source of truth for the SaaS-billing
 > redesign (PR-1…PR-7 below). Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).
 > **Scope:** how Fino charges the *tenant* the SaaS subscription fee — multi-rail,
@@ -28,11 +29,11 @@ This table is the changelog from the original spec so reviewers can see the *why
 | # | Issue | Resolution in this doc |
 |---|---|---|
 | **B1** | `Invoice`/`InvoiceItem` collide with the existing CFDI `Invoice` (same namespace) | Renamed → **`SubscriptionInvoice` / `SubscriptionInvoiceItem`** (§4.4/4.5). |
-| **B2** | `PUT /plan-types/{id}` price edit is reverted by the boot reseed (the §8b footgun) | `PlanType.MonthlyPrice` stays **code-owned** (reseed-owned, display default only); the **per-tenant price is `Subscription.BaseAmountCents`** = SSoT of what a tenant pays. Catalog-price editing deferred (§14 OQ-3). |
-| **B3** | Custom `BaseAmountCents` is unexpressible on the Stripe rail (fail-closed `PriceMap`) | **Custom pricing is allowed only on manual rails in v2.** The Stripe rail stays catalog-priced (registered Price IDs). Negotiated/Enterprise prices ⇒ a manual rail (§7). |
+| **B2** | `PUT /plan-types/{id}` price edit is reverted by the boot reseed (the §8b footgun) | **Resolved (OQ-3): catalog price is admin-editable.** The reseed becomes **upsert-except-`MonthlyPrice`** (insert sets the default; update leaves price untouched) so admin price edits are durable while `Code`/`Name` stay code-owned. Per-tenant negotiated price is still `Subscription.BaseAmountCents`. |
+| **B3** | Custom `BaseAmountCents` is unexpressible on the Stripe rail (fail-closed `PriceMap`) | **Resolved (OQ-2): dynamic Stripe Prices.** The backend creates a Stripe Price per subscription via API and stores the active id on `Subscription.StripePriceId`; the static `PriceMap` is demoted to a seed hint. Custom pricing works on **any** rail (§7). |
 | **B4** | `Subscription.BillingMethodId` NOT NULL would violate FK on existing prod rows (the PR-A1 incident) | Migration **backfills every existing Subscription to the Stripe rail** before the FK goes NOT NULL (§12). |
 | **B5** | Admin↔Stripe reconcile has no source-of-truth/ordering rule (re-introduces the bug it kills) | **Remote-first** rule: call Stripe → await 2xx → then persist + price-history; the webhook is idempotent and reconciles via `UpdatedAt` without clobbering (§5). |
-| **B6** | New `PlanAddOn`/`SubscriptionAddOn` duplicates the existing Stripe `SubscriptionItem` add-on model that feeds device-licensing | Unified: `SubscriptionAddOn` is the rail-agnostic SSoT; for the Stripe rail it mirrors `SubscriptionItem`; the device-licensing engine reads a **union view** (§8). |
+| **B6** | New `PlanAddOn`/`SubscriptionAddOn` duplicates the existing Stripe `SubscriptionItem` add-on model that feeds device-licensing | **Resolved (OQ-5): retire `SubscriptionItem`.** `SubscriptionAddOn` is the single SSoT; `DeviceService.EnforceDeviceLimitsAsync` and the Stripe webhook are rewired to it; the base-plan `StripeItemId` moves to `Subscription.StripeBaseItemId` (§8). PR-4 carries the data migration + test rewire. |
 | **G1** | Notification "queue + retries" promised but no entity modeled | Added **`NotificationOutbox`** (§4.12, §10). |
 | **G2** | Editable `NotificationTemplate` implied but not modeled; Welcome is hardcoded | v2 ships lifecycle templates **code-owned**; DB-editable templates deferred (§10, OQ-7). |
 | **G3** | Tenant visibility of its own SaaS invoices undecided | v2 SaaS-billing tables are **operator-internal (not `IBusinessScoped`)**, `BusinessId` denormalized; tenant-facing billing screen is additive later (OQ-4). |
@@ -168,12 +169,14 @@ Existing kept: `BusinessId`, `StripeCustomerId`, `StripeSubscriptionId`, `Items`
 | New column | Type | Null | Notes |
 |---|---|---|---|
 | BillingMethodId | int (FK→SaaSBillingMethod) | no* | *NOT NULL **after** backfill (§12). `ON DELETE RESTRICT`. |
-| BaseAmountCents | int | no | Negotiated current price (M8). Seed default = `PlanType.MonthlyPrice × 100`. |
+| BaseAmountCents | int | no | Negotiated current price (M8) — the **per-tenant SSoT** of what this tenant is charged. Seed default = `PlanType.MonthlyPrice × 100`. Editing the catalog price (OQ-3) does **not** retroactively change this. |
 | Currency | string(3) | no | Default "MXN". |
 | NextBillingDate | DateTime? | yes | Drives the invoice-generation job. |
 | CfdiRequired | bool | no | Default false. true ⇒ each closed invoice should emit Fino's own CFDI (deferred, §11). |
 | BillingEmail | string(150)? | yes | Where invoices/receipts go; falls back to owner email. |
 | Notes | string(500)? | yes | Operator-internal. |
+| StripePriceId | string(64)? | yes | **OQ-2:** the dynamic Stripe Price (created per subscription via API) that currently backs `BaseAmountCents` on the Stripe rail. Null for manual rails. The static `PriceMap` is only a seed hint now. |
+| StripeBaseItemId | string(64)? | yes | **OQ-5:** the base-plan `si_…` item id (was on the retired `SubscriptionItem`). Lets the webhook target the base item for quantity/price updates. |
 
 > **M1 — fiscal:** the *receptor* RFC/regime/use/postal-code are **not** stored here.
 > `Business` is the fiscal SSoT; those fields are **frozen onto each
@@ -384,17 +387,25 @@ For non-automatic rails (transfer, OXXO ticket, cash, deposit, cheque, other):
 
 ---
 
-## 7. Custom pricing & the Stripe constraint (B3)
+## 7. Custom pricing — dynamic Stripe Prices (B3 / OQ-2)
 
 - **Per-tenant price SSoT = `Subscription.BaseAmountCents`.** `PlanType.MonthlyPrice`
-  is the catalog default only (code-owned; reseed overwrites — B2).
+  is the catalog default (now admin-editable, OQ-3) used only to seed new subscriptions;
+  editing it does not retroactively change negotiated `BaseAmountCents`.
 - **Manual rails:** `BaseAmountCents` is free-form; each cycle the job emits a
   `SubscriptionInvoice` whose `PlanBase` line = `BaseAmountCents`. Discounts/free
   months are negative `Discount` line items + a `SubscriptionPriceHistory` row.
-- **Stripe rail:** the charged amount is whatever the registered Stripe Price says.
-  To honor a negotiated price on Stripe you must register a matching Stripe Price
-  (and add it to `PriceMap`) **or** move the tenant to a manual rail. v2 chooses the
-  latter for negotiated pricing; the catalog Stripe Prices stay fixed.
+- **Stripe rail (dynamic prices):** to charge a negotiated amount the backend **creates
+  a Stripe Price via API** for that subscription and points the Stripe subscription item
+  at it, storing the active id on `Subscription.StripePriceId`. Consequences:
+  - The static `StripeConstants.PriceMap` is **demoted to a seed hint** — plan/cycle/
+    group are no longer resolved from the price id. The webhook
+    (`StripeEventProcessorWorker` / `ResolvePlanType`) is rewired to read the **local**
+    `Subscription` mapping instead of the fail-closed `PriceMap` lookup.
+  - **Orphan cleanup:** Stripe Prices are immutable and cannot be deleted — only
+    **archived** (`active=false`). When `BaseAmountCents` changes, the old dynamic Price
+    is archived via API (on-change; a sweeper job is the fallback).
+  - This grows PR-2 (dynamic-price infra + worker rewire) — flagged in §13.
 
 ---
 
@@ -405,21 +416,26 @@ Two truths must agree: **billing** (this doc) and **device-limit enforcement**
 `DeviceService.EnforceDeviceLimitsAsync` which today sums `SubscriptionItem`
 quantities — [DeviceService.cs:698]).
 
-Decision — **`SubscriptionAddOn` is the rail-agnostic SSoT for active add-ons**:
-- **Stripe rail:** an add-on is *also* a `SubscriptionItem` (Stripe owns it). Each
-  `SubscriptionAddOn` row links to its `SubscriptionItem` via `StripeItemId`; the
-  webhook keeps `SubscriptionItem` in sync, and the activation flow writes both.
-- **Manual rails:** there is no `SubscriptionItem`; `SubscriptionAddOn` stands alone
-  and is billed via `SubscriptionInvoice` line items.
-- **Device-licensing must read a union:** `EnforceDeviceLimitsAsync` changes from
-  "sum `SubscriptionItem`" to "sum active `SubscriptionAddOn` (quantity) of
-  `LinkType=DeviceLicense` for the relevant `FeatureKey`". For Stripe-rail tenants the
-  two are 1:1, so the number is unchanged; for manual-rail tenants it now works at all.
+Decision (OQ-5) — **retire `SubscriptionItem`; `SubscriptionAddOn` is the single SSoT**:
+- The `SubscriptionItem` entity, repository and table are **removed**. The base plan's
+  Stripe item id moves to `Subscription.StripeBaseItemId` (§4.3); add-on items are
+  represented solely by `SubscriptionAddOn` (with `StripeItemId` on the Stripe rail).
+- **Stripe rail:** the webhook (`SyncItemsAndPlan`) is rewritten to distribute
+  `stripe_subscription.items.data` → the base item onto `Subscription.StripeBaseItemId`,
+  every other item onto a matching `SubscriptionAddOn` (by `StripeItemId`).
+- **Manual rails:** no Stripe items; `SubscriptionAddOn` stands alone, billed via
+  `SubscriptionInvoice` line items.
+- **Device-licensing rewire:** `DeviceService.EnforceDeviceLimitsAsync` changes from
+  "sum `SubscriptionItem` quantities" ([DeviceService.cs:698]) to "sum active
+  `SubscriptionAddOn.Quantity` of `LinkType=DeviceLicense` for the relevant
+  `FeatureKey`". This is the meeting point with
+  [monetization-architecture.md](monetization-architecture.md).
 
-> This is the single most invasive integration point. It touches `DeviceService`,
-> the Stripe webhook `SyncItemsAndPlan`, and the device-licensing tests. It is **OQ-5**
-> whether to fully retire `SubscriptionItem` in favor of `SubscriptionAddOn` (bigger,
-> cleaner) or keep both mirrored (smaller, redundant). PR-4 must pick one.
+> This is the single most invasive change. **PR-4** carries: the `SubscriptionItem`
+> removal, a **data migration** (existing items → `Subscription.StripeBaseItemId` +
+> `SubscriptionAddOn`), the webhook rewrite, the `DeviceService` rewire, and the
+> device-licensing test rewrite. The `ISubscriptionItemRepository`/`UnitOfWork`
+> members are dropped with it.
 
 ---
 
@@ -437,8 +453,9 @@ POST   /api/Admin/billing-methods
 PUT    /api/Admin/billing-methods/{id}
 DELETE /api/Admin/billing-methods/{id}        # soft if has payments; 409 if IsSystem
 
-# Plan catalog (read; price edit deferred — OQ-3)
+# Plan catalog (price admin-editable — OQ-3)
 GET    /api/Admin/plan-types
+PUT    /api/Admin/plan-types/{id}               # edit MonthlyPrice/Name; bump Invalidate("PlanTypes")
 
 # Add-on catalog
 GET    /api/Admin/plan-add-ons
@@ -516,8 +533,11 @@ fully prepared (frozen receptor fields on `SubscriptionInvoice`, §4.4); the
 Facturapi-as-issuer integration is **PR-7, deferred**. No migration debt: enabling it
 later only fills already-present nullable columns.
 
-Blockers for PR-7: Fino's own RFC/regime, Facturapi issuer onboarding, IVA handling
-(OQ-8).
+**IVA (OQ-8):** the **backend computes tax** (default 16% MX, configurable) and writes
+`SubscriptionInvoice.TaxCents` per invoice — chosen over Stripe Tax to keep one tax
+engine aligned with Fino's own CFDI (PR-7). Stripe Tax is a possible future upgrade.
+
+Blockers for PR-7: Fino's own RFC/regime, Facturapi issuer onboarding.
 
 ---
 
@@ -542,6 +562,13 @@ Order within the foundation migration(s):
 Seed runs in `DbInitializer` after migrate, idempotent, all envs (matches the
 established pattern).
 
+> **OQ-3 reseed change:** `UpsertPlanTypeCatalog` switches from "upsert all fields" to
+> **upsert-except-`MonthlyPrice`** — on existing rows it still corrects `Code`/`Name`/
+> `SortOrder`/`Currency` from code, but **never touches `MonthlyPrice`** (set only on
+> insert). This makes admin price edits durable while keeping the rest code-owned, with
+> no `IsManaged` flag needed. (Contrast with the system-method §8b footgun, which this
+> deliberately avoids for price.)
+
 ---
 
 ## 13. Implementation plan (PRs)
@@ -550,16 +577,24 @@ Refined from the spec (PR-1 was too large and not schema-only — M6):
 
 - **PR-1a (catalog + gap-closers):** `SaaSBillingMethod` + 7-rail seed,
   `Business.SuspensionReason` + `InvoiceCounter`, `BusinessAuditLog`, dedicated
-  `BillingMethodCacheGeneration`. Refactor existing admin actions (suspend/plan/trial/
-  reset/impersonate/create) to also write `BusinessAuditLog`. No Stripe logic.
+  `BillingMethodCacheGeneration`, plan-types `GET/PUT` + the **reseed
+  upsert-except-`MonthlyPrice`** change (OQ-3). Refactor existing admin actions
+  (suspend/plan/trial/reset/impersonate/create) to also write `BusinessAuditLog`. No
+  Stripe logic.
 - **PR-1b (subscription extension + backfill):** `Subscription` new columns +
   `SubscriptionPriceHistory`, with the **data-sensitive backfill** (§12). No endpoints.
 - **PR-2 (subscription admin surface + reconcile):** `GET/PUT …/subscription`,
-  remote-first reconcile (§5), deprecate `PATCH …/plan` (route through the service).
+  remote-first reconcile (§5), **dynamic Stripe Price infra** (create/archive per
+  subscription, store `Subscription.StripePriceId`) + **worker rewire** off the static
+  `PriceMap` (OQ-2), deprecate `PATCH …/plan` (route through the service).
 - **PR-3 (invoicing + payments):** `SubscriptionInvoice`/`Item`/`TenantPayment` CRUD,
   manual payment flow (§6), Stripe webhook → auto `TenantPayment`, invoice-generation job.
-- **PR-4 (add-ons, unified):** `PlanAddOn` + `SubscriptionAddOn`, activation flow,
-  the device-licensing union rewire (§8, picks OQ-5), next-cycle billing + proration (OQ-1).
+- **PR-4 (add-ons + retire `SubscriptionItem`):** `PlanAddOn` + `SubscriptionAddOn`,
+  activation flow; **remove `SubscriptionItem`** (entity/repo/table) with the data
+  migration (existing items → `Subscription.StripeBaseItemId` + `SubscriptionAddOn`),
+  the webhook `SyncItemsAndPlan` rewrite, the `DeviceService.EnforceDeviceLimitsAsync`
+  rewire (§8) and its test rewrite; proration (OQ-1: Stripe `create_prorations` on the
+  Stripe rail, `Adjustment` line item next invoice on manual rails).
 - **PR-5 (notifications):** `NotificationOutbox` + dispatch worker + retries + the
   lifecycle templates (§10).
 - **PR-6 (metrics):** MRR/ARR/churn/retention/upcoming-invoices endpoints.
@@ -571,28 +606,34 @@ device-licensing; PR-6 needs PR-3 data; PR-7 needs PR-3.
 
 ---
 
-## 14. Open questions (need product input before the affected PR)
+## 14. Open questions — **all Resolved** (2026-06-08)
 
-- **OQ-1 — Proration policy** (PR-2/PR-4): mid-cycle plan/price/add-on change → prorate
-  now, charge pro-rata, or apply next cycle?
-- **OQ-2 — Custom pricing on Stripe** (PR-2): accept v2's "negotiated ⇒ manual rail",
-  or invest in dynamic Stripe Prices + a non-static `PriceMap`?
-- **OQ-3 — Editable catalog plan price** (PR-1a): leave `PlanType.MonthlyPrice`
-  code-owned (current decision), or make it admin-editable by changing the reseed to
-  insert-if-missing / adding `IsManaged` (the §8b fix)?
-- **OQ-4 — Tenant visibility** (post-v2): does the tenant see its own SaaS invoices/
-  payments in fino-app? (Additive: a scoped read endpoint; tables already carry `BusinessId`.)
-- **OQ-5 — Add-on unification** (PR-4): retire `SubscriptionItem` in favor of
-  `SubscriptionAddOn` (clean, bigger) or keep both mirrored (smaller, redundant)?
-- **OQ-6 — OXXO scope** (PR-3): OXXO Pay as a Stripe Payment Method, or Conekta direct?
-  (Changes `ProviderKey` and whether it's truly `IsAutomatic`.)
-- **OQ-7 — Editable templates** (post-v2): keep templates code-owned, or DB-stored +
-  `PUT /notification-templates/{code}` (needs a `NotificationTemplate` entity + reseed policy)?
-- **OQ-8 — IVA / Stripe Tax** (PR-3/PR-7): does Stripe Tax compute IVA, or the backend?
-  Affects `SubscriptionInvoice.TaxCents` and CFDI.
-- **OQ-9 — Refunds** (out of scope v2): `Refunded` status exists but the refund flow
-  (rail-specific) is not designed. Confirm deferral.
-- **OQ-10 — Multi-currency** (future): `Currency` columns exist; only MXN seeded.
+Closed by the product owner; folded into the sections above.
+
+- **OQ-1 — Proration → Resolved: immediate pro-rata.** Stripe rail uses native
+  `proration_behavior: 'create_prorations'`; manual rails apply an `Adjustment` line
+  item on the next invoice. (§13 PR-4.)
+- **OQ-2 — Custom pricing on Stripe → Resolved: dynamic Stripe Prices.** Backend creates
+  a Price per subscription via API, maps the active id on `Subscription.StripePriceId`,
+  archives orphans on change (sweeper fallback). Static `PriceMap` demoted to a seed
+  hint; webhook reads the local mapping. (§4.3, §7, §13 PR-2.)
+- **OQ-3 — Editable catalog plan price → Resolved: admin-editable.** `GET/PUT
+  /Admin/plan-types` with `Invalidate("PlanTypes")`; reseed becomes
+  **upsert-except-`MonthlyPrice`** (no `IsManaged` flag needed). (§9, §12, B2.)
+- **OQ-4 — Tenant visibility → Resolved: post-v2.** Tables keep `BusinessId`
+  denormalized; fino-app adds scoped read endpoints when it gets there. (§4, G3.)
+- **OQ-5 — Add-on SSoT → Resolved: retire `SubscriptionItem`.** `SubscriptionAddOn` is
+  the only SSoT; device-licensing + webhook rewired; base item → `Subscription.StripeBaseItemId`.
+  (§8, §13 PR-4, B6.)
+- **OQ-6 — OXXO → Resolved: Stripe Payment Method** (`ProviderKey='stripe'`,
+  `IsAutomatic=true`); pivot to Conekta only if the concrete Stripe MX account can't
+  enable it. (§4.1.)
+- **OQ-7 — Templates → Resolved: code-owned in v2;** DB-editable post-v2 if demand
+  emerges. (§10.)
+- **OQ-8 — IVA → Resolved: backend computes** (16% MX, configurable); Stripe Tax is a
+  future upgrade. Rationale: align with Fino's own CFDI (PR-7). (§11.)
+- **OQ-9 — Refunds → Resolved: deferred, out of v2.** `Refunded` status stays a placeholder.
+- **OQ-10 — Multi-currency → Resolved: future.** `Currency` columns ready; only MXN seeded.
 
 ---
 
@@ -618,5 +659,5 @@ device-licensing; PR-6 needs PR-3 data; PR-7 needs PR-3.
 - Time estimates.
 - Multi-currency (OQ-10, future).
 - Detailed refunds (OQ-9, deferred).
-- DB-editable notification templates (OQ-7) and editable catalog plan price (OQ-3) —
-  deferred unless the OQ flips them in.
+- DB-editable notification templates (OQ-7, deferred post-v2). *(Editable catalog plan
+  price — OQ-3 — is now **in** v2 via PR-1a.)*
