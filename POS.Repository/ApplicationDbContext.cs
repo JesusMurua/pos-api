@@ -151,6 +151,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PaymentMatrixAuditLog> PaymentMatrixAuditLogs { get; set; } = null!;
     public DbSet<SaaSBillingMethod> SaaSBillingMethods { get; set; } = null!;
     public DbSet<BusinessAuditLog> BusinessAuditLogs { get; set; } = null!;
+    public DbSet<SubscriptionPriceHistory> SubscriptionPriceHistories { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -284,6 +285,34 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(s => s.BusinessId).IsUnique();
             entity.HasIndex(s => s.StripeCustomerId);
             entity.HasIndex(s => s.StripeSubscriptionId);
+
+            // SaaS Billing v2 (PR-1b). BillingMethodId nullable until PR-2 flips NOT NULL.
+            entity.Property(s => s.Currency).HasMaxLength(3).HasDefaultValue("MXN");
+            entity.Property(s => s.CfdiRequired).HasDefaultValue(false);
+            entity.Property(s => s.BillingEmail).HasMaxLength(150);
+            entity.Property(s => s.Notes).HasMaxLength(500);
+            entity.Property(s => s.StripePriceId).HasMaxLength(64);
+            entity.Property(s => s.StripeBaseItemId).HasMaxLength(64);
+
+            entity.HasOne(s => s.BillingMethod)
+                .WithMany()
+                .HasForeignKey(s => s.BillingMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SubscriptionPriceHistory>(entity =>
+        {
+            entity.Property(h => h.Reason).HasMaxLength(300);
+            entity.Property(h => h.ChangedByTokenId).HasMaxLength(64);
+
+            entity.HasOne(h => h.Subscription)
+                .WithMany()
+                .HasForeignKey(h => h.SubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(h => h.SubscriptionId);
+            // AppliedToInvoiceId is a plain nullable column in PR-1b; the FK to
+            // SubscriptionInvoice is added in PR-3 (the table does not exist yet).
         });
 
         modelBuilder.Entity<SubscriptionItem>(entity =>

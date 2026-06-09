@@ -1,8 +1,10 @@
 # SaaS Billing v2 — Architecture & Design (multi-rail, admin-operable)
 
-> **Status:** **PR-1a delivered** (catalog + gap-closers; suite 152 → 166). All open
-> questions resolved (2026-06-08). PR-1b next (subscription extension + data-sensitive
-> backfill). Source of truth for the SaaS-billing redesign (PR-1…PR-7 below).
+> **Status:** **PR-1a + PR-1b delivered** (catalog + gap-closers; Subscription
+> extension + data-sensitive backfill; suite 152 → 168). All open questions resolved
+> (2026-06-08). PR-2 next (subscription admin surface + remote-first reconcile +
+> dynamic Stripe Prices; flips BillingMethodId/BaseAmountCents NOT NULL + assigns
+> them in the worker). Source of truth for the SaaS-billing redesign (PR-1…PR-7 below).
 > Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).
 > **Scope:** how Fino charges the *tenant* the SaaS subscription fee — multi-rail,
