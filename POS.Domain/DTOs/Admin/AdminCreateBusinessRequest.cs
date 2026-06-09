@@ -110,6 +110,10 @@ public sealed record AdminCreateBusinessRequest
     /// sends them straight to the dashboard instead of the wizard.
     /// </summary>
     public bool MarkOnboardingComplete { get; init; } = false;
+
+    /// <summary>Optional operator reason, recorded on the BusinessAuditLog row.</summary>
+    [MaxLength(300)]
+    public string? Reason { get; init; }
 }
 
 /// <summary>

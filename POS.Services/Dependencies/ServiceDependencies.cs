@@ -53,6 +53,9 @@ public static class ServiceDependencies
         services.AddSingleton<PaymentMethodCacheGeneration>();
         services.AddScoped<IPaymentMatrixAdminService, PaymentMatrixAdminService>();
         services.AddScoped<IPaymentMethodAvailabilityService, PaymentMethodAvailabilityService>();
+        // SaaS billing foundation (PR-1a): persistent admin action log + plan-price editing.
+        services.AddScoped<IBusinessAuditService, BusinessAuditService>();
+        services.AddScoped<IPlanTypeAdminService, PlanTypeAdminService>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();

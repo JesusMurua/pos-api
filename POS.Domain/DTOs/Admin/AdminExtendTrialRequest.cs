@@ -16,4 +16,8 @@ public sealed record AdminExtendTrialRequest
     /// </summary>
     [Required]
     public DateTime NewTrialEndsAt { get; init; }
+
+    /// <summary>Optional operator reason, recorded on the BusinessAuditLog row.</summary>
+    [MaxLength(300)]
+    public string? Reason { get; init; }
 }

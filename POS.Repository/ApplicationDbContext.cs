@@ -149,6 +149,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<PlanPaymentMethodMatrix> PlanPaymentMethodMatrices { get; set; } = null!;
     public DbSet<TenantPaymentMethodOverride> TenantPaymentMethodOverrides { get; set; } = null!;
     public DbSet<PaymentMatrixAuditLog> PaymentMatrixAuditLogs { get; set; } = null!;
+    public DbSet<SaaSBillingMethod> SaaSBillingMethods { get; set; } = null!;
+    public DbSet<BusinessAuditLog> BusinessAuditLogs { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -191,6 +193,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(b => b.FacturapiOrganizationId).HasMaxLength(50);
             entity.Property(b => b.CountryCode).HasMaxLength(2).HasDefaultValue("MX");
             entity.Property(b => b.CustomGiroDescription).HasMaxLength(100);
+            entity.Property(b => b.SuspensionReason).HasMaxLength(300);
+            entity.Property(b => b.InvoiceCounter).HasDefaultValue(0);
 
             entity.HasMany(b => b.Branches)
                 .WithOne(br => br.Business)
@@ -1369,6 +1373,28 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasIndex(a => a.ChangedAt);
             entity.HasIndex(a => a.Axis);
+        });
+
+        // SaaS billing rail catalog (tenant → operator). No HasDefaultValue on bools:
+        // CLR-default sentinels collide with seeded values (same rule as PaymentMethodCatalog).
+        modelBuilder.Entity<SaaSBillingMethod>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.ProviderKey).HasMaxLength(30);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+        });
+
+        // Persistent admin action log. Action stored as a string (stable name);
+        // RESTRICT FK to Business; indexed by tenant and time for the timeline reads.
+        modelBuilder.Entity<BusinessAuditLog>(entity =>
+        {
+            entity.Property(a => a.Action).HasConversion<string>().HasMaxLength(40);
+            entity.HasIndex(a => a.BusinessId);
+            entity.HasIndex(a => a.ChangedAtUtc);
+            entity.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(a => a.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<KitchenStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });
         modelBuilder.Entity<DisplayStatusCatalog>(e => { e.HasIndex(x => x.Code).IsUnique(); });

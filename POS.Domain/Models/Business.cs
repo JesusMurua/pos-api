@@ -36,6 +36,21 @@ public partial class Business
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Optional reason captured when an operator suspends the tenant
+    /// (<c>IsActive = false</c>); cleared on reactivation. Closes the
+    /// "suspension has no reason" gap from the admin-surface audit.
+    /// </summary>
+    [MaxLength(300)]
+    public string? SuspensionReason { get; set; }
+
+    /// <summary>
+    /// Per-business monotonic counter backing the SaaS <c>SubscriptionInvoice</c>
+    /// number (incremented under a row lock, like <see cref="Branch"/>.FolioCounter).
+    /// Seeded at 0; the first invoice is emitted in a later PR (PR-3).
+    /// </summary>
+    public int InvoiceCounter { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>ISO 3166-1 alpha-2 country code (e.g., "MX" for Mexico).</summary>

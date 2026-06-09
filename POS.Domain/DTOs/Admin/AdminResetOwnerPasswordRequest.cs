@@ -12,4 +12,8 @@ public sealed record AdminResetOwnerPasswordRequest
 {
     [MinLength(8)]
     public string? NewPassword { get; init; }
+
+    /// <summary>Optional operator reason, recorded on the BusinessAuditLog row.</summary>
+    [MaxLength(300)]
+    public string? Reason { get; init; }
 }

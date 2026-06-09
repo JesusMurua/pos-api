@@ -53,10 +53,13 @@ public static class DbInitializer
         {
             if (existingById.TryGetValue(desired.Id, out var row))
             {
+                // OQ-3: MonthlyPrice is admin-owned and durable — the reseed reconciles
+                // Code/Name/SortOrder/Currency from code but NEVER overwrites the price
+                // (set only on insert below). This lets PUT /Admin/plan-types/{id} edits
+                // survive a redeploy, unlike the §8b system-method footgun.
                 row.Code = desired.Code;
                 row.Name = desired.Name;
                 row.SortOrder = desired.SortOrder;
-                row.MonthlyPrice = desired.MonthlyPrice;
                 row.Currency = desired.Currency;
             }
             else
@@ -94,6 +97,7 @@ public static class DbInitializer
 
         await UpsertPaymentMethodCatalogAsync(context);
         await UpsertPlanPaymentMethodMatrixAsync(context);
+        await UpsertSaaSBillingMethodsAsync(context);
 
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
@@ -735,6 +739,64 @@ public static class DbInitializer
 
         await context.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// Reconciles the 7 system SaaS billing rails (tenant → operator charging).
+    /// Insert-if-missing + update metadata on existing system rows (code-owned).
+    /// Idempotent. See docs/saas-billing-architecture.md §4.1.
+    /// </summary>
+    private static async Task UpsertSaaSBillingMethodsAsync(ApplicationDbContext context)
+    {
+        var desired = new[]
+        {
+            Rail("Stripe", "Stripe", isAutomatic: true, requiresReference: false, provider: "stripe", sort: 1),
+            Rail("BankTransfer", "Transferencia", isAutomatic: false, requiresReference: true, sort: 2),
+            Rail("OxxoPay", "OXXO Pay", isAutomatic: true, requiresReference: false, provider: "stripe", sort: 3),
+            Rail("Cash", "Efectivo", isAutomatic: false, requiresReference: false, sort: 4),
+            Rail("BankDeposit", "Depósito", isAutomatic: false, requiresReference: true, sort: 5),
+            Rail("Check", "Cheque", isAutomatic: false, requiresReference: true, sort: 6),
+            Rail("Other", "Otro", isAutomatic: false, requiresReference: false, sort: 7),
+        };
+
+        var existing = (await context.SaaSBillingMethods.ToListAsync())
+            .ToDictionary(m => m.Code, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var d in desired)
+        {
+            if (existing.TryGetValue(d.Code, out var row))
+            {
+                row.Name = d.Name;
+                row.IsAutomatic = d.IsAutomatic;
+                row.RequiresReference = d.RequiresReference;
+                row.ProviderKey = d.ProviderKey;
+                row.CountryCode = d.CountryCode;
+                row.SortOrder = d.SortOrder;
+                row.IsActive = true;
+                row.IsSystem = true;
+            }
+            else
+            {
+                context.SaaSBillingMethods.Add(d);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private static SaaSBillingMethod Rail(
+        string code, string name, bool isAutomatic, bool requiresReference,
+        int sort, string? provider = null, string? country = null) => new()
+        {
+            Code = code,
+            Name = name,
+            IsAutomatic = isAutomatic,
+            RequiresReference = requiresReference,
+            ProviderKey = provider,
+            CountryCode = country,
+            SortOrder = sort,
+            IsActive = true,
+            IsSystem = true
+        };
 
     private static PaymentMethodCatalog Pm(
         PaymentMethod method, string name, int sortOrder, PaymentCategory category,

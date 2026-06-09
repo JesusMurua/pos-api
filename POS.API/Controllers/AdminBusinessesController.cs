@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using POS.API.Auth;
 using POS.Domain.DTOs.Admin;
 using POS.Domain.DTOs.Common;
+using POS.Domain.Enums;
 using POS.Domain.Exceptions;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
@@ -36,6 +37,7 @@ public class AdminBusinessesController : ControllerBase
     private readonly IUserService _userService;
     private readonly IBusinessSnapshotService _businessSnapshot;
     private readonly IFeatureGateService _featureGate;
+    private readonly IBusinessAuditService _businessAudit;
     private readonly ILogger<AdminBusinessesController> _logger;
 
     public AdminBusinessesController(
@@ -44,6 +46,7 @@ public class AdminBusinessesController : ControllerBase
         IUserService userService,
         IBusinessSnapshotService businessSnapshot,
         IFeatureGateService featureGate,
+        IBusinessAuditService businessAudit,
         ILogger<AdminBusinessesController> logger)
     {
         _authService = authService;
@@ -51,7 +54,36 @@ public class AdminBusinessesController : ControllerBase
         _userService = userService;
         _businessSnapshot = businessSnapshot;
         _featureGate = featureGate;
+        _businessAudit = businessAudit;
         _logger = logger;
+    }
+
+    /// <summary>Hashed admin token id from the <c>token_id</c> claim (audit attribution).</summary>
+    private string? AdminTokenId =>
+        User.FindFirst(AdminTokenAuthenticationHandler.TokenIdClaimType)?.Value;
+
+    /// <summary>
+    /// Persists a <c>BusinessAuditLog</c> row for an action whose primary mutation
+    /// already committed (create/reset) or that mutates nothing (impersonate). The
+    /// audit write is a separate, post-success SaveChanges — a failure is swallowed
+    /// with a LogError (not Warning) so the operator never sees a 500 for an audit
+    /// gap, but the missing row is loud enough to notice (only the volatile Serilog
+    /// trail remains). See PR-1a edge case #2.
+    /// </summary>
+    private async Task SafeRecordAuditAsync(
+        BusinessAuditAction action, int businessId, string? reason, object? before, object? after)
+    {
+        try
+        {
+            _businessAudit.Record(action, businessId, reason, before, after, AdminTokenId);
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to persist BusinessAuditLog for {Action} on business {BusinessId}; only the Serilog trail remains.",
+                action, businessId);
+        }
     }
 
     /// <summary>
@@ -127,6 +159,11 @@ public class AdminBusinessesController : ControllerBase
                 OnboardingCompleted: auth.OnboardingCompleted,
                 OnboardingStatusId: auth.OnboardingStatusId,
                 OwnerJwt: request.IncludeOwnerJwt ? auth.Token : null);
+
+            await SafeRecordAuditAsync(
+                BusinessAuditAction.Created, auth.BusinessId, request.Reason,
+                before: null,
+                after: new { auth.BusinessId, request.Email, PlanTypeId = auth.PlanTypeId });
 
             LogCreateAudit(
                 result: "Success",
@@ -372,8 +409,17 @@ public class AdminBusinessesController : ControllerBase
         var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         if (business is null) return NotFound();
 
+        var before = new { business.IsActive, business.SuspensionReason };
         business.IsActive = request.IsActive;
-        await _unitOfWork.SaveChangesAsync();
+        // Reason captures the why on suspend; cleared on reactivation.
+        business.SuspensionReason = request.IsActive ? null : request.Reason;
+
+        _businessAudit.Record(
+            request.IsActive ? BusinessAuditAction.Reactivated : BusinessAuditAction.Suspended,
+            id, request.Reason, before,
+            new { business.IsActive, business.SuspensionReason }, AdminTokenId);
+
+        await _unitOfWork.SaveChangesAsync(); // mutation + audit row commit atomically
         _featureGate.Invalidate(id);
 
         _logger.LogInformation(
@@ -408,8 +454,12 @@ public class AdminBusinessesController : ControllerBase
         var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         if (business is null) return NotFound();
 
+        var before = new { business.PlanTypeId };
         business.PlanTypeId = request.PlanTypeId;
-        await _unitOfWork.SaveChangesAsync();
+        _businessAudit.Record(
+            BusinessAuditAction.PlanChanged, id, request.Reason,
+            before, new { business.PlanTypeId }, AdminTokenId);
+        await _unitOfWork.SaveChangesAsync(); // mutation + audit row commit atomically
         _featureGate.Invalidate(id);
 
         var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
@@ -443,8 +493,12 @@ public class AdminBusinessesController : ControllerBase
         var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         if (business is null) return NotFound();
 
+        var before = new { business.TrialEndsAt };
         business.TrialEndsAt = request.NewTrialEndsAt;
-        await _unitOfWork.SaveChangesAsync();
+        _businessAudit.Record(
+            BusinessAuditAction.TrialExtended, id, request.Reason,
+            before, new { business.TrialEndsAt }, AdminTokenId);
+        await _unitOfWork.SaveChangesAsync(); // mutation + audit row commit atomically
 
         var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         var detail = await BuildDetailAsync(fresh!);
@@ -470,6 +524,8 @@ public class AdminBusinessesController : ControllerBase
         try
         {
             var newPassword = await _userService.ResetOwnerPasswordAsync(id, request.NewPassword);
+            await SafeRecordAuditAsync(
+                BusinessAuditAction.PasswordReset, id, request.Reason, before: null, after: null);
             LogActionAudit("AdminBusinessResetOwnerPassword", id, stopwatch.ElapsedMilliseconds);
             return Ok(new AdminResetOwnerPasswordResponse(newPassword));
         }
@@ -494,6 +550,7 @@ public class AdminBusinessesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Impersonate(
         int id,
+        [FromBody] AdminImpersonateRequest? request = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -509,6 +566,10 @@ public class AdminBusinessesController : ControllerBase
         var ttl = TimeSpan.FromHours(2);
         var auth = await _authService.GetSessionAsync(owner.Id, "email", ttl);
         var expiresAt = DateTime.UtcNow.Add(ttl);
+
+        await SafeRecordAuditAsync(
+            BusinessAuditAction.Impersonated, id, request?.Reason,
+            before: null, after: new { TargetUserId = owner.Id, TtlHours = ttl.TotalHours });
 
         LogImpersonateAudit(id, owner.Id, ttl, stopwatch.ElapsedMilliseconds);
 

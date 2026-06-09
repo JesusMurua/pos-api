@@ -15,4 +15,8 @@ public sealed record AdminChangePlanRequest
     [Required]
     [Range(1, 4)]
     public int PlanTypeId { get; init; }
+
+    /// <summary>Optional operator reason, recorded on the BusinessAuditLog row.</summary>
+    [MaxLength(300)]
+    public string? Reason { get; init; }
 }

@@ -1,8 +1,9 @@
 # SaaS Billing v2 — Architecture & Design (multi-rail, admin-operable)
 
-> **Status:** Design — not implemented. **All open questions resolved (2026-06-08);
-> ready to start PR-1a.** Source of truth for the SaaS-billing
-> redesign (PR-1…PR-7 below). Written to the same rigor as
+> **Status:** **PR-1a delivered** (catalog + gap-closers; suite 152 → 166). All open
+> questions resolved (2026-06-08). PR-1b next (subscription extension + data-sensitive
+> backfill). Source of truth for the SaaS-billing redesign (PR-1…PR-7 below).
+> Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).
 > **Scope:** how Fino charges the *tenant* the SaaS subscription fee — multi-rail,
 > with custom pricing, invoicing, payments, add-ons, an admin operating surface,
