@@ -398,6 +398,7 @@ builder.Services.AddSingleton<IBridgeNotifier, BridgeNotifier>();
 builder.Services.AddHostedService<StripeEventProcessorWorker>();
 builder.Services.AddHostedService<PaymentWebhookProcessorWorker>();
 builder.Services.AddHostedService<KdsEventDispatcherWorker>();
+builder.Services.AddHostedService<InvoiceLifecycleWorker>();
 
 var app = builder.Build();
 

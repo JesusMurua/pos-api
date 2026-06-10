@@ -12,6 +12,28 @@ public class BusinessRepository : GenericRepository<Business>, IBusinessReposito
     }
 
     /// <inheritdoc />
+    public async Task<int> IncrementInvoiceCounterAsync(int businessId)
+    {
+        // Atomic per-business sequence for SubscriptionInvoice.InvoiceNumber (M3).
+        // Same row-lock discipline as BranchRepository.IncrementFolioCounterAsync:
+        // the UPDATE … RETURNING runs under a Postgres row lock, so concurrent
+        // webhook/job callers never read the same counter value.
+        var result = await _context.Database
+            .SqlQuery<int>($@"
+                UPDATE ""Businesses""
+                SET ""InvoiceCounter"" = ""InvoiceCounter"" + 1
+                WHERE ""Id"" = {businessId}
+                RETURNING ""InvoiceCounter""")
+            .ToListAsync();
+
+        var counter = result.FirstOrDefault();
+        if (counter == 0)
+            throw new InvalidOperationException($"Business {businessId} not found");
+
+        return counter;
+    }
+
+    /// <inheritdoc />
     public async Task<(IReadOnlyList<Business> Items, int Total)> GetAllForAdminAsync(
         int pageNumber,
         int pageSize,

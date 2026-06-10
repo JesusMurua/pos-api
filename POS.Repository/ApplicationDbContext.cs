@@ -153,6 +153,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<BusinessAuditLog> BusinessAuditLogs { get; set; } = null!;
     public DbSet<SubscriptionPriceHistory> SubscriptionPriceHistories { get; set; } = null!;
     public DbSet<StripePlanPrice> StripePlanPrices { get; set; } = null!;
+    public DbSet<SubscriptionInvoice> SubscriptionInvoices { get; set; } = null!;
+    public DbSet<SubscriptionInvoiceItem> SubscriptionInvoiceItems { get; set; } = null!;
+    public DbSet<TenantPayment> TenantPayments { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -315,8 +318,14 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(h => h.SubscriptionId);
-            // AppliedToInvoiceId is a plain nullable column in PR-1b; the FK to
-            // SubscriptionInvoice is added in PR-3 (the table does not exist yet).
+
+            // PR-3: close the FK → SubscriptionInvoice (NO ACTION, M7) now that the
+            // table exists. Nav-less: the column already exists; this only adds the
+            // constraint. Existing rows are null (PR-2 never set it), so it is safe.
+            entity.HasOne<SubscriptionInvoice>()
+                .WithMany()
+                .HasForeignKey(h => h.AppliedToInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         // Stripe Price catalog (PR-2). DB-backed replacement of the static PriceMap.
@@ -348,6 +357,100 @@ public class ApplicationDbContext : DbContext
             // past StripeEventInbox.
             entity.HasIndex(s => s.StripeItemId).IsUnique();
             entity.HasIndex(s => s.SubscriptionId);
+        });
+
+        // SaaS invoicing (PR-3). These entities are admin/worker-facing only and are
+        // intentionally NOT IBusinessScoped — no global tenant filter applies, so the
+        // background worker (no HttpContext) and the X-Admin-Token surface read them uniformly.
+        modelBuilder.Entity<SubscriptionInvoice>(entity =>
+        {
+            entity.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(i => i.Currency).HasMaxLength(3);
+            entity.Property(i => i.CreatedByTokenIdHash).HasMaxLength(64);
+            entity.Property(i => i.StripeInvoiceId).HasMaxLength(64);
+            entity.Property(i => i.ReceptorRfc).HasMaxLength(13);
+            entity.Property(i => i.ReceptorRegime).HasMaxLength(3);
+            entity.Property(i => i.ReceptorLegalName).HasMaxLength(300);
+            entity.Property(i => i.ReceptorPostalCode).HasMaxLength(5);
+            entity.Property(i => i.CfdiUseCode).HasMaxLength(4);
+            entity.Property(i => i.SatPaymentFormCode).HasMaxLength(2);
+            entity.Property(i => i.SatUuid).HasMaxLength(40);
+            entity.Property(i => i.SatXmlUrl).HasMaxLength(500);
+            entity.Property(i => i.SatPdfUrl).HasMaxLength(500);
+
+            entity.HasOne(i => i.Subscription)
+                .WithMany()
+                .HasForeignKey(i => i.SubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<Business>()
+                .WithMany()
+                .HasForeignKey(i => i.BusinessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(i => i.Items)
+                .WithOne(it => it.Invoice)
+                .HasForeignKey(it => it.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(i => i.Payments)
+                .WithOne(p => p.Invoice)
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(i => new { i.BusinessId, i.InvoiceNumber }).IsUnique();
+            entity.HasIndex(i => i.BusinessId);
+            entity.HasIndex(i => i.SubscriptionId);
+
+            // Stripe-rail mirror idempotency: one local row per Stripe invoice.
+            entity.HasIndex(i => i.StripeInvoiceId)
+                .IsUnique()
+                .HasFilter("\"StripeInvoiceId\" IS NOT NULL");
+
+            // Generation-job idempotency: at most one job-generated invoice per
+            // (subscription, period). Partial so it never constrains Stripe-rail
+            // mirrors — Stripe can legitimately emit several invoices per period
+            // (e.g. proration adjustments), which are deduped by StripeInvoiceId above.
+            entity.HasIndex(i => new { i.SubscriptionId, i.PeriodStart })
+                .IsUnique()
+                .HasFilter("\"StripeInvoiceId\" IS NULL");
+        });
+
+        modelBuilder.Entity<SubscriptionInvoiceItem>(entity =>
+        {
+            entity.Property(it => it.Description).HasMaxLength(200);
+            entity.Property(it => it.ItemType).HasConversion<string>().HasMaxLength(20);
+
+            // LinkedAddOnId is a plain nullable column in PR-3 (PlanAddOn does not exist
+            // yet — the FK arrives in PR-4). LinkedPlanTypeId gets its FK now.
+            entity.HasOne<PlanTypeCatalog>()
+                .WithMany()
+                .HasForeignKey(it => it.LinkedPlanTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(it => it.InvoiceId);
+        });
+
+        modelBuilder.Entity<TenantPayment>(entity =>
+        {
+            entity.Property(p => p.Currency).HasMaxLength(3);
+            entity.Property(p => p.Reference).HasMaxLength(120);
+            entity.Property(p => p.Notes).HasMaxLength(300);
+            entity.Property(p => p.ReceivedByTokenIdHash).HasMaxLength(64);
+            entity.Property(p => p.StripeChargeId).HasMaxLength(64);
+
+            entity.HasOne(p => p.BillingMethod)
+                .WithMany()
+                .HasForeignKey(p => p.BillingMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(p => p.InvoiceId);
+
+            // Idempotency (M4): a repeated (rail, reference) maps to the same payment.
+            // Partial — cash and other reference-less rails are not deduped.
+            entity.HasIndex(p => new { p.BillingMethodId, p.Reference })
+                .IsUnique()
+                .HasFilter("\"Reference\" IS NOT NULL");
         });
 
         #endregion

@@ -57,6 +57,10 @@ public static class ServiceDependencies
         services.AddScoped<IBusinessAuditService, BusinessAuditService>();
         services.AddScoped<IPlanTypeAdminService, PlanTypeAdminService>();
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
+        // SaaS billing invoicing + payments (PR-3).
+        services.AddScoped<IAdminInvoiceService, AdminInvoiceService>();
+        services.AddScoped<IAdminTenantPaymentService, AdminTenantPaymentService>();
+        services.AddScoped<IInvoiceGenerationService, InvoiceGenerationService>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();

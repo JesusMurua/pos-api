@@ -63,6 +63,15 @@ public interface IBusinessRepository : IGenericRepository<Business>
     /// request so every count in the response uses the same instant.
     /// </param>
     Task<AdminBusinessStatsRaw> GetAdminStatsAsync(DateTime nowUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically increments and returns this business's <c>InvoiceCounter</c>, the
+    /// per-business monotonic sequence backing <c>SubscriptionInvoice.InvoiceNumber</c>
+    /// (M3). Runs as <c>UPDATE … RETURNING</c> under a Postgres row lock so concurrent
+    /// invoice-generation / webhook callers are serialized. Not exercised by the InMemory
+    /// test provider (raw SQL) — tests assign InvoiceNumber explicitly.
+    /// </summary>
+    Task<int> IncrementInvoiceCounterAsync(int businessId);
 }
 
 /// <summary>

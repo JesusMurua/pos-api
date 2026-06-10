@@ -55,6 +55,9 @@ public class StripeEventProcessorWorker : BackgroundService
         // Same scoped instance backing the UnitOfWork — used for the PR-2 base-price
         // resolution against the StripePlanPrice catalog + Stripe rail lookup.
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        // PR-3: reused to mirror automatic Stripe payments into TenantPayment (§2 model C).
+        // Resolved from the SAME scope so it shares this DbContext instance.
+        var payments = scope.ServiceProvider.GetRequiredService<IAdminTenantPaymentService>();
 
         var pendingEvents = await unitOfWork.StripeEventInbox.GetPendingEventsAsync(BatchSize);
         if (pendingEvents.Count == 0) return;
@@ -68,7 +71,7 @@ public class StripeEventProcessorWorker : BackgroundService
             try
             {
                 var stripeEvent = EventUtility.ParseEvent(inboxEvent.RawJson);
-                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db);
+                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db, payments);
 
                 inboxEvent.Status = StripeEventStatus.Processed;
                 inboxEvent.ProcessedAt = DateTime.UtcNow;
@@ -97,7 +100,8 @@ public class StripeEventProcessorWorker : BackgroundService
         IUnitOfWork unitOfWork,
         IStripeClient stripeClient,
         IFeatureGateService featureGate,
-        ApplicationDbContext db)
+        ApplicationDbContext db,
+        IAdminTenantPaymentService payments)
     {
         switch (stripeEvent.Type)
         {
@@ -118,7 +122,7 @@ public class StripeEventProcessorWorker : BackgroundService
                 break;
 
             case EventTypes.InvoicePaymentSucceeded:
-                await HandleInvoicePaymentSucceededAsync(stripeEvent, unitOfWork);
+                await HandleInvoicePaymentSucceededAsync(stripeEvent, unitOfWork, db, payments);
                 break;
 
             default:
@@ -324,31 +328,79 @@ public class StripeEventProcessorWorker : BackgroundService
         _logger.LogWarning("Payment failed for subscription {SubId}", subscriptionId);
     }
 
-    private async Task HandleInvoicePaymentSucceededAsync(Event stripeEvent, IUnitOfWork unitOfWork)
+    private async Task HandleInvoicePaymentSucceededAsync(
+        Event stripeEvent, IUnitOfWork unitOfWork, ApplicationDbContext db, IAdminTenantPaymentService payments)
     {
-        var invoice = stripeEvent.Data.Object as Stripe.Invoice;
-        var subscriptionId = invoice?.Parent?.SubscriptionDetails?.SubscriptionId;
-        if (invoice == null || string.IsNullOrEmpty(subscriptionId)) return;
+        var stripeInvoice = stripeEvent.Data.Object as Stripe.Invoice;
+        var subscriptionId = stripeInvoice?.Parent?.SubscriptionDetails?.SubscriptionId;
+        if (stripeInvoice == null || string.IsNullOrEmpty(subscriptionId)) return;
 
         var subscription = await unitOfWork.Subscriptions
             .GetByStripeSubscriptionIdAsync(subscriptionId);
         if (subscription == null) return;
 
-        if (IsOutOfOrder(stripeEvent, subscription))
+        // Subscription-status restore stays guarded by the out-of-order check (it mutates
+        // Subscription fields). The invoice mirror below is NOT gated by it — the mirror is
+        // idempotent on StripeInvoiceId, so a replayed/out-of-order event simply no-ops.
+        if (!IsOutOfOrder(stripeEvent, subscription))
         {
-            _logger.LogInformation(
-                "Skipping out-of-order invoice.payment_succeeded event {EventId} for {SubId}",
-                stripeEvent.Id, subscriptionId);
+            subscription.Status = StripeSubscriptionStatus.Active;
+            unitOfWork.Subscriptions.Update(subscription);
+            await unitOfWork.SaveChangesAsync();
+        }
+
+        // Stripe SSoT mirror (§2 model C): replicate the Stripe invoice locally and record
+        // the automatic payment. NEVER apply local IVA here — Stripe already computed the
+        // tax; we copy its amounts (Subtotal/Total). The backend IVA path is the manual-rail
+        // generation job (InvoiceGenerationService), which Stripe-rail invoices never touch.
+        var stripeRailId = await db.SaaSBillingMethods
+            .Where(m => m.Code == "Stripe").Select(m => (int?)m.Id).FirstOrDefaultAsync();
+        if (stripeRailId == null)
+        {
+            _logger.LogWarning("No Stripe billing rail seeded — cannot mirror invoice {StripeInvoiceId}",
+                stripeInvoice.Id);
             return;
         }
 
-        subscription.Status = StripeSubscriptionStatus.Active;
+        var invoice = await db.SubscriptionInvoices
+            .FirstOrDefaultAsync(i => i.StripeInvoiceId == stripeInvoice.Id);
+        if (invoice == null)
+        {
+            var invoiceNumber = await unitOfWork.Business.IncrementInvoiceCounterAsync(subscription.BusinessId);
+            invoice = new Domain.Models.SubscriptionInvoice
+            {
+                SubscriptionId = subscription.Id,
+                BusinessId = subscription.BusinessId,
+                InvoiceNumber = invoiceNumber,
+                Status = SubscriptionInvoiceStatus.Open, // RecordAsync recomputes after the payment
+                IssuedAtUtc = DateTime.UtcNow,
+                DueDate = stripeInvoice.DueDate ?? DateTime.UtcNow,
+                PeriodStart = stripeInvoice.PeriodStart,
+                PeriodEnd = stripeInvoice.PeriodEnd,
+                SubtotalCents = (int)stripeInvoice.Subtotal,
+                TaxCents = (int)(stripeInvoice.Total - stripeInvoice.Subtotal),
+                TotalCents = (int)stripeInvoice.Total,
+                Currency = stripeInvoice.Currency?.ToUpperInvariant() ?? subscription.Currency,
+                StripeInvoiceId = stripeInvoice.Id
+            };
+            db.SubscriptionInvoices.Add(invoice);
+            await db.SaveChangesAsync();
+        }
 
-        unitOfWork.Subscriptions.Update(subscription);
-        await unitOfWork.SaveChangesAsync();
+        await payments.RecordAsync(
+            invoiceId: invoice.Id,
+            billingMethodId: stripeRailId.Value,
+            amountCents: (int)stripeInvoice.AmountPaid,
+            currency: invoice.Currency,
+            paidAtUtc: DateTime.UtcNow,
+            reference: stripeInvoice.Id,   // unique per Stripe invoice → idempotency key
+            notes: null,
+            receivedByTokenIdHash: null,   // automatic (webhook)
+            stripeChargeId: stripeInvoice.Id,
+            rawWebhookPayloadJson: stripeEvent.ToJson());
 
-        _logger.LogInformation("Payment succeeded for subscription {SubId}, status restored to active",
-            subscriptionId);
+        _logger.LogInformation("Payment succeeded for subscription {SubId}; invoice {InvoiceNumber} mirrored",
+            subscriptionId, invoice.InvoiceNumber);
     }
 
     #endregion
