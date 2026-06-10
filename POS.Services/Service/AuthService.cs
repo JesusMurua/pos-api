@@ -26,7 +26,7 @@ public class AuthService : IAuthService
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly JwtSettings _jwtSettings;
-    private readonly IEmailService _emailService;
+    private readonly INotificationService _notifications;
     private readonly IFeatureGateService _featureGate;
     private readonly IBusinessSnapshotService _businessSnapshot;
     private readonly ILogger<AuthService> _logger;
@@ -34,14 +34,14 @@ public class AuthService : IAuthService
     public AuthService(
         IUnitOfWork unitOfWork,
         IOptions<JwtSettings> jwtSettings,
-        IEmailService emailService,
+        INotificationService notifications,
         IFeatureGateService featureGate,
         IBusinessSnapshotService businessSnapshot,
         ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
         _jwtSettings = jwtSettings.Value;
-        _emailService = emailService;
+        _notifications = notifications;
         _featureGate = featureGate;
         _businessSnapshot = businessSnapshot;
         _logger = logger;
@@ -368,12 +368,19 @@ public class AuthService : IAuthService
         var features = await _featureGate.GetEnabledFeaturesAsync(business.Id);
         var token = GenerateToken(user, business, branch.Id, branches, TimeSpan.FromDays(_jwtSettings.OwnerExpirationDays), PlanTypeIds.ToCode(planTypeId), primaryMacro.InternalCode, features, SessionTypeEmail);
 
-        // Fire-and-forget: welcome email — never blocks the response. The
-        // admin tenant-creation endpoint sets SuppressWelcomeEmail = true
-        // for demo flows so the email does not surprise the operator.
+        // Welcome email → durable outbox (PR-5). RecipientType=Custom with the known email,
+        // because the owner User row is not yet resolvable for an at-enqueue DB lookup here.
+        // The admin tenant-creation endpoint sets SuppressWelcomeEmail = true for demo flows.
         if (!request.SuppressWelcomeEmail)
         {
-            _ = _emailService.SendWelcomeEmailAsync(request.Email, request.OwnerName, request.BusinessName);
+            await _notifications.EnqueueAsync("Welcome", NotificationRecipientType.Custom, business.Id,
+                new Dictionary<string, string>
+                {
+                    ["name"] = request.OwnerName,
+                    ["businessName"] = request.BusinessName
+                },
+                customEmail: request.Email);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         var snapshot = await _businessSnapshot.BuildAsync(business.Id);

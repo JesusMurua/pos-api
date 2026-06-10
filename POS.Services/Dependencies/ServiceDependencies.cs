@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using POS.Services.Adapter;
 using POS.Services.IService;
+using POS.Services.Notifications;
 using POS.Services.Service;
 
 namespace POS.Services.Dependencies;
@@ -61,6 +62,25 @@ public static class ServiceDependencies
         services.AddScoped<IAdminInvoiceService, AdminInvoiceService>();
         services.AddScoped<IAdminTenantPaymentService, AdminTenantPaymentService>();
         services.AddScoped<IInvoiceGenerationService, InvoiceGenerationService>();
+        // Notifications (PR-5): durable outbox enqueue + dispatch + code-owned templates.
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+        services.AddSingleton<INotificationTemplateRegistry, NotificationTemplateRegistry>();
+        services.AddSingleton<INotificationTemplate, WelcomeTemplate>();
+        services.AddSingleton<INotificationTemplate, InvoiceCreatedTemplate>();
+        services.AddSingleton<INotificationTemplate, PaymentReceivedTemplate>();
+        services.AddSingleton<INotificationTemplate, PaymentOverdueTemplate>();
+        services.AddSingleton<INotificationTemplate, PaymentFailedTemplate>();
+        services.AddSingleton<INotificationTemplate, SubscriptionPriceChangedTemplate>();
+        services.AddSingleton<INotificationTemplate, PlanChangedTemplate>();
+        services.AddSingleton<INotificationTemplate, AddOnActivatedTemplate>();
+        services.AddSingleton<INotificationTemplate, AddOnDeactivatedTemplate>();
+        services.AddSingleton<INotificationTemplate, TrialExpiring3dTemplate>();
+        services.AddSingleton<INotificationTemplate, TrialExpiring1dTemplate>();
+        services.AddSingleton<INotificationTemplate, TrialExpiredTemplate>();
+        services.AddSingleton<INotificationTemplate, TrialConvertedTemplate>();
+        services.AddSingleton<INotificationTemplate, SuspendedTemplate>();
+        services.AddSingleton<INotificationTemplate, ReactivatedTemplate>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();

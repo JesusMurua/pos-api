@@ -151,6 +151,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<TenantPayment> TenantPayments { get; set; } = null!;
     public DbSet<PlanAddOn> PlanAddOns { get; set; } = null!;
     public DbSet<SubscriptionAddOn> SubscriptionAddOns { get; set; } = null!;
+    public DbSet<NotificationOutbox> NotificationOutbox { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -476,6 +477,26 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(p => new { p.BillingMethodId, p.Reference })
                 .IsUnique()
                 .HasFilter("\"Reference\" IS NOT NULL");
+        });
+
+        // Durable notification queue (PR-5). Admin/worker-facing only — not IBusinessScoped.
+        modelBuilder.Entity<NotificationOutbox>(entity =>
+        {
+            entity.Property(n => n.TemplateCode).HasMaxLength(50);
+            entity.Property(n => n.ToEmail).HasMaxLength(150);
+            entity.Property(n => n.LastError).HasMaxLength(500);
+            entity.Property(n => n.DedupKey).HasMaxLength(100);
+            entity.Property(n => n.RecipientType).HasConversion<string>().HasMaxLength(20);
+            entity.Property(n => n.Status).HasConversion<string>().HasMaxLength(20);
+
+            // Worker hot-path: WHERE Status=Pending AND NextAttemptAtUtc <= now ORDER BY NextAttemptAtUtc.
+            entity.HasIndex(n => new { n.Status, n.NextAttemptAtUtc });
+            entity.HasIndex(n => n.BusinessId);
+
+            // Daily-job idempotency: a re-run cannot enqueue the same dedup-keyed mail twice.
+            entity.HasIndex(n => n.DedupKey)
+                .IsUnique()
+                .HasFilter("\"DedupKey\" IS NOT NULL");
         });
 
         #endregion

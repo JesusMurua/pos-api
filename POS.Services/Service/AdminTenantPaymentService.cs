@@ -13,15 +13,18 @@ public class AdminTenantPaymentService : IAdminTenantPaymentService
 {
     private readonly ApplicationDbContext _context;
     private readonly IBusinessAuditService _audit;
+    private readonly INotificationService _notifications;
     private readonly ILogger<AdminTenantPaymentService> _logger;
 
     public AdminTenantPaymentService(
         ApplicationDbContext context,
         IBusinessAuditService audit,
+        INotificationService notifications,
         ILogger<AdminTenantPaymentService> logger)
     {
         _context = context;
         _audit = audit;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -93,6 +96,17 @@ public class AdminTenantPaymentService : IAdminTenantPaymentService
             before: null,
             after: new { invoiceId, amountCents, billingMethodId, automatic = receivedByTokenIdHash == null },
             receivedByTokenIdHash);
+
+        // PaymentReceived notification — enqueued AFTER the idempotency pre-check (never before),
+        // so a webhook replay that short-circuits above does NOT send a duplicate email. Covers
+        // both the manual admin path and the Stripe-mirror path (both call RecordAsync).
+        await _notifications.EnqueueAsync("PaymentReceived", NotificationRecipientType.BillingEmail,
+            invoice.BusinessId,
+            new Dictionary<string, string>
+            {
+                ["amountPesos"] = $"${amountCents / 100m:N2}",
+                ["invoiceNumber"] = invoice.InvoiceNumber.ToString()
+            });
 
         // Own SaveChanges — the insert + status recompute must commit atomically (§8).
         await _context.SaveChangesAsync();

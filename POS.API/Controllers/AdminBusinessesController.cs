@@ -39,6 +39,7 @@ public class AdminBusinessesController : ControllerBase
     private readonly IFeatureGateService _featureGate;
     private readonly IBusinessAuditService _businessAudit;
     private readonly IAdminSubscriptionService _adminSubscription;
+    private readonly INotificationService _notifications;
     private readonly ILogger<AdminBusinessesController> _logger;
 
     public AdminBusinessesController(
@@ -49,6 +50,7 @@ public class AdminBusinessesController : ControllerBase
         IFeatureGateService featureGate,
         IBusinessAuditService businessAudit,
         IAdminSubscriptionService adminSubscription,
+        INotificationService notifications,
         ILogger<AdminBusinessesController> logger)
     {
         _authService = authService;
@@ -58,6 +60,7 @@ public class AdminBusinessesController : ControllerBase
         _featureGate = featureGate;
         _businessAudit = businessAudit;
         _adminSubscription = adminSubscription;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -422,7 +425,14 @@ public class AdminBusinessesController : ControllerBase
             id, request.Reason, before,
             new { business.IsActive, business.SuspensionReason }, AdminTokenId);
 
-        await _unitOfWork.SaveChangesAsync(); // mutation + audit row commit atomically
+        var payload = request.IsActive
+            ? new Dictionary<string, string>()
+            : new Dictionary<string, string> { ["reason"] = request.Reason ?? "" };
+        await _notifications.EnqueueAsync(
+            request.IsActive ? "Reactivated" : "Suspended",
+            NotificationRecipientType.Owner, id, payload);
+
+        await _unitOfWork.SaveChangesAsync(); // mutation + audit row + notification commit atomically
         _featureGate.Invalidate(id);
 
         _logger.LogInformation(
@@ -464,6 +474,23 @@ public class AdminBusinessesController : ControllerBase
         var detail = await BuildDetailAsync(fresh!);
         LogActionAudit("AdminBusinessChangePlan", id, stopwatch.ElapsedMilliseconds);
         return Ok(detail);
+    }
+
+    /// <summary>
+    /// Manually sends a notification to a tenant via a code-owned template (PR-5). Enqueues for
+    /// immediate dispatch and — uniquely among notification paths — writes a NotificationSent
+    /// audit row (event-driven sends are traced by the outbox itself).
+    /// </summary>
+    [HttpPost("{id:int}/notify")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Notify(int id, [FromBody] AdminNotifyRequest request)
+    {
+        await _notifications.EnqueueManualAsync(
+            id, request.TemplateCode,
+            request.Payload ?? new Dictionary<string, string>(),
+            AdminTokenId);
+        return NoContent();
     }
 
     /// <summary>

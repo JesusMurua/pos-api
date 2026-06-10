@@ -58,6 +58,8 @@ public class StripeEventProcessorWorker : BackgroundService
         // PR-3: reused to mirror automatic Stripe payments into TenantPayment (§2 model C).
         // Resolved from the SAME scope so it shares this DbContext instance.
         var payments = scope.ServiceProvider.GetRequiredService<IAdminTenantPaymentService>();
+        // PR-5: PaymentFailed + TrialConverted notifications.
+        var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
         var pendingEvents = await unitOfWork.StripeEventInbox.GetPendingEventsAsync(BatchSize);
         if (pendingEvents.Count == 0) return;
@@ -71,7 +73,7 @@ public class StripeEventProcessorWorker : BackgroundService
             try
             {
                 var stripeEvent = EventUtility.ParseEvent(inboxEvent.RawJson);
-                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db, payments);
+                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db, payments, notifications);
 
                 inboxEvent.Status = StripeEventStatus.Processed;
                 inboxEvent.ProcessedAt = DateTime.UtcNow;
@@ -101,7 +103,8 @@ public class StripeEventProcessorWorker : BackgroundService
         IStripeClient stripeClient,
         IFeatureGateService featureGate,
         ApplicationDbContext db,
-        IAdminTenantPaymentService payments)
+        IAdminTenantPaymentService payments,
+        INotificationService notifications)
     {
         switch (stripeEvent.Type)
         {
@@ -118,11 +121,11 @@ public class StripeEventProcessorWorker : BackgroundService
                 break;
 
             case EventTypes.InvoicePaymentFailed:
-                await HandleInvoicePaymentFailedAsync(stripeEvent, unitOfWork);
+                await HandleInvoicePaymentFailedAsync(stripeEvent, unitOfWork, notifications);
                 break;
 
             case EventTypes.InvoicePaymentSucceeded:
-                await HandleInvoicePaymentSucceededAsync(stripeEvent, unitOfWork, db, payments);
+                await HandleInvoicePaymentSucceededAsync(stripeEvent, unitOfWork, db, payments, notifications);
                 break;
 
             default:
@@ -300,7 +303,8 @@ public class StripeEventProcessorWorker : BackgroundService
             stripeSub.Id, subscription.BusinessId);
     }
 
-    private async Task HandleInvoicePaymentFailedAsync(Event stripeEvent, IUnitOfWork unitOfWork)
+    private async Task HandleInvoicePaymentFailedAsync(
+        Event stripeEvent, IUnitOfWork unitOfWork, INotificationService notifications)
     {
         var invoice = stripeEvent.Data.Object as Stripe.Invoice;
         var subscriptionId = invoice?.Parent?.SubscriptionDetails?.SubscriptionId;
@@ -320,6 +324,9 @@ public class StripeEventProcessorWorker : BackgroundService
 
         subscription.Status = StripeSubscriptionStatus.PastDue;
 
+        await notifications.EnqueueAsync("PaymentFailed", NotificationRecipientType.BillingEmail,
+            subscription.BusinessId, new Dictionary<string, string>());
+
         unitOfWork.Subscriptions.Update(subscription);
         await unitOfWork.SaveChangesAsync();
 
@@ -327,7 +334,8 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     private async Task HandleInvoicePaymentSucceededAsync(
-        Event stripeEvent, IUnitOfWork unitOfWork, ApplicationDbContext db, IAdminTenantPaymentService payments)
+        Event stripeEvent, IUnitOfWork unitOfWork, ApplicationDbContext db, IAdminTenantPaymentService payments,
+        INotificationService notifications)
     {
         var stripeInvoice = stripeEvent.Data.Object as Stripe.Invoice;
         var subscriptionId = stripeInvoice?.Parent?.SubscriptionDetails?.SubscriptionId;
@@ -342,8 +350,17 @@ public class StripeEventProcessorWorker : BackgroundService
         // idempotent on StripeInvoiceId, so a replayed/out-of-order event simply no-ops.
         if (!IsOutOfOrder(stripeEvent, subscription))
         {
+            // TrialConverted fires once on the trialing → active transition (first paid invoice).
+            var wasTrialing = subscription.Status == StripeSubscriptionStatus.Trialing;
+
             subscription.Status = StripeSubscriptionStatus.Active;
             unitOfWork.Subscriptions.Update(subscription);
+
+            if (wasTrialing)
+                await notifications.EnqueueAsync("TrialConverted", NotificationRecipientType.Owner,
+                    subscription.BusinessId,
+                    new Dictionary<string, string> { ["plan"] = PlanTypeIds.ToCode(subscription.PlanTypeId) });
+
             await unitOfWork.SaveChangesAsync();
         }
 

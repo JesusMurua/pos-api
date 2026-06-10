@@ -15,6 +15,7 @@ public class InvoiceGenerationService : IInvoiceGenerationService
     private readonly ApplicationDbContext _context;
     private readonly IUnitOfWork _uow; // shares the scoped DbContext — used only for the atomic invoice counter.
     private readonly IBusinessAuditService _audit;
+    private readonly INotificationService _notifications;
     private readonly IConfiguration _configuration;
     private readonly ILogger<InvoiceGenerationService> _logger;
 
@@ -24,12 +25,14 @@ public class InvoiceGenerationService : IInvoiceGenerationService
         ApplicationDbContext context,
         IUnitOfWork uow,
         IBusinessAuditService audit,
+        INotificationService notifications,
         IConfiguration configuration,
         ILogger<InvoiceGenerationService> logger)
     {
         _context = context;
         _uow = uow;
         _audit = audit;
+        _notifications = notifications;
         _configuration = configuration;
         _logger = logger;
     }
@@ -182,6 +185,14 @@ public class InvoiceGenerationService : IInvoiceGenerationService
         _audit.Record(BusinessAuditAction.InvoiceCreated, sub.BusinessId, null,
             before: null, after: new { invoiceNumber, totalCents, source = "job" }, tokenId: null);
 
+        await _notifications.EnqueueAsync("InvoiceCreated", NotificationRecipientType.BillingEmail, sub.BusinessId,
+            new Dictionary<string, string>
+            {
+                ["invoiceNumber"] = invoiceNumber.ToString(),
+                ["totalPesos"] = $"${totalCents / 100m:N2}",
+                ["dueDate"] = invoice.DueDate.ToString("yyyy-MM-dd")
+            });
+
         await _context.SaveChangesAsync(ct);
         return true;
     }
@@ -199,6 +210,25 @@ public class InvoiceGenerationService : IInvoiceGenerationService
 
         if (stale.Count > 0)
         {
+            // PaymentOverdue notification per flip (the flip is single-shot → no dedup needed, §11).
+            // Suspended (IsActive=false) tenants are skipped — no dunning emails (§14). The invoice
+            // status still advances to Overdue; only the email is suppressed.
+            var bizIds = stale.Select(i => i.BusinessId).Distinct().ToList();
+            var activeBiz = (await _context.Businesses.IgnoreQueryFilters()
+                .Where(b => bizIds.Contains(b.Id) && b.IsActive).Select(b => b.Id).ToListAsync(ct))
+                .ToHashSet();
+
+            foreach (var i in stale.Where(i => activeBiz.Contains(i.BusinessId)))
+            {
+                await _notifications.EnqueueAsync("PaymentOverdue", NotificationRecipientType.BillingEmail, i.BusinessId,
+                    new Dictionary<string, string>
+                    {
+                        ["invoiceNumber"] = i.InvoiceNumber.ToString(),
+                        ["totalPesos"] = $"${i.TotalCents / 100m:N2}",
+                        ["daysLate"] = Math.Max(0, (now - i.DueDate).Days).ToString()
+                    });
+            }
+
             await _context.SaveChangesAsync(ct);
             _logger.LogInformation("InvoiceGeneration: marked {Count} invoices overdue", stale.Count);
         }

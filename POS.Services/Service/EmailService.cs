@@ -1,15 +1,18 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using POS.Domain.Enums;
 using POS.Domain.Settings;
 using POS.Services.IService;
 
 namespace POS.Services.Service;
 
 /// <summary>
-/// Sends transactional emails via Resend API (https://api.resend.com/emails).
+/// Sends transactional emails via the Resend API (https://api.resend.com/emails).
+/// Pure send layer — called only by the dispatcher; queuing/retries live in the outbox.
 /// </summary>
 public class EmailService : IEmailService
 {
@@ -33,100 +36,57 @@ public class EmailService : IEmailService
     }
 
     /// <inheritdoc />
-    public async Task SendWelcomeEmailAsync(string email, string name, string businessName)
+    public async Task<EmailSendResult> SendNowAsync(string toEmail, string subject, string bodyHtml, string bodyText)
     {
         try
         {
-            var htmlBody = BuildWelcomeHtml(name, businessName);
-
             var payload = new
             {
                 from = $"{_settings.FromName} <{_settings.FromEmail}>",
-                to = new[] { email },
-                subject = "Bienvenido a Fino POS",
-                html = htmlBody
+                to = new[] { toEmail },
+                subject,
+                html = bodyHtml,
+                text = bodyText
             };
 
             var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync("emails", content);
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("Welcome email sent to {Email}", email);
+                _logger.LogInformation("Email '{Subject}' sent to {Email}", subject, toEmail);
+                return EmailSendResult.Sent;
             }
-            else
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                _logger.LogError(
-                    "Resend API failed for {Email}. Status: {Status}, Response: {Body}",
-                    email, (int)response.StatusCode, body);
-            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Resend failed for {Email}. Status: {Status}, Response: {Body}",
+                toEmail, (int)response.StatusCode, body);
+
+            // IMPORTANT: do NOT collapse all 4xx into PermanentError — HTTP 429 (rate limit)
+            // is a 4xx but MUST be retried (the trap). Only genuinely client-side errors
+            // (bad recipient / invalid payload, i.e. other 4xx) are permanent.
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                return EmailSendResult.TransientError;
+
+            return (int)response.StatusCode >= 500
+                ? EmailSendResult.TransientError
+                : EmailSendResult.PermanentError;
         }
         catch (TaskCanceledException)
         {
-            _logger.LogError("Welcome email to {Email} timed out after 10s", email);
+            _logger.LogError("Email to {Email} timed out after 10s", toEmail);
+            return EmailSendResult.TransientError;
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Network error sending welcome email to {Email}", email);
+            _logger.LogError(ex, "Network error sending email to {Email}", toEmail);
+            return EmailSendResult.TransientError;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error sending welcome email to {Email}", email);
+            _logger.LogError(ex, "Unexpected error sending email to {Email}", toEmail);
+            return EmailSendResult.TransientError;
         }
     }
-
-    #region Private Helper Methods
-
-    private static string BuildWelcomeHtml(string name, string businessName)
-    {
-        return $"""
-            <!DOCTYPE html>
-            <html lang="es">
-            <head><meta charset="UTF-8"></head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
-                <tr>
-                  <td align="center">
-                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
-                      <tr>
-                        <td style="background-color: #6366f1; padding: 32px; text-align: center;">
-                          <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Fino POS</h1>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 40px 32px;">
-                          <h2 style="color: #1f2937; margin: 0 0 16px;">Hola, {name}!</h2>
-                          <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                            Bienvenido a <strong>Fino POS</strong>! Tu cuenta ha sido creada con exito
-                            para el negocio <strong>{businessName}</strong>.
-                          </p>
-                          <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-                            Tu periodo de prueba gratuito de <strong>3 meses</strong> ya esta activo.
-                            Puedes comenzar a configurar tus productos, categorias y mesas desde la app.
-                          </p>
-                          <p style="color: #9ca3af; font-size: 14px; margin: 0;">
-                            Si tienes alguna pregunta, responde a este correo y te ayudaremos.
-                          </p>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="background-color: #f9fafb; padding: 24px 32px; text-align: center;">
-                          <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-                            Fino POS &mdash; Tu punto de venta inteligente
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </body>
-            </html>
-            """;
-    }
-
-    #endregion
 }

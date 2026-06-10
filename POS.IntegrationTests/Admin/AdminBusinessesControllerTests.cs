@@ -121,47 +121,43 @@ public class AdminBusinessesControllerTests : IClassFixture<CustomWebApplication
 
     #endregion
 
-    #region Test 5 — POST default (SuppressWelcomeEmail=true) skips the welcome email
+    #region Test 5 — POST default (SuppressWelcomeEmail=true) enqueues NO welcome notification
 
     [Fact]
     public async Task IT_ADM_BIZ_5_Default_Suppress_Skips_WelcomeEmail()
     {
-        _factory.EmailServiceMock.Invocations.Clear();
-
         var client = CreateAdminClient();
         var request = BuildCreateRequest(NewUniqueSuffix());
         // SuppressWelcomeEmail defaults to true via the DTO property initializer.
 
         var response = await client.PostAsJsonAsync(AdminRoute, request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var businessId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("businessId").GetInt32();
 
-        _factory.EmailServiceMock.Verify(
-            x => x.SendWelcomeEmailAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
-            Times.Never(),
-            "the admin endpoint default must NOT dispatch the welcome email");
+        (await WelcomeOutboxCountAsync(businessId)).Should().Be(0,
+            "the admin endpoint default must NOT enqueue the welcome notification");
     }
 
     #endregion
 
-    #region Test 6 — POST with SuppressWelcomeEmail=false sends the welcome email
+    #region Test 6 — POST with SuppressWelcomeEmail=false enqueues a welcome notification
 
     [Fact]
     public async Task IT_ADM_BIZ_6_Explicit_Suppress_False_Sends_WelcomeEmail()
     {
-        _factory.EmailServiceMock.Invocations.Clear();
-
         var client = CreateAdminClient();
         var request = BuildCreateRequest(NewUniqueSuffix()) with { SuppressWelcomeEmail = false };
 
         var response = await client.PostAsJsonAsync(AdminRoute, request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var businessId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("businessId").GetInt32();
 
-        _factory.EmailServiceMock.Verify(
-            x => x.SendWelcomeEmailAsync(
-                request.Email, request.OwnerName, request.BusinessName),
-            Times.Once(),
-            "the admin endpoint must dispatch the welcome email when SuppressWelcomeEmail=false");
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<POS.Repository.ApplicationDbContext>();
+        var welcome = await db.NotificationOutbox
+            .FirstOrDefaultAsync(n => n.BusinessId == businessId && n.TemplateCode == "Welcome");
+        welcome.Should().NotBeNull("SuppressWelcomeEmail=false must enqueue the welcome notification");
+        welcome!.ToEmail.Should().Be(request.Email);
     }
 
     #endregion
@@ -391,6 +387,13 @@ public class AdminBusinessesControllerTests : IClassFixture<CustomWebApplication
     }
 
     private static string NewUniqueSuffix() => Guid.NewGuid().ToString("N")[..12];
+
+    private async Task<int> WelcomeOutboxCountAsync(int businessId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.NotificationOutbox.CountAsync(n => n.BusinessId == businessId && n.TemplateCode == "Welcome");
+    }
 
     /// <summary>
     /// Constructs a syntactically valid <see cref="AdminCreateBusinessRequest"/>

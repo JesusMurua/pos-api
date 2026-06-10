@@ -1,13 +1,13 @@
 # SaaS Billing v2 — Architecture & Design (multi-rail, admin-operable)
 
-> **Status:** **PR-1a + PR-1b + PR-2 + PR-3 + PR-4 delivered** (foundation; admin
-> subscription surface + remote-first reconcile + dynamic Stripe Prices; invoicing +
-> payments; **add-on unification: PlanAddOn catalog + SubscriptionAddOn (sole SSoT),
-> SubscriptionItem + AddonPriceMap retired, DeviceService licensing rewired, add-on
-> activation/deactivation with Stripe items, mid-cycle manual proration, LinkedAddOnId FK
-> closed**; suite 152 → 207). All open questions resolved (2026-06-08). PR-5 next
-> (NotificationOutbox + dispatch worker). Note: only **BillingMethodId** was flipped NOT NULL —
-> BaseAmountCents stays nullable (Enterprise has no price until negotiated). Source
+> **Status:** **PR-1a…PR-5 delivered** (foundation; admin subscription surface + remote-first
+> reconcile + dynamic Stripe Prices; invoicing + payments; add-on unification;
+> **notifications: durable NotificationOutbox + 60s NotificationDispatchWorker with
+> retry/backoff, 15 code-owned es-MX templates, EmailService→SendNowAsync result-typed,
+> ~12 lifecycle triggers enqueue best-effort, trial reminders + PaymentOverdue dunning,
+> InvoiceLifecycleWorker→BillingLifecycleWorker**; suite 152 → 235). All open questions
+> resolved (2026-06-08). PR-6 next (metrics). Note: only **BillingMethodId** was flipped
+> NOT NULL — BaseAmountCents stays nullable (Enterprise has no price until negotiated). Source
 > of truth for the SaaS-billing redesign (PR-1…PR-7 below). Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).
 > **Scope:** how Fino charges the *tenant* the SaaS subscription fee — multi-rail,

@@ -16,17 +16,20 @@ public class AdminInvoiceService : IAdminInvoiceService
     private readonly ApplicationDbContext _context;
     private readonly IUnitOfWork _uow; // shares the scoped DbContext — used only for the atomic invoice counter.
     private readonly IBusinessAuditService _audit;
+    private readonly INotificationService _notifications;
     private readonly IConfiguration _configuration;
 
     public AdminInvoiceService(
         ApplicationDbContext context,
         IUnitOfWork uow,
         IBusinessAuditService audit,
+        INotificationService notifications,
         IConfiguration configuration)
     {
         _context = context;
         _uow = uow;
         _audit = audit;
+        _notifications = notifications;
         _configuration = configuration;
     }
 
@@ -99,6 +102,14 @@ public class AdminInvoiceService : IAdminInvoiceService
 
         _audit.Record(BusinessAuditAction.InvoiceCreated, businessId, request.Reason,
             before: null, after: new { invoiceNumber, totalCents }, tokenId);
+
+        await _notifications.EnqueueAsync("InvoiceCreated", NotificationRecipientType.BillingEmail, businessId,
+            new Dictionary<string, string>
+            {
+                ["invoiceNumber"] = invoiceNumber.ToString(),
+                ["totalPesos"] = $"${totalCents / 100m:N2}",
+                ["dueDate"] = dueDate.ToString("yyyy-MM-dd")
+            });
 
         await _context.SaveChangesAsync();
         return MapDetail(invoice);

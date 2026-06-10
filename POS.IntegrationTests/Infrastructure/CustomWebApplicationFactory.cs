@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Moq;
 using POS.Repository;
+using POS.Domain.Enums;
 using POS.Services.IService;
 
 namespace POS.IntegrationTests.Infrastructure;
@@ -38,13 +39,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     public EFQueryCounterInterceptor QueryCounter { get; } = new();
 
     /// <summary>
-    /// Per-factory <see cref="IEmailService"/> mock so tests can assert
-    /// whether the welcome email was dispatched (e.g. the admin endpoint's
-    /// <c>SuppressWelcomeEmail</c> flag). Registered as a singleton in
-    /// <see cref="ReplaceEmailServiceWithMock"/> so resolving the interface
-    /// from any DI scope yields the same mock instance and
-    /// <see cref="Moq.Mock{T}.Verify(System.Linq.Expressions.Expression{System.Action{T}}, Times)"/>
-    /// sees every call across the request lifetime.
+    /// Per-factory <see cref="IEmailService"/> mock. Since PR-5 the dispatch worker is removed
+    /// from the test DI (like every IHostedService), so <c>SendNowAsync</c> is never actually
+    /// invoked in tests — notification tests assert on the <c>NotificationOutbox</c> row instead.
+    /// The mock just satisfies DI and returns <see cref="EmailSendResult.Sent"/> if ever called.
     /// </summary>
     public Mock<IEmailService> EmailServiceMock { get; } = new(MockBehavior.Loose);
 
@@ -165,27 +163,24 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     /// </summary>
     private void ReplaceEmailServiceWithMock(IServiceCollection services)
     {
-        // Default Loose mocks return null for Task-returning methods, which
-        // would NRE if any future caller awaits the discarded Task. Setup
-        // SendWelcomeEmailAsync to return a completed Task so the mock is
-        // forward-compatible with await callers without losing the call
-        // recording that Verify(...) relies on.
+        // Forward-compatible default: return Sent so any (currently unreachable, worker-stripped)
+        // dispatch call does not NRE on the awaited Task.
         EmailServiceMock
-            .Setup(x => x.SendWelcomeEmailAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+            .Setup(x => x.SendNowAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(EmailSendResult.Sent);
 
         services.RemoveAll<IEmailService>();
         services.AddSingleton<IEmailService>(EmailServiceMock.Object);
     }
 
     /// <summary>
-    /// Strips out the long-running background workers
-    /// (<c>StripeEventProcessorWorker</c>, <c>PaymentWebhookProcessorWorker</c>,
-    /// <c>KdsEventDispatcherWorker</c>) so tests boot cleanly without those
-    /// loops competing for the shared InMemory database. Framework-provided
-    /// <see cref="IHostedService"/> entries (Kestrel, request lifecycle) are
-    /// preserved by matching on the POS.API.Workers namespace only.
+    /// Strips out the long-running background workers (Stripe / PaymentWebhook / Kds /
+    /// BillingLifecycle / NotificationDispatch) so tests boot cleanly without those loops
+    /// competing for the shared InMemory database. Their extracted services (e.g.
+    /// INotificationDispatchService, IInvoiceGenerationService) are exercised directly. Framework
+    /// IHostedService entries (Kestrel, request lifecycle) are preserved by matching on the
+    /// POS.API.Workers namespace only.
     /// </summary>
     private static void RemoveProductionHostedServices(IServiceCollection services)
     {

@@ -16,6 +16,7 @@ public class AdminSubscriptionService : IAdminSubscriptionService
     private readonly ApplicationDbContext _context;
     private readonly IStripeService _stripe;
     private readonly IBusinessAuditService _audit;
+    private readonly INotificationService _notifications;
     private readonly IFeatureGateService _featureGate;
     private readonly ILogger<AdminSubscriptionService> _logger;
 
@@ -23,12 +24,14 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         ApplicationDbContext context,
         IStripeService stripe,
         IBusinessAuditService audit,
+        INotificationService notifications,
         IFeatureGateService featureGate,
         ILogger<AdminSubscriptionService> logger)
     {
         _context = context;
         _stripe = stripe;
         _audit = audit;
+        _notifications = notifications;
         _featureGate = featureGate;
         _logger = logger;
     }
@@ -91,6 +94,7 @@ public class AdminSubscriptionService : IAdminSubscriptionService
 
         // ── Local persist (one transaction): subscription + price history + audit + Business gate.
         var beforeAmount = sub.BaseAmountCents;
+        var oldPlanCode = PlanTypeIds.ToCode(sub.PlanTypeId); // capture before the mutation below
         sub.PlanTypeId = newPlan;
         sub.BaseAmountCents = newAmount;
         sub.BillingMethodId = newBillingMethodId;
@@ -122,6 +126,22 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             new { beforeAmount, beforePlan = (int?)null },
             new { afterAmount = newAmount, afterPlan = newPlan },
             tokenId);
+
+        if (priceChanged)
+            await _notifications.EnqueueAsync("SubscriptionPriceChanged", NotificationRecipientType.Owner, businessId,
+                new Dictionary<string, string>
+                {
+                    ["beforePesos"] = $"${(beforeAmount ?? 0) / 100m:N2}",
+                    ["afterPesos"] = $"${newAmount!.Value / 100m:N2}",
+                    ["effectiveDate"] = DateTime.UtcNow.ToString("yyyy-MM-dd")
+                });
+        else
+            await _notifications.EnqueueAsync("PlanChanged", NotificationRecipientType.Owner, businessId,
+                new Dictionary<string, string>
+                {
+                    ["oldPlan"] = oldPlanCode,
+                    ["newPlan"] = PlanTypeIds.ToCode(newPlan)
+                });
 
         await _context.SaveChangesAsync();
         _featureGate.Invalidate(businessId);
@@ -202,6 +222,9 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             after: new { addOnId = addOn.Id, addOn.Code, request.Quantity, request.CustomPriceCents },
             tokenId);
 
+        await _notifications.EnqueueAsync("AddOnActivated", NotificationRecipientType.Owner, businessId,
+            new Dictionary<string, string> { ["addOnName"] = addOn.Name, ["quantity"] = request.Quantity.ToString() });
+
         await _context.SaveChangesAsync();
     }
 
@@ -228,6 +251,10 @@ public class AdminSubscriptionService : IAdminSubscriptionService
 
         _audit.Record(BusinessAuditAction.AddOnDeactivated, businessId, null,
             before: new { subscriptionAddOnId, addOn.AddOnId }, after: new { status = "Deactivated" }, tokenId);
+
+        var addOnName = await _context.PlanAddOns.Where(a => a.Id == addOn.AddOnId).Select(a => a.Name).FirstAsync();
+        await _notifications.EnqueueAsync("AddOnDeactivated", NotificationRecipientType.Owner, businessId,
+            new Dictionary<string, string> { ["addOnName"] = addOnName });
 
         await _context.SaveChangesAsync();
 
@@ -257,6 +284,13 @@ public class AdminSubscriptionService : IAdminSubscriptionService
 
         _audit.Record(BusinessAuditAction.PlanChanged, businessId, reason,
             new { before }, new { after = planTypeId }, tokenId);
+
+        await _notifications.EnqueueAsync("PlanChanged", NotificationRecipientType.Owner, businessId,
+            new Dictionary<string, string>
+            {
+                ["oldPlan"] = PlanTypeIds.ToCode(before),
+                ["newPlan"] = PlanTypeIds.ToCode(planTypeId)
+            });
 
         await _context.SaveChangesAsync();
         _featureGate.Invalidate(businessId);
