@@ -116,6 +116,37 @@ public class InvoiceGenerationService : IInvoiceGenerationService
             });
         }
 
+        // Active add-ons billed each cycle. An add-on activated mid-cycle is pro-rated on its
+        // FIRST invoice only (LastProRatedInvoiceId set post-save guards against re-charging the
+        // partial period). Stripe rails prorate natively; this covers the manual rails (§14).
+        var activeAddOns = await _context.SubscriptionAddOns
+            .Include(a => a.PlanAddOn)
+            .Where(a => a.SubscriptionId == sub.Id && a.DeactivatedAt == null)
+            .ToListAsync(ct);
+
+        var proRatedThisRun = new List<SubscriptionAddOn>();
+        foreach (var sa in activeAddOns)
+        {
+            var unit = sa.CustomPriceCents ?? sa.PlanAddOn!.DefaultPriceCents;
+            var full = unit * sa.Quantity;
+
+            var isProrated = sa.ActivatedAt > periodStart && sa.LastProRatedInvoiceId == null;
+            var amount = isProrated
+                ? ProRataCalculator.Compute(full, sa.ActivatedAt, periodStart, periodEnd)
+                : full;
+            if (isProrated) proRatedThisRun.Add(sa);
+
+            items.Add(new SubscriptionInvoiceItem
+            {
+                Description = isProrated ? $"{sa.PlanAddOn!.Name} (prorated)" : sa.PlanAddOn!.Name,
+                Quantity = sa.Quantity,
+                UnitAmountCents = unit,
+                TotalAmountCents = amount,
+                ItemType = SubscriptionInvoiceItemType.AddOn,
+                LinkedAddOnId = sa.AddOnId
+            });
+        }
+
         var subtotal = items.Sum(it => it.TotalAmountCents);
         var (subtotalCents, taxCents, totalCents) =
             BillingTaxCalculator.Compute(subtotal, sub.Currency, MxVatRate);
@@ -145,6 +176,7 @@ public class InvoiceGenerationService : IInvoiceGenerationService
         await _context.SaveChangesAsync(ct); // assigns invoice.Id
 
         foreach (var h in pendingHistory) h.AppliedToInvoiceId = invoice.Id;
+        foreach (var sa in proRatedThisRun) sa.LastProRatedInvoiceId = invoice.Id;
         sub.NextBillingDate = periodEnd;
 
         _audit.Record(BusinessAuditAction.InvoiceCreated, sub.BusinessId, null,

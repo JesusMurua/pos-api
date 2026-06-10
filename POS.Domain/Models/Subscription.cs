@@ -18,12 +18,12 @@ public class Subscription : IBusinessScoped
     public string StripeSubscriptionId { get; set; } = null!;
 
     /// <summary>
-    /// Subscription line items mirroring <c>stripe_subscription.items.data</c>.
-    /// Exactly one row should have <see cref="SubscriptionItem.IsBasePlan"/>
-    /// set to <c>true</c>; the rest are add-on licenses summed into the
-    /// device-licensing engine via <c>EnforceDeviceLimitsAsync</c>.
+    /// Active and historical add-ons on this subscription (the sole add-on SSoT, OQ-5).
+    /// The base plan's Stripe item id lives on <see cref="StripeBaseItemId"/>; every other
+    /// Stripe item maps to a <see cref="SubscriptionAddOn"/> by <c>StripeItemId</c>.
+    /// Device licenses are summed into the licensing engine via <c>EnforceDeviceLimitsAsync</c>.
     /// </summary>
-    public ICollection<SubscriptionItem> Items { get; set; } = new List<SubscriptionItem>();
+    public ICollection<SubscriptionAddOn> AddOns { get; set; } = new List<SubscriptionAddOn>();
 
     // Plan info (denormalized for quick access)
     /// <summary>FK to PlanTypeCatalog.Id (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>

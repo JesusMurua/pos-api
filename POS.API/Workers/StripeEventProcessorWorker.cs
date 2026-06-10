@@ -160,10 +160,9 @@ public class StripeEventProcessorWorker : BackgroundService
 
         var firstItem = stripeSub.Items.Data[0];
 
-        // Eager-load with items so the clear-and-replace path operates on the
-        // full collection in memory (otherwise EF will not delete orphans).
+        // Eager-load active add-ons so SyncItemsAndPlanAsync can upsert/deactivate them in memory.
         var subscription = await unitOfWork.Subscriptions
-            .GetByStripeSubscriptionIdWithItemsAsync(stripeSubscriptionId);
+            .GetByStripeSubscriptionIdWithAddOnsAsync(stripeSubscriptionId);
         bool isNew = subscription == null;
 
         if (subscription == null)
@@ -219,10 +218,9 @@ public class StripeEventProcessorWorker : BackgroundService
         var stripeSub = stripeEvent.Data.Object as Stripe.Subscription;
         if (stripeSub == null) return;
 
-        // Eager-load items so SyncItemsAndPlan can clear-and-replace without
-        // leaving orphan rows in SubscriptionItems.
+        // Eager-load active add-ons so SyncItemsAndPlanAsync can upsert/deactivate them in memory.
         var subscription = await unitOfWork.Subscriptions
-            .GetByStripeSubscriptionIdWithItemsAsync(stripeSub.Id);
+            .GetByStripeSubscriptionIdWithAddOnsAsync(stripeSub.Id);
         if (subscription == null) return;
 
         // Temporal guard: discard out-of-order events
@@ -418,73 +416,73 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     /// <summary>
-    /// Clears the local <see cref="Domain.Models.Subscription.Items"/> collection and
-    /// rebuilds it from <paramref name="stripeSub"/>. A base-plan price is resolved
-    /// (PR-2) as: <b>catalog</b> (<c>StripePlanPrice</c>) → <b>custom</b>
-    /// (<c>price.Metadata["planTypeId"]</c>, <c>kind=custom</c>) → <b>fail-closed</b>
-    /// (<see cref="KeyNotFoundException"/>). Add-ons keep using
-    /// <see cref="StripeConstants.IsAddon"/>. Also populates the frozen Stripe columns
-    /// (<c>StripePriceId</c>/<c>StripeBaseItemId</c>/<c>BaseAmountCents</c>) and the
-    /// <c>BillingMethodId</c> (the Stripe rail) from Stripe's authoritative state.
+    /// Reconciles <paramref name="subscription"/> with <paramref name="stripeSub"/>. The base
+    /// plan resolves (PR-2) as <b>catalog</b> (<c>StripePlanPrice</c>) → <b>custom</b>
+    /// (<c>price.Metadata["planTypeId"]</c>, <c>kind=custom</c>) → <b>fail-closed</b>.
+    /// Add-ons (PR-4) resolve as <b>catalog</b> (<c>PlanAddOn.StripePriceId</c>) → <b>custom-addon</b>
+    /// (<c>kind=custom-addon</c> + <c>metadata.addOnId</c>) → <b>fail-closed</b>, and are synced
+    /// into <see cref="Domain.Models.Subscription.AddOns"/>. Populates the frozen Stripe columns
+    /// and the <c>BillingMethodId</c> (Stripe rail).
     /// </summary>
     private static async Task SyncItemsAndPlanAsync(
         Domain.Models.Subscription subscription,
         Stripe.Subscription stripeSub,
         ApplicationDbContext db)
     {
-        // Clear-and-replace: EF tracks removals on the loaded collection so
-        // the corresponding SubscriptionItems rows get deleted on SaveChanges.
-        subscription.Items.Clear();
-
         var now = DateTime.UtcNow;
-        var catalog = (await db.StripePlanPrices.AsNoTracking().ToListAsync())
+        var planCatalog = (await db.StripePlanPrices.AsNoTracking().ToListAsync())
             .ToDictionary(p => p.StripePriceId, StringComparer.Ordinal);
+        var addOnCatalog = (await db.PlanAddOns.AsNoTracking().Where(a => a.StripePriceId != null).ToListAsync())
+            .ToDictionary(a => a.StripePriceId!, a => a, StringComparer.Ordinal);
+
+        // ── Classify every Stripe item into exactly one base + N add-ons. ──
+        Stripe.SubscriptionItem? baseStripeItem = null;
+        // (Stripe item, resolved PlanAddOn id) for the add-on sync below.
+        var addOnHits = new List<(Stripe.SubscriptionItem Item, int PlanAddOnId)>();
 
         foreach (var item in stripeSub.Items.Data)
         {
             var priceId = item.Price?.Id
                 ?? throw new InvalidOperationException(
                     $"Stripe subscription {stripeSub.Id} item {item.Id} has no Price.Id.");
+            var kind = item.Price?.Metadata?.GetValueOrDefault("kind");
 
-            bool inCatalog = catalog.ContainsKey(priceId);
-            bool isCustom = !inCatalog && string.Equals(
-                item.Price?.Metadata?.GetValueOrDefault("kind"), "custom", StringComparison.OrdinalIgnoreCase);
-            bool isBase = inCatalog || isCustom;
-            bool isAddon = StripeConstants.IsAddon(priceId);
+            bool isBase = planCatalog.ContainsKey(priceId)
+                || string.Equals(kind, "custom", StringComparison.OrdinalIgnoreCase);
 
-            if (!isBase && !isAddon)
+            if (isBase)
             {
-                throw new KeyNotFoundException(
-                    $"Stripe Price ID '{priceId}' on subscription {stripeSub.Id} is not in the StripePlanPrice " +
-                    "catalog, not a custom price (metadata.kind=custom), nor a registered add-on (fail-closed).");
+                if (baseStripeItem != null)
+                    throw new InvalidOperationException(
+                        $"Stripe subscription {stripeSub.Id} has more than one base plan item — only one expected.");
+                baseStripeItem = item;
+                continue;
             }
 
-            subscription.Items.Add(new Domain.Models.SubscriptionItem
+            // Add-on: catalog by price id, or custom-addon by metadata.addOnId. Fail-closed otherwise.
+            if (addOnCatalog.TryGetValue(priceId, out var planAddOn))
             {
-                StripeItemId = item.Id,
-                StripePriceId = priceId,
-                Quantity = (int)item.Quantity,
-                IsBasePlan = isBase,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
+                addOnHits.Add((item, planAddOn.Id));
+            }
+            else if (string.Equals(kind, "custom-addon", StringComparison.OrdinalIgnoreCase)
+                     && int.TryParse(item.Price?.Metadata?.GetValueOrDefault("addOnId"), out var customAddOnId))
+            {
+                addOnHits.Add((item, customAddOnId));
+            }
+            else
+            {
+                throw new KeyNotFoundException(
+                    $"Stripe Price ID '{priceId}' on subscription {stripeSub.Id} is not a base plan " +
+                    "(StripePlanPrice / kind=custom), nor a catalog/custom add-on (PlanAddOn / kind=custom-addon) — fail-closed.");
+            }
         }
 
-        // Exactly-one-base-plan invariant — fail-closed so catalog drift or
-        // mis-classified add-ons surface as failed events instead of silent downgrades.
-        var basePlanItems = subscription.Items.Where(i => i.IsBasePlan).ToList();
-        if (basePlanItems.Count == 0)
-            throw new InvalidOperationException(
-                $"Stripe subscription {stripeSub.Id} has no base plan item.");
-        if (basePlanItems.Count > 1)
-            throw new InvalidOperationException(
-                $"Stripe subscription {stripeSub.Id} has {basePlanItems.Count} base plan items — only one expected.");
+        if (baseStripeItem == null)
+            throw new InvalidOperationException($"Stripe subscription {stripeSub.Id} has no base plan item.");
 
-        var baseItem = basePlanItems[0];
-        var basePriceId = baseItem.StripePriceId;
-        var baseStripeItem = stripeSub.Items.Data.First(i => i.Id == baseItem.StripeItemId);
-
-        if (catalog.TryGetValue(basePriceId, out var cat))
+        // ── Resolve the base plan (catalog → custom metadata). ──
+        var basePriceId = baseStripeItem.Price!.Id;
+        if (planCatalog.TryGetValue(basePriceId, out var cat))
         {
             subscription.PlanTypeId = cat.PlanTypeId;
             subscription.BillingCycle = cat.BillingCycle;
@@ -492,7 +490,6 @@ public class StripeEventProcessorWorker : BackgroundService
         }
         else
         {
-            // Custom price: resolve from the Stripe Price metadata set at CreateCustomPriceAsync.
             var meta = baseStripeItem.Price?.Metadata;
             if (meta == null || !int.TryParse(meta.GetValueOrDefault("planTypeId"), out var planTypeId))
                 throw new KeyNotFoundException(
@@ -504,13 +501,48 @@ public class StripeEventProcessorWorker : BackgroundService
             subscription.PricingGroup = meta.GetValueOrDefault("pricingGroup") ?? "General";
         }
 
-        // Frozen Stripe truth + the rail. BaseAmountCents = the Stripe unit_amount
-        // (covers catalog and custom uniformly).
+        // Frozen Stripe truth + the rail. BaseAmountCents = the Stripe unit_amount.
         subscription.StripePriceId = basePriceId;
-        subscription.StripeBaseItemId = baseItem.StripeItemId;
+        subscription.StripeBaseItemId = baseStripeItem.Id;
         subscription.BaseAmountCents = (int?)baseStripeItem.Price?.UnitAmount;
         subscription.BillingMethodId = await db.SaaSBillingMethods
             .Where(m => m.Code == "Stripe").Select(m => (int?)m.Id).FirstOrDefaultAsync();
+
+        // ── Add-on sync. IMPORTANT: SubscriptionAddOn is NOT a pure mirror of
+        //    stripe_subscription.items — it carries local-only state that does not exist in
+        //    Stripe: CustomPriceCents, Reason, ActivatedByTokenIdHash, LastProRatedInvoiceId.
+        //    DO NOT use .Clear() + rebuild (the legacy SubscriptionItem pattern, now retired) —
+        //    that would silently destroy admin-entered data. Instead UPSERT by StripeItemId
+        //    (update Quantity if present, insert if new) and SOFT-DEACTIVATE (set DeactivatedAt,
+        //    never DELETE) the ones that vanished from Stripe, preserving history (§6). ──
+        var seenStripeItemIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (item, planAddOnId) in addOnHits)
+        {
+            seenStripeItemIds.Add(item.Id);
+            var existing = subscription.AddOns
+                .FirstOrDefault(a => a.DeactivatedAt == null && a.StripeItemId == item.Id);
+            if (existing != null)
+            {
+                existing.Quantity = (int)item.Quantity;
+            }
+            else
+            {
+                subscription.AddOns.Add(new Domain.Models.SubscriptionAddOn
+                {
+                    AddOnId = planAddOnId,
+                    Quantity = (int)item.Quantity,
+                    ActivatedAt = now,
+                    StripeItemId = item.Id,
+                    StripeAddOnPriceId = item.Price?.Id
+                });
+            }
+        }
+
+        foreach (var local in subscription.AddOns.Where(a => a.DeactivatedAt == null && a.StripeItemId != null))
+        {
+            if (!seenStripeItemIds.Contains(local.StripeItemId!))
+                local.DeactivatedAt = now;
+        }
     }
 
     #endregion

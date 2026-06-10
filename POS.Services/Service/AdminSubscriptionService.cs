@@ -139,6 +139,110 @@ public class AdminSubscriptionService : IAdminSubscriptionService
         }
     }
 
+    public async Task ActivateAddOnAsync(int businessId, AdminActivateAddOnRequest request, string? tokenId)
+    {
+        var sub = await _context.Subscriptions.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.BusinessId == businessId)
+            ?? throw new NotFoundException($"Business {businessId} has no subscription.");
+
+        var addOn = await _context.PlanAddOns.FirstOrDefaultAsync(a => a.Id == request.AddOnId && a.IsActive)
+            ?? throw new NotFoundException($"Active PlanAddOn {request.AddOnId} not found.");
+
+        // Pre-check the active-uniqueness invariant (the partial unique index is the DB backstop
+        // but is not enforced by the InMemory test provider).
+        var dup = await _context.SubscriptionAddOns
+            .AnyAsync(sa => sa.SubscriptionId == sub.Id && sa.AddOnId == addOn.Id && sa.DeactivatedAt == null);
+        if (dup)
+            throw new ConcurrencyConflictException(
+                $"Add-on {addOn.Code} is already active on this subscription. Deactivate it first.");
+
+        var railCode = sub.BillingMethodId == null ? null : await _context.SaaSBillingMethods
+            .Where(m => m.Id == sub.BillingMethodId).Select(m => m.Code).FirstOrDefaultAsync();
+        var isStripeRail = railCode == "Stripe" && !string.IsNullOrEmpty(sub.StripeSubscriptionId);
+
+        string? stripeItemId = null;
+        string? stripePriceId = null;
+
+        // ── Remote-first on the Stripe rail: resolve/create the Price, append the item,
+        //    await 2xx. If Stripe throws, nothing below runs → no partial local state.
+        if (isStripeRail)
+        {
+            if (request.CustomPriceCents.HasValue)
+            {
+                stripePriceId = await _stripe.CreateAddOnPriceAsync(
+                    addOn.Id, businessId, request.CustomPriceCents.Value, sub.Currency, addOn.BillingCycle.ToString());
+            }
+            else
+            {
+                stripePriceId = addOn.StripePriceId
+                    ?? throw new ValidationException(
+                        $"Add-on {addOn.Code} has no catalog Stripe price; a CustomPriceCents is required on the Stripe rail.");
+            }
+
+            stripeItemId = await _stripe.AddSubscriptionItemAsync(
+                sub.StripeSubscriptionId, stripePriceId, request.Quantity);
+        }
+
+        _context.SubscriptionAddOns.Add(new SubscriptionAddOn
+        {
+            SubscriptionId = sub.Id,
+            AddOnId = addOn.Id,
+            Quantity = request.Quantity,
+            ActivatedAt = DateTime.UtcNow,
+            CustomPriceCents = request.CustomPriceCents,
+            ActivatedByTokenIdHash = tokenId,
+            Reason = request.Reason,
+            StripeItemId = stripeItemId,
+            StripeAddOnPriceId = stripePriceId
+        });
+        sub.UpdatedAt = DateTime.UtcNow;
+
+        _audit.Record(BusinessAuditAction.AddOnActivated, businessId, request.Reason,
+            before: null,
+            after: new { addOnId = addOn.Id, addOn.Code, request.Quantity, request.CustomPriceCents },
+            tokenId);
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task DeactivateAddOnAsync(int businessId, int subscriptionAddOnId, string? tokenId)
+    {
+        var addOn = await _context.SubscriptionAddOns
+            .FirstOrDefaultAsync(sa => sa.Id == subscriptionAddOnId
+                                    && sa.Subscription!.BusinessId == businessId
+                                    && sa.DeactivatedAt == null)
+            ?? throw new NotFoundException($"Active SubscriptionAddOn {subscriptionAddOnId} not found for business {businessId}.");
+
+        var sub = await _context.Subscriptions.IgnoreQueryFilters().FirstAsync(s => s.Id == addOn.SubscriptionId);
+
+        var railCode = sub.BillingMethodId == null ? null : await _context.SaaSBillingMethods
+            .Where(m => m.Id == sub.BillingMethodId).Select(m => m.Code).FirstOrDefaultAsync();
+        var isStripeRail = railCode == "Stripe" && !string.IsNullOrEmpty(addOn.StripeItemId);
+
+        // Remote-first: drop the Stripe item (with proration), await 2xx, then persist.
+        if (isStripeRail)
+            await _stripe.RemoveSubscriptionItemAsync(addOn.StripeItemId!);
+
+        addOn.DeactivatedAt = DateTime.UtcNow;
+        sub.UpdatedAt = DateTime.UtcNow;
+
+        _audit.Record(BusinessAuditAction.AddOnDeactivated, businessId, null,
+            before: new { subscriptionAddOnId, addOn.AddOnId }, after: new { status = "Deactivated" }, tokenId);
+
+        await _context.SaveChangesAsync();
+
+        // Archive a CUSTOM Stripe Price post-success (catalog prices are shared — never archived).
+        if (addOn.CustomPriceCents.HasValue && !string.IsNullOrEmpty(addOn.StripeAddOnPriceId))
+        {
+            try { await _stripe.ArchivePriceAsync(addOn.StripeAddOnPriceId); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to archive custom add-on price {PriceId} for business {BusinessId}",
+                    addOn.StripeAddOnPriceId, businessId);
+            }
+        }
+    }
+
     public async Task ChangePlanAsync(int businessId, int planTypeId, string? reason, string? tokenId)
     {
         var business = await _context.Businesses.IgnoreQueryFilters().FirstOrDefaultAsync(b => b.Id == businessId)

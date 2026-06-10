@@ -27,4 +27,20 @@ public interface IAdminSubscriptionService
     /// not reprice Stripe in v2 (the price-change path owns Stripe reconcile).
     /// </summary>
     Task ChangePlanAsync(int businessId, int planTypeId, string? reason, string? tokenId);
+
+    /// <summary>
+    /// Activates an add-on on the business's subscription (PR-4). Remote-first on the Stripe
+    /// rail: resolves/creates the add-on Price, appends the Stripe subscription item with
+    /// proration, awaits 2xx, then persists the SubscriptionAddOn + audit atomically. Manual
+    /// rails persist locally only. Rejects a duplicate active add-on (409) and a price-less
+    /// Stripe activation (400).
+    /// </summary>
+    Task ActivateAddOnAsync(int businessId, AdminActivateAddOnRequest request, string? tokenId);
+
+    /// <summary>
+    /// Deactivates an active SubscriptionAddOn (soft, keeps history). On the Stripe rail it
+    /// removes the Stripe item (proration) and archives a custom Price post-success. Manual
+    /// rails update locally only.
+    /// </summary>
+    Task DeactivateAddOnAsync(int businessId, int subscriptionAddOnId, string? tokenId);
 }

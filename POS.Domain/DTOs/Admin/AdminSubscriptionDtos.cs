@@ -45,3 +45,15 @@ public sealed record AdminUpdateSubscriptionRequest
     public string? Notes { get; init; }
     public string? Reason { get; init; }
 }
+
+/// <summary>
+/// Activate an add-on on a subscription. On the Stripe rail a <c>CustomPriceCents</c> creates
+/// a dynamic add-on Price; otherwise the catalog <c>PlanAddOn.StripePriceId</c> is reused.
+/// </summary>
+public sealed record AdminActivateAddOnRequest
+{
+    public int AddOnId { get; init; }
+    public int Quantity { get; init; } = 1;
+    public int? CustomPriceCents { get; init; }
+    public string? Reason { get; init; }
+}

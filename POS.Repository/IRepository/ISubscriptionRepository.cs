@@ -9,10 +9,10 @@ public interface ISubscriptionRepository : IGenericRepository<Subscription>
     Task<Subscription?> GetByStripeSubscriptionIdAsync(string stripeSubscriptionId);
 
     /// <summary>
-    /// Eager-loads the subscription row together with all its
-    /// <see cref="SubscriptionItem"/> children. Used by the Stripe webhook
-    /// processor to perform a clear-and-replace of the items collection
-    /// without leaving orphaned rows in <c>SubscriptionItems</c>.
+    /// Eager-loads the subscription row together with its ACTIVE
+    /// <see cref="SubscriptionAddOn"/> children. Used by the Stripe webhook processor to
+    /// upsert/deactivate add-ons by <c>StripeItemId</c> (never clear-and-replace — add-ons
+    /// carry local-only state that does not live in Stripe).
     /// </summary>
-    Task<Subscription?> GetByStripeSubscriptionIdWithItemsAsync(string stripeSubscriptionId);
+    Task<Subscription?> GetByStripeSubscriptionIdWithAddOnsAsync(string stripeSubscriptionId);
 }

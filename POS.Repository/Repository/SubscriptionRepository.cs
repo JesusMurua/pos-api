@@ -28,10 +28,12 @@ public class SubscriptionRepository : GenericRepository<Subscription>, ISubscrip
             .FirstOrDefaultAsync(s => s.StripeSubscriptionId == stripeSubscriptionId);
     }
 
-    public async Task<Subscription?> GetByStripeSubscriptionIdWithItemsAsync(string stripeSubscriptionId)
+    public async Task<Subscription?> GetByStripeSubscriptionIdWithAddOnsAsync(string stripeSubscriptionId)
     {
+        // Eager-load AddOns so the worker can upsert/deactivate them in memory. Only the
+        // ACTIVE add-ons are needed for the sync (deactivated rows are immutable history).
         return await _context.Subscriptions
-            .Include(s => s.Items)
+            .Include(s => s.AddOns.Where(a => a.DeactivatedAt == null))
             .FirstOrDefaultAsync(s => s.StripeSubscriptionId == stripeSubscriptionId);
     }
 }

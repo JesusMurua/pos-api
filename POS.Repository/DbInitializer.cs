@@ -99,6 +99,7 @@ public static class DbInitializer
         await UpsertPlanPaymentMethodMatrixAsync(context);
         await UpsertSaaSBillingMethodsAsync(context);
         await UpsertStripePlanPricesAsync(context);
+        await UpsertPlanAddOnsAsync(context);
 
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
@@ -855,6 +856,55 @@ public static class DbInitializer
         PricingGroup = group,
         StripePriceId = priceId,
         IsActive = true
+    };
+
+    private static async Task UpsertPlanAddOnsAsync(ApplicationDbContext context)
+    {
+        // The three device-license add-ons that materialize the retired AddonPriceMap 1:1.
+        // LinkedEntityId is the integer value of the FeatureKey the license unlocks.
+        var desired = new[]
+        {
+            AddOn("device_kds",     "Pantalla KDS adicional",  FeatureKey.MaxKdsScreens,    StripeConstants.AddOnPlaceholders.Kds),
+            AddOn("device_kiosk",   "Kiosko adicional",        FeatureKey.MaxKiosks,        StripeConstants.AddOnPlaceholders.Kiosk),
+            AddOn("device_cashier", "Caja registradora extra", FeatureKey.MaxCashRegisters, StripeConstants.AddOnPlaceholders.Cashier),
+        };
+
+        var existing = (await context.PlanAddOns.ToListAsync())
+            .ToDictionary(a => a.Code, StringComparer.Ordinal);
+
+        foreach (var d in desired)
+        {
+            if (existing.TryGetValue(d.Code, out var row))
+            {
+                row.Name = d.Name;
+                row.BillingCycle = d.BillingCycle;
+                row.LinkType = d.LinkType;
+                row.LinkedEntityId = d.LinkedEntityId;
+                row.StripePriceId = d.StripePriceId;
+                row.IsActive = true;
+                row.IsSystem = true;
+            }
+            else
+            {
+                context.PlanAddOns.Add(d);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private static PlanAddOn AddOn(string code, string name, FeatureKey feature, string stripePriceId) => new()
+    {
+        Code = code,
+        Name = name,
+        BillingCycle = PlanAddOnBillingCycle.Monthly,
+        DefaultPriceCents = 0, // placeholder price; admin sets the real amount per activation
+        Currency = "MXN",
+        LinkType = PlanAddOnLinkType.DeviceLicense,
+        LinkedEntityId = (int)feature,
+        StripePriceId = stripePriceId,
+        IsActive = true,
+        IsSystem = true
     };
 
     private static SaaSBillingMethod Rail(

@@ -693,10 +693,11 @@ public class DeviceService : IDeviceService
 
         var usage = activeDevices + pendingCodes;
 
-        // Sum purchased Stripe Add-on licenses for this feature. Fail-strict:
-        // only active/trialing subscriptions contribute.
-        var addonLimit = await _unitOfWork.SubscriptionItems
-            .SumAddonQuantityByFeatureAsync(businessId, feature.Value);
+        // Sum active add-on licenses for this feature (PR-4: SubscriptionAddOn is the sole
+        // SSoT, replacing the retired SubscriptionItem). Fail-strict: only DeactivatedAt-null
+        // add-ons on active/trialing subscriptions contribute.
+        var addonLimit = await _unitOfWork.SubscriptionAddOns
+            .SumActiveQuantityByLinkAsync(businessId, feature.Value);
 
         // null limit (Enterprise) stays null even after add-ons — unlimited
         // remains unlimited, no point summing finite add-ons into infinity.

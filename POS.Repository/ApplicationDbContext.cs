@@ -41,12 +41,6 @@ public class ApplicationDbContext : DbContext
             entry.Entity.UpdatedAt = DateTime.UtcNow;
         }
 
-        foreach (var entry in ChangeTracker.Entries<SubscriptionItem>()
-            .Where(e => e.State == EntityState.Modified))
-        {
-            entry.Entity.UpdatedAt = DateTime.UtcNow;
-        }
-
         foreach (var entry in ChangeTracker.Entries<Supplier>()
             .Where(e => e.State == EntityState.Modified))
         {
@@ -106,7 +100,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<OrderPayment> OrderPayments { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<Subscription> Subscriptions { get; set; } = null!;
-    public DbSet<SubscriptionItem> SubscriptionItems { get; set; } = null!;
     public DbSet<Supplier> Suppliers { get; set; } = null!;
     public DbSet<StockReceipt> StockReceipts { get; set; } = null!;
     public DbSet<StockReceiptItem> StockReceiptItems { get; set; } = null!;
@@ -156,6 +149,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<SubscriptionInvoice> SubscriptionInvoices { get; set; } = null!;
     public DbSet<SubscriptionInvoiceItem> SubscriptionInvoiceItems { get; set; } = null!;
     public DbSet<TenantPayment> TenantPayments { get; set; } = null!;
+    public DbSet<PlanAddOn> PlanAddOns { get; set; } = null!;
+    public DbSet<SubscriptionAddOn> SubscriptionAddOns { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -342,21 +337,47 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<SubscriptionItem>(entity =>
+        // Add-on catalog (PR-4). DB-backed replacement of the retired AddonPriceMap.
+        modelBuilder.Entity<PlanAddOn>(entity =>
         {
-            entity.Property(s => s.StripeItemId).HasMaxLength(255);
-            entity.Property(s => s.StripePriceId).HasMaxLength(255);
+            entity.Property(a => a.Code).HasMaxLength(30);
+            entity.Property(a => a.Name).HasMaxLength(60);
+            entity.Property(a => a.Description).HasMaxLength(300);
+            entity.Property(a => a.Currency).HasMaxLength(3);
+            entity.Property(a => a.StripePriceId).HasMaxLength(64);
+            entity.Property(a => a.BillingCycle).HasConversion<string>().HasMaxLength(20);
+            entity.Property(a => a.LinkType).HasConversion<string>().HasMaxLength(20);
+            // LinkedEntityId is a polymorphic plain int? (no FK) — its meaning depends on LinkType.
+            entity.HasIndex(a => a.Code).IsUnique();
+        });
+
+        // Active/historical add-ons per subscription (PR-4, sole add-on SSoT).
+        modelBuilder.Entity<SubscriptionAddOn>(entity =>
+        {
+            entity.Property(s => s.ActivatedByTokenIdHash).HasMaxLength(64);
+            entity.Property(s => s.Reason).HasMaxLength(300);
+            entity.Property(s => s.StripeItemId).HasMaxLength(64);
+            entity.Property(s => s.StripeAddOnPriceId).HasMaxLength(64);
 
             entity.HasOne(s => s.Subscription)
-                .WithMany(s => s.Items)
+                .WithMany(s => s.AddOns)
                 .HasForeignKey(s => s.SubscriptionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Stripe item IDs are globally unique. The unique index defends
-            // idempotency at the DB level even if a webhook replay slips
-            // past StripeEventInbox.
-            entity.HasIndex(s => s.StripeItemId).IsUnique();
+            entity.HasOne(s => s.PlanAddOn)
+                .WithMany()
+                .HasForeignKey(s => s.AddOnId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasIndex(s => s.SubscriptionId);
+
+            // At most one ACTIVE instance of an add-on per subscription; deactivated rows
+            // (history) are unconstrained, so re-activation inserts a fresh row.
+            entity.HasIndex(s => new { s.SubscriptionId, s.AddOnId })
+                .IsUnique()
+                .HasFilter("\"DeactivatedAt\" IS NULL");
+            // LastProRatedInvoiceId is a plain nullable trace (no FK) — same discipline as
+            // SubscriptionPriceHistory.AppliedToInvoiceId.
         });
 
         // SaaS invoicing (PR-3). These entities are admin/worker-facing only and are
@@ -421,8 +442,12 @@ public class ApplicationDbContext : DbContext
             entity.Property(it => it.Description).HasMaxLength(200);
             entity.Property(it => it.ItemType).HasConversion<string>().HasMaxLength(20);
 
-            // LinkedAddOnId is a plain nullable column in PR-3 (PlanAddOn does not exist
-            // yet — the FK arrives in PR-4). LinkedPlanTypeId gets its FK now.
+            // PR-4: LinkedAddOnId FK -> PlanAddOn (RESTRICT) closed now that the table exists.
+            entity.HasOne<PlanAddOn>()
+                .WithMany()
+                .HasForeignKey(it => it.LinkedAddOnId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne<PlanTypeCatalog>()
                 .WithMany()
                 .HasForeignKey(it => it.LinkedPlanTypeId)

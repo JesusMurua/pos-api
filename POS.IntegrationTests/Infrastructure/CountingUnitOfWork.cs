@@ -46,7 +46,7 @@ public class CountingUnitOfWork : IUnitOfWork
     public IZoneRepository Zones => _inner.Zones;
     public IReservationRepository Reservations => _inner.Reservations;
     public ISubscriptionRepository Subscriptions => _inner.Subscriptions;
-    public ISubscriptionItemRepository SubscriptionItems => _inner.SubscriptionItems;
+    public ISubscriptionAddOnRepository SubscriptionAddOns => _inner.SubscriptionAddOns;
     public IStripeEventInboxRepository StripeEventInbox => _inner.StripeEventInbox;
     public IPaymentWebhookInboxRepository PaymentWebhookInbox => _inner.PaymentWebhookInbox;
     public IBranchPaymentConfigRepository BranchPaymentConfigs => _inner.BranchPaymentConfigs;

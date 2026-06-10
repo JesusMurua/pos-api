@@ -92,30 +92,17 @@ public static class StripeConstants
     // DbInitializer from the nested constants above) and the webhook resolves a
     // base price as catalog → custom-metadata → fail-closed. The nested price-id
     // constant classes (Basico/Pro/Enterprise) are kept solely as the seed source.
+    //
+    // PR-4: the static AddonPriceMap + IsAddon were retired. Add-ons now live in the
+    // DB-backed `PlanAddOn` catalog (seeded in DbInitializer); the webhook classifies an
+    // item as an add-on when its price id is in PlanAddOn.StripePriceId.
 
-    /// <summary>
-    /// Catalog of Add-on Price IDs (extra device licenses sold on top of a
-    /// base plan). Each entry maps to a <see cref="FeatureKey"/> and a
-    /// <c>QuantityPerUnit</c> indicating how many license units the add-on
-    /// grants per purchased Stripe quantity.
-    /// </summary>
-    /// <remarks>
-    /// Real Stripe Price IDs replace these placeholders once the dashboard
-    /// products are created. The placeholder ids are intentionally
-    /// unconventional (no <c>price_1</c> prefix) so they cannot collide with
-    /// real Stripe ids by accident.
-    /// </remarks>
-    public static readonly Dictionary<string, (FeatureKey Feature, int QuantityPerUnit)> AddonPriceMap = new()
+    /// <summary>The Stripe Price id placeholders for the seeded device-license add-ons.
+    /// Kept solely as the seed source for the PlanAddOn catalog (DbInitializer).</summary>
+    public static class AddOnPlaceholders
     {
-        { "price_dummy_kds",      (FeatureKey.MaxKdsScreens,      1) },
-        { "price_dummy_kiosk",    (FeatureKey.MaxKiosks,          1) },
-        { "price_dummy_cashier",  (FeatureKey.MaxCashRegisters,   1) },
-    };
-
-    /// <summary>
-    /// Returns <c>true</c> when <paramref name="priceId"/> is a registered
-    /// add-on price. Used by the webhook handler to classify each item in
-    /// <c>stripe_subscription.items.data</c> as base-plan vs add-on.
-    /// </summary>
-    public static bool IsAddon(string priceId) => AddonPriceMap.ContainsKey(priceId);
+        public const string Kds = "price_dummy_kds";
+        public const string Kiosk = "price_dummy_kiosk";
+        public const string Cashier = "price_dummy_cashier";
+    }
 }

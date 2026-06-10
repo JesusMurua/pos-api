@@ -195,6 +195,58 @@ public class StripeService : IStripeService
     }
 
     /// <inheritdoc />
+    public async Task<string> CreateAddOnPriceAsync(
+        int planAddOnId, int businessId, long amountCents, string currency, string billingCycle)
+    {
+        var interval = billingCycle.Equals("Annual", StringComparison.OrdinalIgnoreCase) ? "year" : "month";
+        var options = new PriceCreateOptions
+        {
+            UnitAmount = amountCents,
+            Currency = currency.ToLowerInvariant(),
+            Recurring = new PriceRecurringOptions { Interval = interval },
+            ProductData = new PriceProductDataOptions { Name = $"Custom add-on {planAddOnId} (business {businessId})" },
+            Metadata = new Dictionary<string, string>
+            {
+                { "addOnId", planAddOnId.ToString() },
+                { "businessId", businessId.ToString() },
+                { "kind", "custom-addon" },
+                { "billingCycle", billingCycle }
+            }
+        };
+        var requestOptions = new RequestOptions
+        {
+            IdempotencyKey = $"createaddonprice:{businessId}:{planAddOnId}:{amountCents}:{interval}:{currency}"
+        };
+        var price = await new PriceService(_stripeClient).CreateAsync(options, requestOptions);
+        return price.Id;
+    }
+
+    /// <inheritdoc />
+    public async Task<string> AddSubscriptionItemAsync(string stripeSubscriptionId, string priceId, int quantity)
+    {
+        var options = new SubscriptionItemCreateOptions
+        {
+            Subscription = stripeSubscriptionId,
+            Price = priceId,
+            Quantity = quantity,
+            ProrationBehavior = "create_prorations"
+        };
+        var requestOptions = new RequestOptions
+        {
+            IdempotencyKey = $"addsubitem:{stripeSubscriptionId}:{priceId}"
+        };
+        var item = await new SubscriptionItemService(_stripeClient).CreateAsync(options, requestOptions);
+        return item.Id;
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveSubscriptionItemAsync(string stripeSubscriptionItemId)
+    {
+        var options = new SubscriptionItemDeleteOptions { ProrationBehavior = "create_prorations" };
+        await new SubscriptionItemService(_stripeClient).DeleteAsync(stripeSubscriptionItemId, options);
+    }
+
+    /// <inheritdoc />
     public async Task QueueWebhookEventAsync(string stripeEventId, string eventType, string rawJson)
     {
         try

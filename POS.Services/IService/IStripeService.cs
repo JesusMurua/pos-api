@@ -33,6 +33,23 @@ public interface IStripeService
     Task ArchivePriceAsync(string priceId);
 
     /// <summary>
+    /// Creates a dynamic Stripe Price for a negotiated ADD-ON amount and returns its id.
+    /// Metadata kind="custom-addon" (+ addOnId/businessId) lets the webhook classify it.
+    /// Idempotent per (business, addOn, amount, interval).
+    /// </summary>
+    Task<string> CreateAddOnPriceAsync(
+        int planAddOnId, int businessId, long amountCents, string currency, string billingCycle);
+
+    /// <summary>
+    /// Appends a price item to a Stripe subscription with proration and returns the new
+    /// Stripe item id (<c>si_…</c>). Idempotent per (subscription, price).
+    /// </summary>
+    Task<string> AddSubscriptionItemAsync(string stripeSubscriptionId, string priceId, int quantity);
+
+    /// <summary>Removes a Stripe subscription item (add-on) with proration.</summary>
+    Task RemoveSubscriptionItemAsync(string stripeSubscriptionItemId);
+
+    /// <summary>
     /// Returns the current Subscription entity for the business.
     /// </summary>
     Task<Subscription?> GetSubscriptionStatusAsync(int businessId);

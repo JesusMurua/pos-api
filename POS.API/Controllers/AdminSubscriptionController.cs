@@ -42,4 +42,26 @@ public class AdminSubscriptionController : ControllerBase
         await _service.UpdateAsync(businessId, request, AdminTokenId);
         return NoContent();
     }
+
+    /// <summary>Activate an add-on (remote-first on the Stripe rail).</summary>
+    [HttpPost("add-ons")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ActivateAddOn(int businessId, [FromBody] AdminActivateAddOnRequest request)
+    {
+        await _service.ActivateAddOnAsync(businessId, request, AdminTokenId);
+        return NoContent();
+    }
+
+    /// <summary>Deactivate an active add-on (soft; archives a custom Stripe Price).</summary>
+    [HttpDelete("add-ons/{subscriptionAddOnId:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeactivateAddOn(int businessId, int subscriptionAddOnId)
+    {
+        await _service.DeactivateAddOnAsync(businessId, subscriptionAddOnId, AdminTokenId);
+        return NoContent();
+    }
 }

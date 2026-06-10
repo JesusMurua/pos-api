@@ -1,12 +1,12 @@
 # SaaS Billing v2 — Architecture & Design (multi-rail, admin-operable)
 
-> **Status:** **PR-1a + PR-1b + PR-2 + PR-3 delivered** (foundation; admin subscription
-> surface + remote-first reconcile + dynamic Stripe Prices + worker rewire off the
-> static PriceMap; **SubscriptionInvoice/Item + TenantPayment + manual payment flow +
-> daily invoice-generation/overdue job + Stripe-rail mirror + AppliedToInvoiceId FK
-> closed**; suite 152 → 191). All open questions resolved (2026-06-08). PR-4 next
-> (retire SubscriptionItem + unify add-ons + close LinkedAddOnId FK + DeviceService
-> rewire). Note: only **BillingMethodId** was flipped NOT NULL —
+> **Status:** **PR-1a + PR-1b + PR-2 + PR-3 + PR-4 delivered** (foundation; admin
+> subscription surface + remote-first reconcile + dynamic Stripe Prices; invoicing +
+> payments; **add-on unification: PlanAddOn catalog + SubscriptionAddOn (sole SSoT),
+> SubscriptionItem + AddonPriceMap retired, DeviceService licensing rewired, add-on
+> activation/deactivation with Stripe items, mid-cycle manual proration, LinkedAddOnId FK
+> closed**; suite 152 → 207). All open questions resolved (2026-06-08). PR-5 next
+> (NotificationOutbox + dispatch worker). Note: only **BillingMethodId** was flipped NOT NULL —
 > BaseAmountCents stays nullable (Enterprise has no price until negotiated). Source
 > of truth for the SaaS-billing redesign (PR-1…PR-7 below). Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).
