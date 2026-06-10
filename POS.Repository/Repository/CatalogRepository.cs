@@ -70,4 +70,13 @@ public class CatalogRepository : ICatalogRepository
 
     public async Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync() =>
         await _context.AccessMethodCatalogs.AsNoTracking().OrderBy(c => c.SortOrder).ToListAsync();
+
+    public async Task<string?> GetStripePlanPriceIdAsync(int planTypeId, string billingCycle, string pricingGroup) =>
+        await _context.StripePlanPrices.AsNoTracking()
+            .Where(p => p.PlanTypeId == planTypeId
+                && p.BillingCycle == billingCycle
+                && p.PricingGroup == pricingGroup
+                && p.IsActive)
+            .Select(p => p.StripePriceId)
+            .FirstOrDefaultAsync();
 }

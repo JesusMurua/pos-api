@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using POS.Domain.Enums;
 using POS.Domain.Helpers;
 using POS.Domain.Models;
@@ -51,6 +52,9 @@ public class StripeEventProcessorWorker : BackgroundService
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var stripeClient = scope.ServiceProvider.GetRequiredService<IStripeClient>();
         var featureGate = scope.ServiceProvider.GetRequiredService<IFeatureGateService>();
+        // Same scoped instance backing the UnitOfWork — used for the PR-2 base-price
+        // resolution against the StripePlanPrice catalog + Stripe rail lookup.
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var pendingEvents = await unitOfWork.StripeEventInbox.GetPendingEventsAsync(BatchSize);
         if (pendingEvents.Count == 0) return;
@@ -64,7 +68,7 @@ public class StripeEventProcessorWorker : BackgroundService
             try
             {
                 var stripeEvent = EventUtility.ParseEvent(inboxEvent.RawJson);
-                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate);
+                await ProcessEventAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db);
 
                 inboxEvent.Status = StripeEventStatus.Processed;
                 inboxEvent.ProcessedAt = DateTime.UtcNow;
@@ -92,16 +96,17 @@ public class StripeEventProcessorWorker : BackgroundService
         Event stripeEvent,
         IUnitOfWork unitOfWork,
         IStripeClient stripeClient,
-        IFeatureGateService featureGate)
+        IFeatureGateService featureGate,
+        ApplicationDbContext db)
     {
         switch (stripeEvent.Type)
         {
             case EventTypes.CheckoutSessionCompleted:
-                await HandleCheckoutSessionCompletedAsync(stripeEvent, unitOfWork, stripeClient, featureGate);
+                await HandleCheckoutSessionCompletedAsync(stripeEvent, unitOfWork, stripeClient, featureGate, db);
                 break;
 
             case EventTypes.CustomerSubscriptionUpdated:
-                await HandleSubscriptionUpdatedAsync(stripeEvent, unitOfWork, featureGate);
+                await HandleSubscriptionUpdatedAsync(stripeEvent, unitOfWork, featureGate, db);
                 break;
 
             case EventTypes.CustomerSubscriptionDeleted:
@@ -123,7 +128,8 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     private async Task HandleCheckoutSessionCompletedAsync(
-        Event stripeEvent, IUnitOfWork unitOfWork, IStripeClient stripeClient, IFeatureGateService featureGate)
+        Event stripeEvent, IUnitOfWork unitOfWork, IStripeClient stripeClient, IFeatureGateService featureGate,
+        ApplicationDbContext db)
     {
         var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
         if (session == null) return;
@@ -181,7 +187,7 @@ public class StripeEventProcessorWorker : BackgroundService
             subscription.CanceledAt = null;
         }
 
-        SyncItemsAndPlan(subscription, stripeSub);
+        await SyncItemsAndPlanAsync(subscription, stripeSub, db);
 
         if (isNew)
             await unitOfWork.Subscriptions.AddAsync(subscription);
@@ -204,7 +210,7 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     private async Task HandleSubscriptionUpdatedAsync(
-        Event stripeEvent, IUnitOfWork unitOfWork, IFeatureGateService featureGate)
+        Event stripeEvent, IUnitOfWork unitOfWork, IFeatureGateService featureGate, ApplicationDbContext db)
     {
         var stripeSub = stripeEvent.Data.Object as Stripe.Subscription;
         if (stripeSub == null) return;
@@ -234,7 +240,7 @@ public class StripeEventProcessorWorker : BackgroundService
         subscription.CurrentPeriodStart = stripeSub.Items.Data[0].CurrentPeriodStart;
         subscription.CurrentPeriodEnd = stripeSub.Items.Data[0].CurrentPeriodEnd;
 
-        SyncItemsAndPlan(subscription, stripeSub);
+        await SyncItemsAndPlanAsync(subscription, stripeSub, db);
 
         unitOfWork.Subscriptions.Update(subscription);
 
@@ -360,24 +366,27 @@ public class StripeEventProcessorWorker : BackgroundService
     }
 
     /// <summary>
-    /// Clears the local <see cref="Domain.Models.Subscription.Items"/>
-    /// collection and rebuilds it from <paramref name="stripeSub"/> so
-    /// the local row mirrors Stripe's authoritative state. Each item is
-    /// classified as base plan or add-on via <see cref="StripeConstants"/>;
-    /// unknown Price IDs raise <see cref="KeyNotFoundException"/> (fail-closed).
-    /// After rebuilding, the method validates that exactly one item carries
-    /// <see cref="Domain.Models.SubscriptionItem.IsBasePlan"/> and uses it
-    /// to resolve <c>PlanTypeId</c>, <c>BillingCycle</c> and <c>PricingGroup</c>.
+    /// Clears the local <see cref="Domain.Models.Subscription.Items"/> collection and
+    /// rebuilds it from <paramref name="stripeSub"/>. A base-plan price is resolved
+    /// (PR-2) as: <b>catalog</b> (<c>StripePlanPrice</c>) → <b>custom</b>
+    /// (<c>price.Metadata["planTypeId"]</c>, <c>kind=custom</c>) → <b>fail-closed</b>
+    /// (<see cref="KeyNotFoundException"/>). Add-ons keep using
+    /// <see cref="StripeConstants.IsAddon"/>. Also populates the frozen Stripe columns
+    /// (<c>StripePriceId</c>/<c>StripeBaseItemId</c>/<c>BaseAmountCents</c>) and the
+    /// <c>BillingMethodId</c> (the Stripe rail) from Stripe's authoritative state.
     /// </summary>
-    private static void SyncItemsAndPlan(
+    private static async Task SyncItemsAndPlanAsync(
         Domain.Models.Subscription subscription,
-        Stripe.Subscription stripeSub)
+        Stripe.Subscription stripeSub,
+        ApplicationDbContext db)
     {
         // Clear-and-replace: EF tracks removals on the loaded collection so
         // the corresponding SubscriptionItems rows get deleted on SaveChanges.
         subscription.Items.Clear();
 
         var now = DateTime.UtcNow;
+        var catalog = (await db.StripePlanPrices.AsNoTracking().ToListAsync())
+            .ToDictionary(p => p.StripePriceId, StringComparer.Ordinal);
 
         foreach (var item in stripeSub.Items.Data)
         {
@@ -385,15 +394,17 @@ public class StripeEventProcessorWorker : BackgroundService
                 ?? throw new InvalidOperationException(
                     $"Stripe subscription {stripeSub.Id} item {item.Id} has no Price.Id.");
 
-            bool isBase = StripeConstants.IsBasePlan(priceId);
+            bool inCatalog = catalog.ContainsKey(priceId);
+            bool isCustom = !inCatalog && string.Equals(
+                item.Price?.Metadata?.GetValueOrDefault("kind"), "custom", StringComparison.OrdinalIgnoreCase);
+            bool isBase = inCatalog || isCustom;
             bool isAddon = StripeConstants.IsAddon(priceId);
 
             if (!isBase && !isAddon)
             {
                 throw new KeyNotFoundException(
-                    $"Stripe Price ID '{priceId}' on subscription {stripeSub.Id} is not registered " +
-                    "in StripeConstants.PriceMap nor StripeConstants.AddonPriceMap. " +
-                    "Add it to the catalog before processing this subscription (fail-closed).");
+                    $"Stripe Price ID '{priceId}' on subscription {stripeSub.Id} is not in the StripePlanPrice " +
+                    "catalog, not a custom price (metadata.kind=custom), nor a registered add-on (fail-closed).");
             }
 
             subscription.Items.Add(new Domain.Models.SubscriptionItem
@@ -408,8 +419,7 @@ public class StripeEventProcessorWorker : BackgroundService
         }
 
         // Exactly-one-base-plan invariant — fail-closed so catalog drift or
-        // mis-classified add-ons surface as failed events instead of silent
-        // tenant downgrades.
+        // mis-classified add-ons surface as failed events instead of silent downgrades.
         var basePlanItems = subscription.Items.Where(i => i.IsBasePlan).ToList();
         if (basePlanItems.Count == 0)
             throw new InvalidOperationException(
@@ -418,10 +428,37 @@ public class StripeEventProcessorWorker : BackgroundService
             throw new InvalidOperationException(
                 $"Stripe subscription {stripeSub.Id} has {basePlanItems.Count} base plan items — only one expected.");
 
-        var basePlanPriceId = basePlanItems[0].StripePriceId;
-        subscription.PlanTypeId = StripeConstants.ResolvePlanTypeId(basePlanPriceId);
-        subscription.BillingCycle = StripeConstants.ResolveBillingCycle(basePlanPriceId);
-        subscription.PricingGroup = StripeConstants.ResolvePricingGroup(basePlanPriceId);
+        var baseItem = basePlanItems[0];
+        var basePriceId = baseItem.StripePriceId;
+        var baseStripeItem = stripeSub.Items.Data.First(i => i.Id == baseItem.StripeItemId);
+
+        if (catalog.TryGetValue(basePriceId, out var cat))
+        {
+            subscription.PlanTypeId = cat.PlanTypeId;
+            subscription.BillingCycle = cat.BillingCycle;
+            subscription.PricingGroup = cat.PricingGroup;
+        }
+        else
+        {
+            // Custom price: resolve from the Stripe Price metadata set at CreateCustomPriceAsync.
+            var meta = baseStripeItem.Price?.Metadata;
+            if (meta == null || !int.TryParse(meta.GetValueOrDefault("planTypeId"), out var planTypeId))
+                throw new KeyNotFoundException(
+                    $"Custom Stripe Price '{basePriceId}' on subscription {stripeSub.Id} has no resolvable " +
+                    "planTypeId metadata (fail-closed).");
+            subscription.PlanTypeId = planTypeId;
+            subscription.BillingCycle = meta.GetValueOrDefault("billingCycle")
+                ?? (string.Equals(baseStripeItem.Price?.Recurring?.Interval, "year", StringComparison.OrdinalIgnoreCase) ? "Annual" : "Monthly");
+            subscription.PricingGroup = meta.GetValueOrDefault("pricingGroup") ?? "General";
+        }
+
+        // Frozen Stripe truth + the rail. BaseAmountCents = the Stripe unit_amount
+        // (covers catalog and custom uniformly).
+        subscription.StripePriceId = basePriceId;
+        subscription.StripeBaseItemId = baseItem.StripeItemId;
+        subscription.BaseAmountCents = (int?)baseStripeItem.Price?.UnitAmount;
+        subscription.BillingMethodId = await db.SaaSBillingMethods
+            .Where(m => m.Code == "Stripe").Select(m => (int?)m.Id).FirstOrDefaultAsync();
     }
 
     #endregion

@@ -152,6 +152,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<SaaSBillingMethod> SaaSBillingMethods { get; set; } = null!;
     public DbSet<BusinessAuditLog> BusinessAuditLogs { get; set; } = null!;
     public DbSet<SubscriptionPriceHistory> SubscriptionPriceHistories { get; set; } = null!;
+    public DbSet<StripePlanPrice> StripePlanPrices { get; set; } = null!;
     public DbSet<KitchenStatusCatalog> KitchenStatusCatalogs { get; set; } = null!;
     public DbSet<DisplayStatusCatalog> DisplayStatusCatalogs { get; set; } = null!;
     public DbSet<DeviceModeCatalog> DeviceModeCatalogs { get; set; } = null!;
@@ -294,10 +295,13 @@ public class ApplicationDbContext : DbContext
             entity.Property(s => s.StripePriceId).HasMaxLength(64);
             entity.Property(s => s.StripeBaseItemId).HasMaxLength(64);
 
+            // PR-2: BillingMethodId is now NOT NULL (every subscription has a rail).
+            // BaseAmountCents stays nullable (Enterprise has no price until negotiated).
             entity.HasOne(s => s.BillingMethod)
                 .WithMany()
                 .HasForeignKey(s => s.BillingMethodId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired();
         });
 
         modelBuilder.Entity<SubscriptionPriceHistory>(entity =>
@@ -313,6 +317,20 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(h => h.SubscriptionId);
             // AppliedToInvoiceId is a plain nullable column in PR-1b; the FK to
             // SubscriptionInvoice is added in PR-3 (the table does not exist yet).
+        });
+
+        // Stripe Price catalog (PR-2). DB-backed replacement of the static PriceMap.
+        modelBuilder.Entity<StripePlanPrice>(entity =>
+        {
+            entity.Property(p => p.BillingCycle).HasMaxLength(20);
+            entity.Property(p => p.PricingGroup).HasMaxLength(20);
+            entity.Property(p => p.StripePriceId).HasMaxLength(64);
+            entity.HasIndex(p => p.StripePriceId).IsUnique();
+            entity.HasIndex(p => new { p.PlanTypeId, p.BillingCycle, p.PricingGroup });
+            entity.HasOne<PlanTypeCatalog>()
+                .WithMany()
+                .HasForeignKey(p => p.PlanTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SubscriptionItem>(entity =>

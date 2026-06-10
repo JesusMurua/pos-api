@@ -55,13 +55,17 @@ public class SubscriptionController : BaseApiController
         try
         {
             var url = await _stripeService.CreateCheckoutSessionAsync(
-                BusinessId, request.PriceId, request.SuccessUrl, request.CancelUrl);
+                BusinessId, request.PlanTypeId, request.BillingCycle, request.SuccessUrl, request.CancelUrl);
 
             return Ok(new { url });
         }
         catch (NotFoundException ex)
         {
             return NotFound(ex.Message);
+        }
+        catch (ConcurrencyConflictException ex)
+        {
+            return Conflict(ex.Message); // Enterprise / negotiated → contact-sales (409)
         }
         catch (Exception ex)
         {

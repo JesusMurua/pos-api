@@ -15,7 +15,12 @@ public class SubscriptionPriceHistory
     /// <summary>FK → Subscription (RESTRICT).</summary>
     public int SubscriptionId { get; set; }
 
-    public int BeforeAmountCents { get; set; }
+    /// <summary>
+    /// Price before the change, in cents. Nullable: the first price assignment to
+    /// an Enterprise subscription (negotiated after a price-less alta) has no
+    /// "before" value (Before=null → After=X).
+    /// </summary>
+    public int? BeforeAmountCents { get; set; }
 
     public int AfterAmountCents { get; set; }
 

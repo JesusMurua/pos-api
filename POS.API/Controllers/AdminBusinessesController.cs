@@ -38,6 +38,7 @@ public class AdminBusinessesController : ControllerBase
     private readonly IBusinessSnapshotService _businessSnapshot;
     private readonly IFeatureGateService _featureGate;
     private readonly IBusinessAuditService _businessAudit;
+    private readonly IAdminSubscriptionService _adminSubscription;
     private readonly ILogger<AdminBusinessesController> _logger;
 
     public AdminBusinessesController(
@@ -47,6 +48,7 @@ public class AdminBusinessesController : ControllerBase
         IBusinessSnapshotService businessSnapshot,
         IFeatureGateService featureGate,
         IBusinessAuditService businessAudit,
+        IAdminSubscriptionService adminSubscription,
         ILogger<AdminBusinessesController> logger)
     {
         _authService = authService;
@@ -55,6 +57,7 @@ public class AdminBusinessesController : ControllerBase
         _businessSnapshot = businessSnapshot;
         _featureGate = featureGate;
         _businessAudit = businessAudit;
+        _adminSubscription = adminSubscription;
         _logger = logger;
     }
 
@@ -436,9 +439,10 @@ public class AdminBusinessesController : ControllerBase
     }
 
     /// <summary>
-    /// Changes the tenant's plan directly (admin override). Stripe-managed
-    /// subscriptions will resync on the next webhook event — the worker
-    /// treats Stripe as single source of truth for billed tenants.
+    /// Changes the tenant's plan. <b>Deprecated alias</b> — delegates to
+    /// <see cref="IAdminSubscriptionService.ChangePlanAsync"/> (no raw FK write) so the
+    /// plan change goes through the same path as the admin subscription surface. New
+    /// clients should use <c>PUT /api/Admin/businesses/{id}/subscription</c>.
     /// </summary>
     [HttpPatch("{id:int}/plan")]
     [ProducesResponseType(typeof(AdminBusinessDetailResponse), StatusCodes.Status200OK)]
@@ -454,13 +458,7 @@ public class AdminBusinessesController : ControllerBase
         var business = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         if (business is null) return NotFound();
 
-        var before = new { business.PlanTypeId };
-        business.PlanTypeId = request.PlanTypeId;
-        _businessAudit.Record(
-            BusinessAuditAction.PlanChanged, id, request.Reason,
-            before, new { business.PlanTypeId }, AdminTokenId);
-        await _unitOfWork.SaveChangesAsync(); // mutation + audit row commit atomically
-        _featureGate.Invalidate(id);
+        await _adminSubscription.ChangePlanAsync(id, request.PlanTypeId, request.Reason, AdminTokenId);
 
         var fresh = await _unitOfWork.Business.GetByIdForAdminAsync(id, cancellationToken);
         var detail = await BuildDetailAsync(fresh!);

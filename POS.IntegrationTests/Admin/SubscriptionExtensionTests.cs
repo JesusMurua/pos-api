@@ -29,15 +29,17 @@ public class SubscriptionExtensionTests : IClassFixture<CustomWebApplicationFact
     }
 
     [Fact]
-    public async Task NewColumns_DefaultCorrectly_AndNullableDeferStartNull()
+    public async Task NewColumns_DefaultCorrectly_AndBillingMethodPersists()
     {
         var businessId = await CreateBusinessAsync();
 
         int subId;
+        int railId;
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var sub = NewSubscription(businessId);
+            railId = await db.SaaSBillingMethods.Where(m => m.Code == "Stripe").Select(m => m.Id).FirstAsync();
+            var sub = NewSubscription(businessId, railId);
             db.Subscriptions.Add(sub);
             await db.SaveChangesAsync();
             subId = sub.Id;
@@ -50,10 +52,8 @@ public class SubscriptionExtensionTests : IClassFixture<CustomWebApplicationFact
 
             sub.Currency.Should().Be("MXN", "default applies without a creator setting it");
             sub.CfdiRequired.Should().BeFalse();
-            sub.BillingMethodId.Should().BeNull("nullable-defer until PR-2");
-            sub.BaseAmountCents.Should().BeNull("nullable-defer until PR-2");
-            sub.StripePriceId.Should().BeNull();
-            sub.StripeBaseItemId.Should().BeNull();
+            sub.BillingMethodId.Should().Be(railId, "PR-2: BillingMethodId is required (the rail)");
+            sub.BaseAmountCents.Should().Be(14900);
         }
     }
 
@@ -65,14 +65,15 @@ public class SubscriptionExtensionTests : IClassFixture<CustomWebApplicationFact
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        var sub = NewSubscription(businessId);
+        var railId = await db.SaaSBillingMethods.Where(m => m.Code == "Stripe").Select(m => m.Id).FirstAsync();
+        var sub = NewSubscription(businessId, railId);
         db.Subscriptions.Add(sub);
         await db.SaveChangesAsync();
 
         db.Set<SubscriptionPriceHistory>().Add(new SubscriptionPriceHistory
         {
             SubscriptionId = sub.Id,
-            BeforeAmountCents = 0,
+            BeforeAmountCents = null,
             AfterAmountCents = 14900,
             ChangedAtUtc = DateTime.UtcNow,
             ChangedByTokenId = "ops-test",
@@ -90,7 +91,7 @@ public class SubscriptionExtensionTests : IClassFixture<CustomWebApplicationFact
 
     #region Helpers
 
-    private static Subscription NewSubscription(int businessId) => new()
+    private static Subscription NewSubscription(int businessId, int billingMethodId) => new()
     {
         BusinessId = businessId,
         StripeCustomerId = $"cus_{businessId}",
@@ -101,7 +102,9 @@ public class SubscriptionExtensionTests : IClassFixture<CustomWebApplicationFact
         Status = "active",
         CurrentPeriodStart = DateTime.UtcNow,
         CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1),
-        UpdatedAt = DateTime.UtcNow
+        UpdatedAt = DateTime.UtcNow,
+        BillingMethodId = billingMethodId,
+        BaseAmountCents = 14900
     };
 
     private async Task<int> CreateBusinessAsync()

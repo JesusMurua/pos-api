@@ -98,6 +98,7 @@ public static class DbInitializer
         await UpsertPaymentMethodCatalogAsync(context);
         await UpsertPlanPaymentMethodMatrixAsync(context);
         await UpsertSaaSBillingMethodsAsync(context);
+        await UpsertStripePlanPricesAsync(context);
 
         if (!await context.KitchenStatusCatalogs.AnyAsync())
         {
@@ -585,6 +586,11 @@ public static class DbInitializer
         var trialEnd = DateTime.UtcNow.AddMonths(3);
         var now = DateTime.UtcNow;
 
+        // PR-2: dev subs carry the Stripe rail + fixed placeholders (no real Stripe
+        // call — the dev tenant never receives a real webhook). §9 B.
+        var stripeRailId = await context.SaaSBillingMethods
+            .Where(m => m.Code == "Stripe").Select(m => m.Id).FirstAsync();
+
         foreach (var business in businesses)
         {
             context.Subscriptions.Add(new Subscription
@@ -599,7 +605,12 @@ public static class DbInitializer
                 TrialEndsAt = trialEnd,
                 CurrentPeriodStart = now,
                 CurrentPeriodEnd = trialEnd,
-                UpdatedAt = now
+                UpdatedAt = now,
+                BillingMethodId = stripeRailId,
+                BaseAmountCents = 0,
+                Currency = "MXN",
+                StripePriceId = "price_test_seed_free",
+                StripeBaseItemId = $"si_test_seed_{business.Id}"
             });
         }
 
@@ -782,6 +793,69 @@ public static class DbInitializer
 
         await context.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// Seeds the 18 base-plan Stripe Price ids (3 tiers × 3 groups × 2 cycles) into
+    /// the DB-backed catalog (PR-2, OQ-2). Maps each to the CORRECT PlanTypeId —
+    /// fixes a latent bug where the retired PriceMap labelled Basic prices "Basico",
+    /// which the string-parse resolver silently bucketed to Free. Idempotent by
+    /// StripePriceId. See docs/saas-billing-architecture.md §5.
+    /// </summary>
+    private static async Task UpsertStripePlanPricesAsync(ApplicationDbContext context)
+    {
+        var desired = new[]
+        {
+            Spp(PlanTypeIds.Basic, "Monthly", "General",    StripeConstants.Basico.General.Monthly),
+            Spp(PlanTypeIds.Basic, "Annual",  "General",    StripeConstants.Basico.General.Annual),
+            Spp(PlanTypeIds.Basic, "Monthly", "Standard",   StripeConstants.Basico.Standard.Monthly),
+            Spp(PlanTypeIds.Basic, "Annual",  "Standard",   StripeConstants.Basico.Standard.Annual),
+            Spp(PlanTypeIds.Basic, "Monthly", "Restaurant", StripeConstants.Basico.Restaurant.Monthly),
+            Spp(PlanTypeIds.Basic, "Annual",  "Restaurant", StripeConstants.Basico.Restaurant.Annual),
+
+            Spp(PlanTypeIds.Pro, "Monthly", "General",    StripeConstants.Pro.General.Monthly),
+            Spp(PlanTypeIds.Pro, "Annual",  "General",    StripeConstants.Pro.General.Annual),
+            Spp(PlanTypeIds.Pro, "Monthly", "Standard",   StripeConstants.Pro.Standard.Monthly),
+            Spp(PlanTypeIds.Pro, "Annual",  "Standard",   StripeConstants.Pro.Standard.Annual),
+            Spp(PlanTypeIds.Pro, "Monthly", "Restaurant", StripeConstants.Pro.Restaurant.Monthly),
+            Spp(PlanTypeIds.Pro, "Annual",  "Restaurant", StripeConstants.Pro.Restaurant.Annual),
+
+            Spp(PlanTypeIds.Enterprise, "Monthly", "General",    StripeConstants.Enterprise.General.Monthly),
+            Spp(PlanTypeIds.Enterprise, "Annual",  "General",    StripeConstants.Enterprise.General.Annual),
+            Spp(PlanTypeIds.Enterprise, "Monthly", "Standard",   StripeConstants.Enterprise.Standard.Monthly),
+            Spp(PlanTypeIds.Enterprise, "Annual",  "Standard",   StripeConstants.Enterprise.Standard.Annual),
+            Spp(PlanTypeIds.Enterprise, "Monthly", "Restaurant", StripeConstants.Enterprise.Restaurant.Monthly),
+            Spp(PlanTypeIds.Enterprise, "Annual",  "Restaurant", StripeConstants.Enterprise.Restaurant.Annual),
+        };
+
+        var existing = (await context.StripePlanPrices.ToListAsync())
+            .ToDictionary(p => p.StripePriceId, StringComparer.Ordinal);
+
+        foreach (var d in desired)
+        {
+            if (existing.TryGetValue(d.StripePriceId, out var row))
+            {
+                row.PlanTypeId = d.PlanTypeId;
+                row.BillingCycle = d.BillingCycle;
+                row.PricingGroup = d.PricingGroup;
+                row.IsActive = true;
+            }
+            else
+            {
+                context.StripePlanPrices.Add(d);
+            }
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private static StripePlanPrice Spp(int planTypeId, string cycle, string group, string priceId) => new()
+    {
+        PlanTypeId = planTypeId,
+        BillingCycle = cycle,
+        PricingGroup = group,
+        StripePriceId = priceId,
+        IsActive = true
+    };
 
     private static SaaSBillingMethod Rail(
         string code, string name, bool isAutomatic, bool requiresReference,

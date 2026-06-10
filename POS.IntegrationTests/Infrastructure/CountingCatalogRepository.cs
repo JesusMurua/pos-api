@@ -138,4 +138,10 @@ public class CountingCatalogRepository : ICatalogRepository
         _counter.Increment();
         return _inner.GetAccessMethodsAsync();
     }
+
+    public Task<string?> GetStripePlanPriceIdAsync(int planTypeId, string billingCycle, string pricingGroup)
+    {
+        _counter.Increment();
+        return _inner.GetStripePlanPriceIdAsync(planTypeId, billingCycle, pricingGroup);
+    }
 }

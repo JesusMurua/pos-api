@@ -87,67 +87,11 @@ public static class StripeConstants
         _ => "General"
     };
 
-    /// <summary>
-    /// Maps Stripe Price IDs to (PlanType, BillingCycle, PricingGroup) tuples.
-    /// </summary>
-    public static readonly Dictionary<string, (string Plan, string Cycle, string Group)> PriceMap = new()
-    {
-        // Basico
-        { Basico.General.Monthly, ("Basico", "Monthly", "General") },
-        { Basico.General.Annual, ("Basico", "Annual", "General") },
-        { Basico.Standard.Monthly, ("Basico", "Monthly", "Standard") },
-        { Basico.Standard.Annual, ("Basico", "Annual", "Standard") },
-        { Basico.Restaurant.Monthly, ("Basico", "Monthly", "Restaurant") },
-        { Basico.Restaurant.Annual, ("Basico", "Annual", "Restaurant") },
-        // Pro
-        { Pro.General.Monthly, ("Pro", "Monthly", "General") },
-        { Pro.General.Annual, ("Pro", "Annual", "General") },
-        { Pro.Standard.Monthly, ("Pro", "Monthly", "Standard") },
-        { Pro.Standard.Annual, ("Pro", "Annual", "Standard") },
-        { Pro.Restaurant.Monthly, ("Pro", "Monthly", "Restaurant") },
-        { Pro.Restaurant.Annual, ("Pro", "Annual", "Restaurant") },
-        // Enterprise
-        { Enterprise.General.Monthly, ("Enterprise", "Monthly", "General") },
-        { Enterprise.General.Annual, ("Enterprise", "Annual", "General") },
-        { Enterprise.Standard.Monthly, ("Enterprise", "Monthly", "Standard") },
-        { Enterprise.Standard.Annual, ("Enterprise", "Annual", "Standard") },
-        { Enterprise.Restaurant.Monthly, ("Enterprise", "Monthly", "Restaurant") },
-        { Enterprise.Restaurant.Annual, ("Enterprise", "Annual", "Restaurant") },
-    };
-
-    /// <summary>
-    /// Resolves a Stripe Price ID to its base plan name. Throws
-    /// <see cref="KeyNotFoundException"/> when the id is not present in
-    /// <see cref="PriceMap"/> — fail-closed semantics force a registry update
-    /// instead of silently bucketing unknown prices into "Free", which used
-    /// to downgrade tenants invisibly when Stripe drift occurred.
-    /// </summary>
-    public static string ResolvePlanType(string priceId)
-    {
-        if (!PriceMap.TryGetValue(priceId, out var info))
-            throw new KeyNotFoundException(
-                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap. Add it to the catalog before processing this subscription.");
-        return info.Plan;
-    }
-
-    public static int ResolvePlanTypeId(string priceId) =>
-        PlanTypeIds.FromEnum(Enum.TryParse<Enums.PlanType>(ResolvePlanType(priceId), true, out var p) ? p : Enums.PlanType.Free);
-
-    public static string ResolveBillingCycle(string priceId)
-    {
-        if (!PriceMap.TryGetValue(priceId, out var info))
-            throw new KeyNotFoundException(
-                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap.");
-        return info.Cycle;
-    }
-
-    public static string ResolvePricingGroup(string priceId)
-    {
-        if (!PriceMap.TryGetValue(priceId, out var info))
-            throw new KeyNotFoundException(
-                $"Stripe Price ID '{priceId}' is not registered as a base plan in StripeConstants.PriceMap.");
-        return info.Group;
-    }
+    // PR-2: the base-plan PriceMap + Resolve*/IsBasePlan were retired. The Stripe
+    // Price ids now live in the DB-backed `StripePlanPrice` catalog (seeded in
+    // DbInitializer from the nested constants above) and the webhook resolves a
+    // base price as catalog → custom-metadata → fail-closed. The nested price-id
+    // constant classes (Basico/Pro/Enterprise) are kept solely as the seed source.
 
     /// <summary>
     /// Catalog of Add-on Price IDs (extra device licenses sold on top of a
@@ -174,10 +118,4 @@ public static class StripeConstants
     /// <c>stripe_subscription.items.data</c> as base-plan vs add-on.
     /// </summary>
     public static bool IsAddon(string priceId) => AddonPriceMap.ContainsKey(priceId);
-
-    /// <summary>
-    /// Returns <c>true</c> when <paramref name="priceId"/> is a registered
-    /// base plan price.
-    /// </summary>
-    public static bool IsBasePlan(string priceId) => PriceMap.ContainsKey(priceId);
 }

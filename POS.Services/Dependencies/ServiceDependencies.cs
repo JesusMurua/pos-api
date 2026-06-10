@@ -56,6 +56,7 @@ public static class ServiceDependencies
         // SaaS billing foundation (PR-1a): persistent admin action log + plan-price editing.
         services.AddScoped<IBusinessAuditService, BusinessAuditService>();
         services.AddScoped<IPlanTypeAdminService, PlanTypeAdminService>();
+        services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
         services.AddSingleton<ITaxResolverService, TaxResolverService>();
         services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
         services.AddHttpClient<IClipService, ClipService>();

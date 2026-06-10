@@ -25,4 +25,7 @@ public interface ICatalogRepository
 
     Task<IEnumerable<AccessReasonCatalog>> GetAccessReasonsAsync();
     Task<IEnumerable<AccessMethodCatalog>> GetAccessMethodsAsync();
+
+    /// <summary>Forward lookup of the catalog Stripe price id for self-service checkout (PR-2).</summary>
+    Task<string?> GetStripePlanPriceIdAsync(int planTypeId, string billingCycle, string pricingGroup);
 }

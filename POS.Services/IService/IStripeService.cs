@@ -8,9 +8,29 @@ namespace POS.Services.IService;
 public interface IStripeService
 {
     /// <summary>
-    /// Creates a Stripe Checkout Session and returns the session URL.
+    /// Creates a Stripe Checkout Session for a CATALOG plan (self-service) and returns
+    /// the session URL. The price id is resolved server-side from the StripePlanPrice
+    /// catalog by (planTypeId, billingCycle, business pricing group). Enterprise and
+    /// businesses with an existing active subscription are rejected (contact-sales).
     /// </summary>
-    Task<string> CreateCheckoutSessionAsync(int businessId, string priceId, string successUrl, string cancelUrl);
+    Task<string> CreateCheckoutSessionAsync(int businessId, int planTypeId, string billingCycle, string successUrl, string cancelUrl);
+
+    /// <summary>
+    /// Creates a dynamic Stripe Price for a negotiated amount and returns its id.
+    /// Carries metadata (planTypeId/businessId/kind=custom/cycle/group) so the webhook
+    /// can resolve it without a catalog row. Idempotent per (business, amount, interval).
+    /// </summary>
+    Task<string> CreateCustomPriceAsync(
+        int planTypeId, int businessId, long amountCents, string currency, string billingCycle, string pricingGroup);
+
+    /// <summary>
+    /// Moves a Stripe subscription's base item to a new price with proration.
+    /// Idempotent per (subscription, price).
+    /// </summary>
+    Task UpdateSubscriptionPriceAsync(string stripeSubscriptionId, string baseItemId, string newPriceId);
+
+    /// <summary>Archives (deactivates) a Stripe Price. Stripe prices cannot be deleted.</summary>
+    Task ArchivePriceAsync(string priceId);
 
     /// <summary>
     /// Returns the current Subscription entity for the business.
