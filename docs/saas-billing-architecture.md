@@ -179,7 +179,7 @@ Existing kept: `BusinessId`, `StripeCustomerId`, `StripeSubscriptionId`, `Items`
 | New column | Type | Null | Notes |
 |---|---|---|---|
 | BillingMethodId | int (FK→SaaSBillingMethod) | no* | *NOT NULL **after** backfill (§12). `ON DELETE RESTRICT`. |
-| BaseAmountCents | int | no | Negotiated current price (M8) — the **per-tenant SSoT** of what this tenant is charged. Seed default = `PlanType.MonthlyPrice × 100`. Editing the catalog price (OQ-3) does **not** retroactively change this. |
+| BaseAmountCents | int? | **yes** | Negotiated current price (M8) — the **per-tenant SSoT** of what this tenant is charged. **Nullable**: an Enterprise tenant with no negotiated price stays `null` until admin assignment. The PR-2 *flip-only-`BillingMethodId`* decision kept this column nullable (only `BillingMethodId` became NOT NULL). Seed default = `PlanType.MonthlyPrice × 100` when `MonthlyPrice` is not null. |
 | Currency | string(3) | no | Default "MXN". |
 | NextBillingDate | DateTime? | yes | Drives the invoice-generation job. |
 | CfdiRequired | bool | no | Default false. true ⇒ each closed invoice should emit Fino's own CFDI (deferred, §11). |
