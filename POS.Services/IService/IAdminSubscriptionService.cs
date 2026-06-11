@@ -13,6 +13,15 @@ public interface IAdminSubscriptionService
     Task<AdminSubscriptionDetailDto> GetAsync(int businessId);
 
     /// <summary>
+    /// Provisions a subscription where none exists. Stripe rail: remote-first (create Customer +
+    /// Subscription against the catalog Price, await 2xx, then persist the local row mirroring
+    /// Stripe). Manual rail: local only. Records a SubscriptionCreated audit row and keeps
+    /// Business.PlanTypeId in sync. Rejects a second subscription (409) and an unpriced Stripe
+    /// rail (400). Returns the created detail.
+    /// </summary>
+    Task<AdminSubscriptionDetailDto> CreateAsync(int businessId, AdminCreateSubscriptionRequest request, string? tokenId);
+
+    /// <summary>
     /// Reconcile: applies the requested changes. On the Stripe rail a BaseAmountCents
     /// change creates a dynamic Price and updates Stripe (await 2xx, then persist; on a
     /// Stripe error nothing is committed). Persists Subscription + SubscriptionPriceHistory

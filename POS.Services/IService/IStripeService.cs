@@ -3,10 +3,33 @@ using POS.Domain.Models;
 namespace POS.Services.IService;
 
 /// <summary>
+/// The fields the admin create flow persists onto the local <see cref="Subscription"/> row,
+/// taken straight from the Stripe SDK create response so the local row mirrors Stripe exactly
+/// (and a later <c>customer.subscription.updated</c> webhook resolves to it by id, not a duplicate).
+/// </summary>
+public sealed record StripeSubscriptionCreateResult(
+    string SubscriptionId,
+    string CustomerId,
+    string BaseItemId,
+    string Status,
+    DateTime CurrentPeriodStart,
+    DateTime CurrentPeriodEnd);
+
+/// <summary>
 /// Manages Stripe checkout sessions, subscription status, cancellations, and webhook processing.
 /// </summary>
 public interface IStripeService
 {
+    /// <summary>
+    /// Admin-driven subscription provisioning (no Checkout): creates the Stripe Customer
+    /// (if the business has none) and a Subscription against the CATALOG Price resolved by
+    /// (planTypeId, billingCycle, pricingGroup). Off-session, idempotent per business.
+    /// Throws <see cref="POS.Domain.Exceptions.ValidationException"/> when no catalog Price
+    /// exists (e.g. Enterprise) and a <c>StripeException</c> on any SDK failure.
+    /// </summary>
+    Task<StripeSubscriptionCreateResult> CreateSubscriptionAsync(
+        int businessId, int planTypeId, string billingCycle, string pricingGroup);
+
     /// <summary>
     /// Creates a Stripe Checkout Session for a CATALOG plan (self-service) and returns
     /// the session URL. The price id is resolved server-side from the StripePlanPrice

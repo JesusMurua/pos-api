@@ -76,12 +76,115 @@ public class AdminSubscriptionService : IAdminSubscriptionService
             x.CustomPriceCents ?? x.DefaultPriceCents,
             x.BillingCycle.ToString(), x.ActivatedAt)).ToList();
 
+        // Manual-rail rows carry empty Stripe ids (the columns are NOT NULL by legacy design);
+        // surface them as null so the client sees "no Stripe customer" rather than "".
+        var stripeCustomerId = string.IsNullOrEmpty(sub.StripeCustomerId) ? null : sub.StripeCustomerId;
+        var stripeSubscriptionId = string.IsNullOrEmpty(sub.StripeSubscriptionId) ? null : sub.StripeSubscriptionId;
+
         return new AdminSubscriptionDetailDto(
             sub.BusinessId, sub.PlanTypeId, PlanTypeIds.ToCode(sub.PlanTypeId),
             sub.BaseAmountCents, sub.Currency, sub.BillingMethodId, railCode,
-            sub.Status, sub.BillingCycle, sub.PricingGroup, sub.StripeSubscriptionId,
+            sub.Status, sub.BillingCycle, sub.PricingGroup, stripeCustomerId, stripeSubscriptionId,
             sub.StripePriceId, sub.CfdiRequired, sub.BillingEmail, sub.Notes,
             sub.NextBillingDate, history, addOns);
+    }
+
+    public async Task<AdminSubscriptionDetailDto> CreateAsync(
+        int businessId, AdminCreateSubscriptionRequest request, string? tokenId)
+    {
+        // One subscription per business: pre-check (not catch) so the conflict is a clean 409.
+        var alreadyExists = await _context.Subscriptions.IgnoreQueryFilters()
+            .AnyAsync(s => s.BusinessId == businessId);
+        if (alreadyExists)
+            throw new ConcurrencyConflictException(
+                $"Business {businessId} already has a subscription. Use PUT to edit it.");
+
+        var business = await _context.Businesses.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(b => b.Id == businessId)
+            ?? throw new NotFoundException($"Business {businessId} not found.");
+
+        // ── Validate references + amount up front (all → 400 via ValidationException).
+        if (!await _context.PlanTypeCatalogs.AnyAsync(p => p.Id == request.PlanTypeId))
+            throw new ValidationException($"Unknown planTypeId {request.PlanTypeId}.");
+
+        var rail = await _context.SaaSBillingMethods
+            .FirstOrDefaultAsync(m => m.Id == request.BillingMethodId && m.IsActive)
+            ?? throw new ValidationException($"Unknown or inactive billingMethodId {request.BillingMethodId}.");
+
+        if (request.BaseAmountCents is < 0)
+            throw new ValidationException("baseAmountCents cannot be negative.");
+
+        var currency = string.IsNullOrWhiteSpace(request.Currency) ? "MXN" : request.Currency;
+        const string billingCycle = "Monthly"; // admin create defaults to monthly (self-service owns cycle choice)
+        var pricingGroup = StripeConstants.GetPricingGroup(business.PrimaryMacroCategoryId);
+        var isStripeRail = rail.Code == "Stripe";
+
+        var now = DateTime.UtcNow;
+        Subscription sub;
+
+        if (isStripeRail)
+        {
+            // ── Remote-first: create on Stripe (catalog price), await 2xx, THEN persist a local
+            //    row that mirrors Stripe exactly. A StripeException here surfaces as 502 (middleware);
+            //    an unpriced plan (Enterprise) surfaces as 400. Nothing is persisted on failure.
+            var result = await _stripe.CreateSubscriptionAsync(businessId, request.PlanTypeId, billingCycle, pricingGroup);
+
+            sub = new Subscription
+            {
+                BusinessId = businessId,
+                // ⚠ Persist the REAL Stripe ids the SDK returned. The worker does NOT handle
+                //   customer.subscription.created (that event is a no-op); a later
+                //   subscription.updated webhook resolves to THIS row by StripeSubscriptionId and
+                //   updates it in place. If a future refactor drops this persist on the assumption
+                //   "the webhook creates the row", the subscription would never materialize locally.
+                StripeCustomerId = result.CustomerId,
+                StripeSubscriptionId = result.SubscriptionId,
+                StripeBaseItemId = result.BaseItemId,
+                Status = result.Status,
+                CurrentPeriodStart = result.CurrentPeriodStart,
+                CurrentPeriodEnd = result.CurrentPeriodEnd,
+                NextBillingDate = null // Stripe drives billing on this rail (excluded from the manual generation job)
+            };
+        }
+        else
+        {
+            // Manual rail: no Stripe call. Empty Stripe ids (columns are NOT NULL by legacy design)
+            // → surfaced as null in the detail DTO.
+            sub = new Subscription
+            {
+                BusinessId = businessId,
+                StripeCustomerId = string.Empty,
+                StripeSubscriptionId = string.Empty,
+                Status = StripeSubscriptionStatus.Active,
+                CurrentPeriodStart = now,
+                CurrentPeriodEnd = now.AddMonths(1),
+                NextBillingDate = now.AddMonths(1)
+            };
+        }
+
+        sub.PlanTypeId = request.PlanTypeId;
+        sub.BillingCycle = billingCycle;
+        sub.PricingGroup = pricingGroup;
+        sub.BillingMethodId = rail.Id;
+        sub.BaseAmountCents = request.BaseAmountCents;
+        sub.Currency = currency;
+        sub.CfdiRequired = request.CfdiRequired;
+        sub.BillingEmail = request.BillingEmail;
+        sub.Notes = request.Notes;
+        sub.UpdatedAt = now;
+        _context.Subscriptions.Add(sub);
+
+        business.PlanTypeId = request.PlanTypeId; // SSoT for the feature gate
+
+        _audit.Record(BusinessAuditAction.SubscriptionCreated, businessId, request.Reason,
+            before: null,
+            after: new { request.PlanTypeId, billingMethodId = rail.Id, rail.Code, request.BaseAmountCents, currency },
+            tokenId);
+
+        await _context.SaveChangesAsync();
+        _featureGate.Invalidate(businessId);
+
+        return await GetAsync(businessId);
     }
 
     public async Task UpdateAsync(int businessId, AdminUpdateSubscriptionRequest request, string? tokenId)

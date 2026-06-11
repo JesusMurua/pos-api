@@ -32,6 +32,18 @@ public class AdminSubscriptionController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(int businessId) => Ok(await _service.GetAsync(businessId));
 
+    /// <summary>Provision a subscription where none exists (Stripe rail: remote-first).</summary>
+    [HttpPost]
+    [ProducesResponseType(typeof(AdminSubscriptionDetailDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> Create(int businessId, [FromBody] AdminCreateSubscriptionRequest request)
+    {
+        var detail = await _service.CreateAsync(businessId, request, AdminTokenId);
+        return CreatedAtAction(nameof(Get), new { businessId }, detail);
+    }
+
     /// <summary>Reconcile the subscription (remote-first on the Stripe rail).</summary>
     [HttpPut]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

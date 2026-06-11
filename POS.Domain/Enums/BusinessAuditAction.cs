@@ -18,6 +18,7 @@ public enum BusinessAuditAction
 
     // Reserved for later SaaS-billing PRs (declared now so the enum/string mapping
     // is stable and no migration is needed when they start being written).
+    SubscriptionCreated,
     SubscriptionPriceChanged,
     AddOnActivated,
     AddOnDeactivated,

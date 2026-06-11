@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using POS.Domain.Exceptions;
+using Stripe;
 
 namespace POS.API.Middleware;
 
@@ -88,6 +89,16 @@ public class ExceptionMiddleware
         {
             _logger.LogWarning(ex, "Concurrency conflict: {Message}", ex.Message);
             await WriteErrorResponse(context, HttpStatusCode.Conflict, "ConcurrencyConflict", ex.Message);
+        }
+        catch (StripeException ex)
+        {
+            // A Stripe SDK failure is an upstream/gateway problem, not our 500. Surfacing it
+            // as 502 keeps the contract honest: the request was well-formed, the dependency
+            // failed. Centralized here so EVERY Stripe-rail path (subscription create, reprice,
+            // add-on activate/deactivate) reports the same status instead of a misleading 500.
+            _logger.LogError(ex, "Stripe gateway error: {Message}", ex.Message);
+            await WriteErrorResponse(context, HttpStatusCode.BadGateway, "StripeGatewayError",
+                "The payment provider rejected or failed the request. Please retry.");
         }
         catch (Exception ex)
         {

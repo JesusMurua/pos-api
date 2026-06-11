@@ -119,6 +119,41 @@ public class StripeService : IStripeService
     }
 
     /// <inheritdoc />
+    public async Task<StripeSubscriptionCreateResult> CreateSubscriptionAsync(
+        int businessId, int planTypeId, string billingCycle, string pricingGroup)
+    {
+        var business = await _unitOfWork.Business.GetByIdAsync(businessId)
+            ?? throw new NotFoundException($"Business with id {businessId} not found");
+
+        // Catalog price only (negotiated amounts ride the PUT reprice flow). A null here is
+        // the Enterprise / unpriced case → 400 (ValidationException), not a Stripe call.
+        var priceId = await _unitOfWork.Catalog.GetStripePlanPriceIdAsync(planTypeId, billingCycle, pricingGroup)
+            ?? throw new ValidationException(
+                $"No catalog Stripe price for plan {planTypeId} / {billingCycle} / {pricingGroup}. " +
+                "Use a manual rail or a self-service/negotiated flow.");
+
+        var customerId = await GetOrCreateStripeCustomerAsync(business);
+
+        var options = new SubscriptionCreateOptions
+        {
+            Customer = customerId,
+            Items = new List<SubscriptionItemOptions> { new() { Price = priceId, Quantity = 1 } },
+            Metadata = new Dictionary<string, string> { { "businessId", businessId.ToString() } }
+        };
+        // Idempotent per business: an admin retry returns the same Stripe subscription rather
+        // than provisioning a second one.
+        var requestOptions = new RequestOptions { IdempotencyKey = $"createsub:{businessId}" };
+        var sub = await new Stripe.SubscriptionService(_stripeClient).CreateAsync(options, requestOptions);
+
+        // Stripe.net 51: the billing period lives on the item, not the subscription (mirrors
+        // StripeEventProcessorWorker's firstItem.CurrentPeriodStart/End reads).
+        var firstItem = sub.Items.Data[0];
+        return new StripeSubscriptionCreateResult(
+            sub.Id, customerId, firstItem.Id, sub.Status,
+            firstItem.CurrentPeriodStart, firstItem.CurrentPeriodEnd);
+    }
+
+    /// <inheritdoc />
     public async Task<Domain.Models.Subscription?> GetSubscriptionStatusAsync(int businessId)
     {
         return await _unitOfWork.Subscriptions.GetByBusinessIdAsync(businessId);

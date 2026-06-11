@@ -4,10 +4,11 @@
 > **as-built** admin surface (X-Admin-Token) shipped in PR-1a…PR-6. This is the source of truth
 > for the fino-admin TypeScript models and service layer.
 >
-> **Status:** reflects code after **PR-UI-prep** (suite 260). The five read surfaces the architecture
-> doc §9 promised but that were missing at `23f285a` — BusinessAuditLog readers, active add-ons on the
-> subscription detail, and the billing-method / add-on catalog readers — are now **built**. [§10](#10-gaps--resolved-in-pr-ui-prep)
-> tracks their resolution; UI-1 is unblocked.
+> **Status:** reflects code after **PR-UI-prep** + the **subscription-create MINI-PR** (suite 265). The
+> five read surfaces the architecture doc §9 promised but that were missing at `23f285a` —
+> BusinessAuditLog readers, active add-ons on the subscription detail, and the billing-method / add-on
+> catalog readers — are **built** ([§10](#10-gaps--resolved-in-pr-ui-prep)); plus `POST /subscription`
+> (create flow) and `stripeCustomerId` on the subscription detail (§2). UI-1 and UI-2 are unblocked.
 
 ---
 
@@ -28,7 +29,7 @@
 - **`Subscription.status`** (plain string, lowercase — Stripe values): `"active"`, `"trialing"`, `"past_due"`, `"canceled"`, `"paused"`, `"incomplete"`, `"incomplete_expired"`. For badges: active/trialing = healthy, past_due = warning, canceled/incomplete\* = inactive.
 - **`SubscriptionInvoice.status`** (PascalCase enum): `"Open"`, `"PartiallyPaid"`, `"Paid"`, `"Overdue"`, `"Void"`, `"Refunded"` (`Refunded` is a placeholder — refunds deferred, OQ-9).
 - **`SubscriptionInvoiceItem.itemType`**: `"PlanBase"`, `"AddOn"`, `"Discount"`, `"Adjustment"`.
-- **`BusinessAuditAction`** (used in BusinessAuditLog — see §10 gap): `"Created"`, `"Suspended"`, `"Reactivated"`, `"PlanChanged"`, `"TrialExtended"`, `"PasswordReset"`, `"Impersonated"`, `"SubscriptionPriceChanged"`, `"AddOnActivated"`, `"AddOnDeactivated"`, `"InvoiceCreated"`, `"InvoiceVoided"`, `"PaymentRegistered"`, `"PaymentDeleted"`, `"CfdiToggled"`, `"NotificationSent"`, `"Other"`.
+- **`BusinessAuditAction`** (used in BusinessAuditLog — readable via §7): `"Created"`, `"Suspended"`, `"Reactivated"`, `"PlanChanged"`, `"TrialExtended"`, `"PasswordReset"`, `"Impersonated"`, `"SubscriptionCreated"`, `"SubscriptionPriceChanged"`, `"AddOnActivated"`, `"AddOnDeactivated"`, `"InvoiceCreated"`, `"InvoiceVoided"`, `"PaymentRegistered"`, `"PaymentDeleted"`, `"CfdiToggled"`, `"NotificationSent"`, `"Other"`.
 
 ---
 
@@ -52,6 +53,7 @@ Subscription detail + price history. Money is flat cents.
   "status": "active",
   "billingCycle": "Monthly",
   "pricingGroup": "General",
+  "stripeCustomerId": "cus_...",     // nullable (null on manual rails)
   "stripeSubscriptionId": "sub_...", // nullable (manual rails)
   "stripePriceId": "price_...",      // nullable
   "cfdiRequired": false,
@@ -81,6 +83,31 @@ Subscription detail + price history. Money is flat cents.
 - `404` if the business has no subscription.
 - `activeAddOns` (PR-UI-prep, GAP-B): **active add-ons only** (`DeactivatedAt IS NULL`); deactivated rows are kept for history but never returned here. `effectivePriceCents` is resolved server-side so the UI shows the charged amount without re-deriving it. There is no separate "list add-ons" endpoint — they ride on the subscription detail.
 
+### `POST /api/Admin/businesses/{businessId}/subscription`
+
+Provision a subscription where **none exists** (the PUT only edits an existing one). Stripe rail = remote-first (creates the Stripe Customer if absent + a Subscription against the **catalog** Price for `(planTypeId, "Monthly", business pricing group)`, awaits 2xx, then persists a local row mirroring Stripe); manual rail = local only. Records a `SubscriptionCreated` `BusinessAuditLog` row and keeps `Business.planTypeId` in sync.
+
+Body `AdminCreateSubscriptionRequest`:
+
+```jsonc
+{
+  "planTypeId": 2,            // required
+  "billingMethodId": 3,      // required
+  "baseAmountCents": 14900,  // optional (null = unset, e.g. Enterprise)
+  "currency": "MXN",         // default "MXN"
+  "cfdiRequired": false,     // default false
+  "billingEmail": "x@y.com", // optional
+  "notes": "…",              // optional
+  "reason": "Alta manual"    // optional → BusinessAuditLog
+}
+```
+
+- The created subscription is **Monthly**; its pricing group is derived from the business macro-category (self-service owns cycle choice). `baseAmountCents` is the local per-tenant SSoT; on the Stripe rail the Stripe charge follows the **catalog** price (push a negotiated amount afterward via the PUT reprice flow).
+- `201 Created` → `SubscriptionDetailResponse` of the new subscription (`Location` header points at the GET).
+- `400` validation (unknown `planTypeId` / inactive `billingMethodId`, negative `baseAmountCents`, **Stripe rail with no catalog price** — e.g. Enterprise → use a manual rail).
+- `409` the business already has a subscription (use PUT to edit).
+- `502` the Stripe SDK rejected/failed the create (nothing is persisted — retry).
+
 ### `PUT /api/Admin/businesses/{businessId}/subscription`
 
 Remote-first reconcile (Stripe rail: hits Stripe → 2xx → persists; manual rail: local only). Records `SubscriptionPriceHistory` + `BusinessAuditLog`.
@@ -92,6 +119,7 @@ Body `AdminUpdateSubscriptionRequest` — **only supplied fields change** (all o
   "cfdiRequired": true, "billingEmail": "x@y.com", "notes": "…", "reason": "Upgrade" }
 ```
 
+- **`baseAmountCents` is preserved when changing `planTypeId`** — it is a per-tenant SSoT (architecture §4.3), so a negotiated price survives a plan change. To reset it to the new plan's default, set `baseAmountCents` to the new value explicitly **in the same request**. A null/absent field is always a no-op, never a reset — there is no way to express "clear to default" via null (an absent field and an explicit `null` are indistinguishable on the wire).
 - `204` on success · `400` validation (e.g. Stripe rail with no base item to reprice) · `404` no subscription.
 
 ### `POST /api/Admin/businesses/{businessId}/subscription/add-ons`

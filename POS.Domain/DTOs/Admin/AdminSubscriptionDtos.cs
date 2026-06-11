@@ -12,6 +12,7 @@ public sealed record AdminSubscriptionDetailDto(
     string Status,
     string BillingCycle,
     string PricingGroup,
+    string? StripeCustomerId,
     string? StripeSubscriptionId,
     string? StripePriceId,
     bool CfdiRequired,
@@ -48,9 +49,36 @@ public sealed record SubscriptionAddOnDto(
     DateTime ActivatedAt);
 
 /// <summary>
-/// Admin reconcile payload. Only supplied fields change. A <c>BaseAmountCents</c>
-/// change on the Stripe rail creates a dynamic Price + updates Stripe (remote-first);
-/// on a manual rail it only updates local state. Records SubscriptionPriceHistory +
+/// Admin create payload — provisions a subscription where none exists (the PUT only edits
+/// an existing one). <c>PlanTypeId</c> + <c>BillingMethodId</c> are required. On the Stripe
+/// rail it creates the Stripe Customer (if absent) + Subscription against the catalog Price
+/// for (plan, Monthly, business pricing group), remote-first; on a manual rail it persists
+/// locally only. Records a <c>SubscriptionCreated</c> BusinessAuditLog row.
+/// </summary>
+public sealed record AdminCreateSubscriptionRequest
+{
+    /// <summary>Required. FK → PlanTypeCatalog (1=Free, 2=Basic, 3=Pro, 4=Enterprise).</summary>
+    public int PlanTypeId { get; init; }
+
+    /// <summary>Required. FK → SaaSBillingMethod (the rail charging this tenant).</summary>
+    public int BillingMethodId { get; init; }
+
+    /// <summary>Negotiated per-tenant price (cents). Null = unset (e.g. Enterprise without a price).</summary>
+    public int? BaseAmountCents { get; init; }
+
+    public string Currency { get; init; } = "MXN";
+    public bool CfdiRequired { get; init; }
+    public string? BillingEmail { get; init; }
+    public string? Notes { get; init; }
+    public string? Reason { get; init; }
+}
+
+/// <summary>
+/// Admin reconcile payload. Only supplied fields change — a null/absent field is a no-op,
+/// never a reset (e.g. <c>BaseAmountCents</c> is PRESERVED across a <c>PlanTypeId</c> change;
+/// to move it to the new plan's default the caller passes the explicit value). A
+/// <c>BaseAmountCents</c> change on the Stripe rail creates a dynamic Price + updates Stripe
+/// (remote-first); on a manual rail it only updates local state. Records SubscriptionPriceHistory +
 /// BusinessAuditLog.
 /// </summary>
 public sealed record AdminUpdateSubscriptionRequest
