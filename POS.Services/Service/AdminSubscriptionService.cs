@@ -53,12 +53,35 @@ public class AdminSubscriptionService : IAdminSubscriptionService
                 h.ChangedByTokenId, h.Reason, h.EffectiveDate))
             .ToListAsync();
 
+        // Active add-ons only (DeactivatedAt IS NULL); deactivated rows are kept for
+        // history but never shown on the live subscription. EffectivePriceCents resolves
+        // CustomPriceCents ?? DefaultPriceCents server-side.
+        // BillingCycle carries a HasConversion<string>, so .ToString() is mapped in memory
+        // after materialization (not all providers translate it inside the SQL projection).
+        var addOnRows = await (
+            from sa in _context.SubscriptionAddOns.AsNoTracking()
+            join pa in _context.PlanAddOns.AsNoTracking() on sa.AddOnId equals pa.Id
+            where sa.SubscriptionId == sub.Id && sa.DeactivatedAt == null
+            orderby sa.ActivatedAt
+            select new
+            {
+                sa.Id, sa.AddOnId, pa.Code, pa.Name, sa.Quantity,
+                sa.CustomPriceCents, pa.DefaultPriceCents, pa.BillingCycle, sa.ActivatedAt
+            })
+            .ToListAsync();
+
+        var addOns = addOnRows.Select(x => new SubscriptionAddOnDto(
+            x.Id, x.AddOnId, x.Code, x.Name, x.Quantity,
+            x.CustomPriceCents, x.DefaultPriceCents,
+            x.CustomPriceCents ?? x.DefaultPriceCents,
+            x.BillingCycle.ToString(), x.ActivatedAt)).ToList();
+
         return new AdminSubscriptionDetailDto(
             sub.BusinessId, sub.PlanTypeId, PlanTypeIds.ToCode(sub.PlanTypeId),
             sub.BaseAmountCents, sub.Currency, sub.BillingMethodId, railCode,
             sub.Status, sub.BillingCycle, sub.PricingGroup, sub.StripeSubscriptionId,
             sub.StripePriceId, sub.CfdiRequired, sub.BillingEmail, sub.Notes,
-            sub.NextBillingDate, history);
+            sub.NextBillingDate, history, addOns);
     }
 
     public async Task UpdateAsync(int businessId, AdminUpdateSubscriptionRequest request, string? tokenId)

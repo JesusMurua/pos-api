@@ -4,10 +4,10 @@
 > **as-built** admin surface (X-Admin-Token) shipped in PR-1a…PR-6. This is the source of truth
 > for the fino-admin TypeScript models and service layer.
 >
-> **Status:** reflects code at commit `23f285a` (suite 250). Where the architecture doc promised an
-> endpoint that was **not built**, it is listed under [§10 Gaps](#10-gaps--required-before-ui-1) —
-> **read that section before scoping UI-1**: the BusinessAuditLog viewer, the subscription add-on
-> list, and the billing-method / add-on catalogs do not yet have a read surface.
+> **Status:** reflects code after **PR-UI-prep** (suite 260). The five read surfaces the architecture
+> doc §9 promised but that were missing at `23f285a` — BusinessAuditLog readers, active add-ons on the
+> subscription detail, and the billing-method / add-on catalog readers — are now **built**. [§10](#10-gaps--resolved-in-pr-ui-prep)
+> tracks their resolution; UI-1 is unblocked.
 
 ---
 
@@ -64,12 +64,22 @@ Subscription detail + price history. Money is flat cents.
       "changedAtUtc": "2026-06-10T…", "changedByTokenId": "ab12cd34",
       "reason": "Negociado", "effectiveDate": "2026-06-10T…"
     }
+  ],
+  "activeAddOns": [
+    {
+      "subscriptionAddOnId": 8, "addOnId": 7, "addOnCode": "device_kds",
+      "addOnName": "Pantalla KDS adicional", "quantity": 2,
+      "customPriceCents": 5000,           // nullable: omitted when on catalog price
+      "defaultPriceCents": 4900,
+      "effectivePriceCents": 5000,        // customPriceCents ?? defaultPriceCents (server-resolved)
+      "billingCycle": "Monthly", "activatedAt": "2026-06-08T…"
+    }
   ]
 }
 ```
 
 - `404` if the business has no subscription.
-- **⚠️ GAP-B:** the response does **not** include the subscription's active add-ons, and there is no separate "list add-ons" endpoint. A Tenant detail screen cannot show active add-ons today. See §10.
+- `activeAddOns` (PR-UI-prep, GAP-B): **active add-ons only** (`DeactivatedAt IS NULL`); deactivated rows are kept for history but never returned here. `effectivePriceCents` is resolved server-side so the UI shows the charged amount without re-deriving it. There is no separate "list add-ons" endpoint — they ride on the subscription detail.
 
 ### `PUT /api/Admin/businesses/{businessId}/subscription`
 
@@ -186,7 +196,29 @@ Capture-error fix; recomputes status. `204` · `404`.
 
 `GET 200` → `PlanTypeDto[]` (Id, Code, Name, MonthlyPrice (decimal pesos), SortOrder, IsActive — see the Catalog contract). `PUT` body `AdminUpdatePlanTypeRequest` (editable: MonthlyPrice/Name/SortOrder/Currency; Code/Id immutable) → `204` · `400` (e.g. negative price) · `404`. Edits invalidate the `PlanTypes` + `Plans` public caches.
 
-> **⚠️ GAP-C:** `GET /api/Admin/billing-methods` (SaaSBillingMethod catalog) and `GET /api/Admin/plan-add-ons` (PlanAddOn catalog) — promised in architecture §9 — **were never built**. UI dropdowns for rail selection and add-on selection have no data source. See §10.
+### `GET /api/Admin/billing-methods`
+
+The SaaS billing rails (tenant → operator), ordered by `sortOrder`. Read-only, code-seeded. `200` → `SaaSBillingMethodDto[]`:
+
+```jsonc
+[{ "id": 1, "code": "Stripe", "name": "Stripe", "isAutomatic": true, "requiresReference": false,
+   "providerKey": "stripe", "countryCode": null, "sortOrder": 1, "isActive": true, "isSystem": true }]
+```
+
+- 7 rails today (`Stripe`, `BankTransfer`, `OxxoPay`, `Cash`, `BankDeposit`, `Check`, `Other`). Use `code` as the stable selector key; `name` is the display label.
+
+### `GET /api/Admin/plan-add-ons`
+
+The full add-on catalog (active **and** inactive), ordered by id. Read-only, code-seeded. `200` → `PlanAddOnDto[]`:
+
+```jsonc
+[{ "id": 7, "code": "device_kds", "name": "Pantalla KDS adicional", "description": null,
+   "billingCycle": "Monthly", "defaultPriceCents": 4900, "currency": "MXN",
+   "linkType": "DeviceLicense", "linkedEntityId": 14, "stripePriceId": "price_…",
+   "isActive": true, "isSystem": true }]
+```
+
+- `billingCycle` ∈ `"OneTime" | "Monthly" | "Annual"`. `linkType` ∈ `"DeviceLicense" | …`. `linkedEntityId` is polymorphic (for `DeviceLicense` it is a `FeatureKey` int — opaque to the UI).
 
 ---
 
@@ -247,9 +279,33 @@ Manual send (immediate dispatch + writes a `NotificationSent` audit row). Body `
 
 ---
 
-## 7. Audit blobs (`before` / `after`)
+## 7. Audit log (read) + blobs
 
-The `BusinessAuditLog` rows carry `beforeJson` / `afterJson` — **opaque JSON strings**, serialized server-side from anonymous shapes that vary per action. **Do not type-parse them on the client**; render as collapsible raw JSON. Caveat (mirrors the payment-method doc M5): enum-ish values **inside** these blobs are whatever the server wrote (often raw ints), even though the same concept is a PascalCase string on the typed wire endpoints. (Moot until the read endpoint exists — §10 GAP-A.)
+### `GET /api/Admin/businesses/{businessId}/audit-log` · `GET /api/Admin/audit-log`
+
+Read the `BusinessAuditLog` trail (the explicit operator-action log, written since PR-1a). The per-tenant route is scoped to one business; the cross-tenant route spans all tenants and takes an optional `businessId`. Both are paginated and newest-first.
+
+Query: `?page=1&pageSize=50&action=PlanChanged&from=2026-01-01&to=2026-12-31` — `action`/`from`/`to` optional (cross-tenant also takes `businessId`). `page` defaults `1`, `pageSize` defaults `50` (max `200`). An unknown `action` name yields **zero rows** (typed filter — no silent wildcard).
+
+`200` → `PagedBusinessAuditLogDto`:
+
+```jsonc
+{
+  "page": 1, "pageSize": 50, "totalRows": 3,
+  "items": [
+    { "id": 12, "businessId": 12, "action": "PlanChanged",
+      "changedAtUtc": "2026-06-10T…", "changedByTokenIdHash": "ab12cd34",
+      "reason": "Upgrade",             // nullable
+      "beforeJson": "{…}", "afterJson": "{…}" }  // nullable opaque strings — see below
+  ]
+}
+```
+
+- `action` is the stable PascalCase `BusinessAuditAction` name (§1). `changedByTokenIdHash` is the hashed admin `token_id` (display as an opaque attribution chip).
+
+### Audit blobs (`before` / `after`)
+
+The `beforeJson` / `afterJson` fields are **opaque JSON strings**, serialized server-side from anonymous shapes that vary per action. **Do not type-parse them on the client**; render as collapsible raw JSON. Caveat (mirrors the payment-method doc M5): enum-ish values **inside** these blobs are whatever the server wrote (often raw ints), even though the same concept is a PascalCase string on the typed wire endpoints.
 
 ---
 
@@ -275,15 +331,13 @@ interface Money { amountCents: number; currency: string }   // §5 metrics ONLY
 
 ---
 
-## 10. Gaps — required before UI-1
+## 10. Gaps — resolved in PR-UI-prep
 
-The architecture doc §9 listed these; the code audit (2026-06-11) confirms they were **never built**. They block the fino-admin Tenant-detail + audit-viewer screens and should ship as a short backend PR **before** UI-1.
+The architecture doc §9 promised these read surfaces but they were missing at `23f285a`. **PR-UI-prep** (read-only, no migrations) shipped all four; UI-1 is unblocked. Kept here as a resolution record.
 
-| # | Gap | Blocks | Proposed contract |
+| # | Gap | Status | Where |
 |---|---|---|---|
-| **GAP-A** | **No BusinessAuditLog read endpoints.** `GET /Admin/businesses/{id}/audit-log` and `GET /Admin/audit-log` do not exist (only FeatureMatrix/PaymentMatrix audit logs have readers). The rows are written since PR-1a but have no read surface. | BusinessAuditLog viewer | Paginated: `?page&pageSize&action?&from?&to?` → envelope `{ page, pageSize, totalRows, items: [{ id, businessId, action, reason?, beforeJson?, afterJson?, changedByTokenId?, changedAtUtc }] }`. Mirror the `FeatureMatrixAuditLog.GetAuditLogAsync` shape. |
-| **GAP-B** | **`GET /subscription` omits active add-ons**, and there is no list-add-ons endpoint. | Add-on display on Tenant detail | Add `addOns: [{ id, addOnId, code, name, quantity, effectivePriceCents (customPriceCents ?? defaultPriceCents), activatedAt, stripeItemId? }]` to `SubscriptionDetailResponse`. |
-| **GAP-C** | **No admin catalog readers** for `SaaSBillingMethod` (`GET /Admin/billing-methods`) or `PlanAddOn` (`GET /Admin/plan-add-ons`). | Rail + add-on dropdowns | `GET /Admin/billing-methods` → `[{ id, code, name, isAutomatic, requiresReference, isActive }]`; `GET /Admin/plan-add-ons` → `[{ id, code, name, billingCycle, defaultPriceCents, currency, linkType, isActive }]`. |
-| **GAP-D** | **Denormalization is code-level, not name-level.** `GET /subscription` returns `planTypeCode` + `billingMethodCode` but no display names / billing-method flags. | Labels without extra round-trips | Either embed display fields in `SubscriptionDetailResponse` (plan name, billing-method name/isAutomatic/requiresReference) **or** ship GAP-C so the UI maps codes→labels from cached catalogs. GAP-C is the lighter fix and unblocks both. |
-
-**Recommendation:** a short **PR-UI-prep** (read-only endpoints: GAP-A audit-log readers, GAP-B add-ons in subscription detail, GAP-C two catalog readers) lands before UI-1. GAP-D is then satisfied by GAP-C (code→label mapping client-side) without changing existing response shapes.
+| **GAP-A** | No BusinessAuditLog read endpoints. | ✅ **Shipped** | [§7](#7-audit-log-read--blobs): `GET /Admin/businesses/{id}/audit-log` + `GET /Admin/audit-log`, paginated + filterable. |
+| **GAP-B** | `GET /subscription` omitted active add-ons. | ✅ **Shipped** | [§2](#2-subscription): `activeAddOns[]` on `SubscriptionDetailResponse` (active only, server-resolved `effectivePriceCents`). |
+| **GAP-C** | No admin catalog readers for rails / add-ons. | ✅ **Shipped** | [§4](#4-catalogs): `GET /Admin/billing-methods` + `GET /Admin/plan-add-ons`. |
+| **GAP-D** | Denormalization is code-level, not name-level. | ✅ **Resolved by GAP-C** | `GET /subscription` still returns `planTypeCode` / `billingMethodCode`; the UI maps codes→labels from the cached GAP-C catalogs. No existing response shape changed. |

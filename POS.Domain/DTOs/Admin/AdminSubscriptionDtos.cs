@@ -18,7 +18,8 @@ public sealed record AdminSubscriptionDetailDto(
     string? BillingEmail,
     string? Notes,
     DateTime? NextBillingDate,
-    IReadOnlyList<SubscriptionPriceHistoryDto> PriceHistory);
+    IReadOnlyList<SubscriptionPriceHistoryDto> PriceHistory,
+    IReadOnlyList<SubscriptionAddOnDto> ActiveAddOns);
 
 public sealed record SubscriptionPriceHistoryDto(
     int Id,
@@ -28,6 +29,23 @@ public sealed record SubscriptionPriceHistoryDto(
     string? ChangedByTokenId,
     string Reason,
     DateTime EffectiveDate);
+
+/// <summary>
+/// An active add-on on the subscription (only rows with <c>DeactivatedAt IS NULL</c>).
+/// <c>EffectivePriceCents = CustomPriceCents ?? DefaultPriceCents</c> is resolved
+/// server-side so the UI shows the charged amount without re-deriving it.
+/// </summary>
+public sealed record SubscriptionAddOnDto(
+    int SubscriptionAddOnId,
+    int AddOnId,
+    string AddOnCode,
+    string AddOnName,
+    int Quantity,
+    int? CustomPriceCents,
+    int DefaultPriceCents,
+    int EffectivePriceCents,
+    string BillingCycle,
+    DateTime ActivatedAt);
 
 /// <summary>
 /// Admin reconcile payload. Only supplied fields change. A <c>BaseAmountCents</c>

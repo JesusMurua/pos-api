@@ -58,6 +58,9 @@ public static class ServiceDependencies
         services.AddScoped<IBusinessAuditService, BusinessAuditService>();
         services.AddScoped<IPlanTypeAdminService, PlanTypeAdminService>();
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
+        // SaaS billing read endpoints for UI-1 (PR-UI-prep): audit-log + catalog readers.
+        services.AddScoped<IAdminAuditLogService, AdminAuditLogService>();
+        services.AddScoped<IAdminBillingCatalogService, AdminBillingCatalogService>();
         // SaaS billing invoicing + payments (PR-3).
         services.AddScoped<IAdminInvoiceService, AdminInvoiceService>();
         services.AddScoped<IAdminTenantPaymentService, AdminTenantPaymentService>();
