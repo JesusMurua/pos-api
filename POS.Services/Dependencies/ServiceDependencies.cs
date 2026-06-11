@@ -62,6 +62,8 @@ public static class ServiceDependencies
         services.AddScoped<IAdminInvoiceService, AdminInvoiceService>();
         services.AddScoped<IAdminTenantPaymentService, AdminTenantPaymentService>();
         services.AddScoped<IInvoiceGenerationService, InvoiceGenerationService>();
+        // Billing metrics (PR-6): financial dashboard aggregation.
+        services.AddScoped<IBillingMetricsService, BillingMetricsService>();
         // Notifications (PR-5): durable outbox enqueue + dispatch + code-owned templates.
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();

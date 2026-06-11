@@ -46,8 +46,15 @@ public class NotificationService : INotificationService
             var toEmail = await ResolveEmailAsync(recipientType, businessId, customEmail);
             if (string.IsNullOrWhiteSpace(toEmail))
             {
-                _logger.LogError("Notification '{Template}' skipped: no recipient email for business {BusinessId}",
+                // Record an unresolved-recipient failure as a queryable Failed row (not just a log)
+                // so the metrics endpoint can surface this class of silent enqueue failure (PR-6).
+                _logger.LogError("Notification '{Template}' unresolved recipient for business {BusinessId}",
                     templateCode, businessId);
+                var failed = BuildRow(templateCode, recipientType, businessId, "(unresolved)", payload, dedupKey);
+                failed.Status = NotificationStatus.Failed;
+                failed.LastError = "recipient unresolved";
+                failed.FailedAtUtc = DateTime.UtcNow;
+                _context.NotificationOutbox.Add(failed);
                 return;
             }
 

@@ -48,4 +48,12 @@ public class NotificationOutbox
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime? SentAtUtc { get; set; }
+
+    /// <summary>
+    /// When the row entered <see cref="NotificationStatus.Failed"/> (retry cap, permanent error,
+    /// render failure, or unresolved recipient). Distinct from <see cref="CreatedAtUtc"/> so the
+    /// metrics endpoint can window "failures in the last 24h/7d" accurately — a row that slow-fails
+    /// days after creation must count in the window when it actually failed.
+    /// </summary>
+    public DateTime? FailedAtUtc { get; set; }
 }

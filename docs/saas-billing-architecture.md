@@ -6,7 +6,11 @@
 > retry/backoff, 15 code-owned es-MX templates, EmailService→SendNowAsync result-typed,
 > ~12 lifecycle triggers enqueue best-effort, trial reminders + PaymentOverdue dunning,
 > InvoiceLifecycleWorker→BillingLifecycleWorker**; suite 152 → 235). All open questions
-> resolved (2026-06-08). PR-6 next (metrics). Note: only **BillingMethodId** was flipped
+> resolved (2026-06-08). **PR-6 (metrics)** delivered: `/Admin/billing/metrics` (snapshot
+> MRR/ARR + 30d paid-logo churn + collected revenue-by-month + cohort retention from CanceledAt
+> + notification health) + `/Admin/billing/upcoming-invoices` (manual rail only); +FailedAtUtc on
+> NotificationOutbox; suite 235 → 250. PR-7 (CFDI issuer, deferred) is the last backend item, then
+> the fino-admin UI roadmap. Note: only **BillingMethodId** was flipped
 > NOT NULL — BaseAmountCents stays nullable (Enterprise has no price until negotiated). Source
 > of truth for the SaaS-billing redesign (PR-1…PR-7 below). Written to the same rigor as
 > [payment-method-catalog-architecture.md](payment-method-catalog-architecture.md).

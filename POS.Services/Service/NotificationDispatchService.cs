@@ -107,6 +107,7 @@ public class NotificationDispatchService : INotificationDispatchService
     {
         row.Status = NotificationStatus.Failed;
         row.LastError = Truncate(error);
+        row.FailedAtUtc = DateTime.UtcNow; // stamp the actual failure time for accurate metric windows
     }
 
     private static string Truncate(string s) => s.Length > 500 ? s[..500] : s;
